@@ -12,7 +12,6 @@ import FaceLoginScreen from '../screens/FaceLoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import HomeScreen from '../screens/HomeScreen';
 import BorrowScreen from '../screens/BorrowScreen';
-import ReturnScreen from '../screens/ReturnScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import FaceCameraScreen from '../screens/FaceCameraScreen';
 
@@ -81,16 +80,6 @@ function MainTabNavigator() {
           title: 'Mượn sách',
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="book-plus" size={size} color={color} />
-          ),
-        }}
-      />
-      <MainTab.Screen
-        name="Return"
-        component={ReturnScreen}
-        options={{
-          title: 'Trả sách',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="book-arrow-left" size={size} color={color} />
           ),
         }}
       />

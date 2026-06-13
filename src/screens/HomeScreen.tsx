@@ -103,13 +103,13 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         <TouchableOpacity
           style={styles.actionButton}
           activeOpacity={0.85}
-          onPress={() => navigation.navigate('Return')}
+          onPress={() => navigation.navigate('Borrow')}
         >
           <Surface style={styles.actionInner} elevation={0}>
             <View style={styles.actionIconSecondary}>
-              <MaterialCommunityIcons name="book-arrow-left" size={20} color={colors.text} />
+              <MaterialCommunityIcons name="history" size={20} color={colors.text} />
             </View>
-            <Text style={styles.actionLabel}>Trả sách</Text>
+            <Text style={styles.actionLabel}>Lịch sử</Text>
           </Surface>
         </TouchableOpacity>
       </View>

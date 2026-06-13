@@ -2,17 +2,17 @@ import api from './client';
 import { BorrowResponse, ReturnResponse, BorrowRecord, Book } from '../types';
 
 export interface BorrowRequest {
-  isbn: string;
+  barcode: string;
 }
 
 export const borrowApi = {
-  borrowBook: async (isbn: string): Promise<BorrowResponse> => {
-    const response = await api.post<BorrowResponse>('/borrow/', { isbn });
+  borrowBook: async (barcode: string): Promise<BorrowResponse> => {
+    const response = await api.post<BorrowResponse>('/borrow/', { barcode });
     return response.data;
   },
 
-  returnBook: async (isbn: string): Promise<ReturnResponse> => {
-    const response = await api.post<ReturnResponse>('/borrow/return', { isbn });
+  returnBook: async (barcode: string): Promise<ReturnResponse> => {
+    const response = await api.post<ReturnResponse>('/borrow/return', { barcode });
     return response.data;
   },
 

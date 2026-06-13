@@ -9,7 +9,6 @@ export type AuthStackParamList = {
 export type MainTabParamList = {
   Home: undefined;
   Borrow: undefined;
-  Return: undefined;
   Profile: undefined;
 };
 

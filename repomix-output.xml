@@ -1,0 +1,4706 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+.agents/skills/frontend-design/LICENSE.txt
+.agents/skills/frontend-design/SKILL.md
+.claude/settings.json
+.env.example
+.gitignore
+app.json
+App.tsx
+assets/android-icon-background.png
+assets/android-icon-foreground.png
+assets/android-icon-monochrome.png
+assets/favicon.png
+assets/icon.png
+assets/splash-icon.png
+index.ts
+LICENSE
+package.json
+src/api/auth.ts
+src/api/borrow.ts
+src/api/client.ts
+src/api/index.ts
+src/api/openlibrary.ts
+src/context/AuthContext.tsx
+src/i18n/vi.json
+src/navigation/AppNavigator.tsx
+src/navigation/types.ts
+src/screens/BorrowScreen.tsx
+src/screens/FaceCameraScreen.tsx
+src/screens/FaceLoginScreen.tsx
+src/screens/HomeScreen.tsx
+src/screens/LoginScreen.tsx
+src/screens/ProfileScreen.tsx
+src/screens/RegisterScreen.tsx
+src/screens/ReturnScreen.tsx
+src/theme/colors.ts
+src/theme/DarkTheme.ts
+src/types/index.ts
+src/utils/dateUtils.ts
+tsconfig.json
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path=".agents/skills/frontend-design/LICENSE.txt">
+Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
+
+   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+   1. Definitions.
+
+      "License" shall mean the terms and conditions for use, reproduction,
+      and distribution as defined by Sections 1 through 9 of this document.
+
+      "Licensor" shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
+
+      "Legal Entity" shall mean the union of the acting entity and all
+      other entities that control, are controlled by, or are under common
+      control with that entity. For the purposes of this definition,
+      "control" means (i) the power, direct or indirect, to cause the
+      direction or management of such entity, whether by contract or
+      otherwise, or (ii) ownership of fifty percent (50%) or more of the
+      outstanding shares, or (iii) beneficial ownership of such entity.
+
+      "You" (or "Your") shall mean an individual or Legal Entity
+      exercising permissions granted by this License.
+
+      "Source" form shall mean the preferred form for making modifications,
+      including but not limited to software source code, documentation
+      source, and configuration files.
+
+      "Object" form shall mean any form resulting from mechanical
+      transformation or translation of a Source form, including but
+      not limited to compiled object code, generated documentation,
+      and conversions to other media types.
+
+      "Work" shall mean the work of authorship, whether in Source or
+      Object form, made available under the License, as indicated by a
+      copyright notice that is included in or attached to the work
+      (an example is provided in the Appendix below).
+
+      "Derivative Works" shall mean any work, whether in Source or Object
+      form, that is based on (or derived from) the Work and for which the
+      editorial revisions, annotations, elaborations, or other modifications
+      represent, as a whole, an original work of authorship. For the purposes
+      of this License, Derivative Works shall not include works that remain
+      separable from, or merely link (or bind by name) to the interfaces of,
+      the Work and Derivative Works thereof.
+
+      "Contribution" shall mean any work of authorship, including
+      the original version of the Work and any modifications or additions
+      to that Work or Derivative Works thereof, that is intentionally
+      submitted to Licensor for inclusion in the Work by the copyright owner
+      or by an individual or Legal Entity authorized to submit on behalf of
+      the copyright owner. For the purposes of this definition, "submitted"
+      means any form of electronic, verbal, or written communication sent
+      to the Licensor or its representatives, including but not limited to
+      communication on electronic mailing lists, source code control systems,
+      and issue tracking systems that are managed by, or on behalf of, the
+      Licensor for the purpose of discussing and improving the Work, but
+      excluding communication that is conspicuously marked or otherwise
+      designated in writing by the copyright owner as "Not a Contribution."
+
+      "Contributor" shall mean Licensor and any individual or Legal Entity
+      on behalf of whom a Contribution has been received by Licensor and
+      subsequently incorporated within the Work.
+
+   2. Grant of Copyright License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      copyright license to reproduce, prepare Derivative Works of,
+      publicly display, publicly perform, sublicense, and distribute the
+      Work and such Derivative Works in Source or Object form.
+
+   3. Grant of Patent License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      (except as stated in this section) patent license to make, have made,
+      use, offer to sell, sell, import, and otherwise transfer the Work,
+      where such license applies only to those patent claims licensable
+      by such Contributor that are necessarily infringed by their
+      Contribution(s) alone or by combination of their Contribution(s)
+      with the Work to which such Contribution(s) was submitted. If You
+      institute patent litigation against any entity (including a
+      cross-claim or counterclaim in a lawsuit) alleging that the Work
+      or a Contribution incorporated within the Work constitutes direct
+      or contributory patent infringement, then any patent licenses
+      granted to You under this License for that Work shall terminate
+      as of the date such litigation is filed.
+
+   4. Redistribution. You may reproduce and distribute copies of the
+      Work or Derivative Works thereof in any medium, with or without
+      modifications, and in Source or Object form, provided that You
+      meet the following conditions:
+
+      (a) You must give any other recipients of the Work or
+          Derivative Works a copy of this License; and
+
+      (b) You must cause any modified files to carry prominent notices
+          stating that You changed the files; and
+
+      (c) You must retain, in the Source form of any Derivative Works
+          that You distribute, all copyright, patent, trademark, and
+          attribution notices from the Source form of the Work,
+          excluding those notices that do not pertain to any part of
+          the Derivative Works; and
+
+      (d) If the Work includes a "NOTICE" text file as part of its
+          distribution, then any Derivative Works that You distribute must
+          include a readable copy of the attribution notices contained
+          within such NOTICE file, excluding those notices that do not
+          pertain to any part of the Derivative Works, in at least one
+          of the following places: within a NOTICE text file distributed
+          as part of the Derivative Works; within the Source form or
+          documentation, if provided along with the Derivative Works; or,
+          within a display generated by the Derivative Works, if and
+          wherever such third-party notices normally appear. The contents
+          of the NOTICE file are for informational purposes only and
+          do not modify the License. You may add Your own attribution
+          notices within Derivative Works that You distribute, alongside
+          or as an addendum to the NOTICE text from the Work, provided
+          that such additional attribution notices cannot be construed
+          as modifying the License.
+
+      You may add Your own copyright statement to Your modifications and
+      may provide additional or different license terms and conditions
+      for use, reproduction, or distribution of Your modifications, or
+      for any such Derivative Works as a whole, provided Your use,
+      reproduction, and distribution of the Work otherwise complies with
+      the conditions stated in this License.
+
+   5. Submission of Contributions. Unless You explicitly state otherwise,
+      any Contribution intentionally submitted for inclusion in the Work
+      by You to the Licensor shall be under the terms and conditions of
+      this License, without any additional terms or conditions.
+      Notwithstanding the above, nothing herein shall supersede or modify
+      the terms of any separate license agreement you may have executed
+      with Licensor regarding such Contributions.
+
+   6. Trademarks. This License does not grant permission to use the trade
+      names, trademarks, service marks, or product names of the Licensor,
+      except as required for reasonable and customary use in describing the
+      origin of the Work and reproducing the content of the NOTICE file.
+
+   7. Disclaimer of Warranty. Unless required by applicable law or
+      agreed to in writing, Licensor provides the Work (and each
+      Contributor provides its Contributions) on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+      implied, including, without limitation, any warranties or conditions
+      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+      PARTICULAR PURPOSE. You are solely responsible for determining the
+      appropriateness of using or redistributing the Work and assume any
+      risks associated with Your exercise of permissions under this License.
+
+   8. Limitation of Liability. In no event and under no legal theory,
+      whether in tort (including negligence), contract, or otherwise,
+      unless required by applicable law (such as deliberate and grossly
+      negligent acts) or agreed to in writing, shall any Contributor be
+      liable to You for damages, including any direct, indirect, special,
+      incidental, or consequential damages of any character arising as a
+      result of this License or out of the use or inability to use the
+      Work (including but not limited to damages for loss of goodwill,
+      work stoppage, computer failure or malfunction, or any and all
+      other commercial damages or losses), even if such Contributor
+      has been advised of the possibility of such damages.
+
+   9. Accepting Warranty or Additional Liability. While redistributing
+      the Work or Derivative Works thereof, You may choose to offer,
+      and charge a fee for, acceptance of support, warranty, indemnity,
+      or other liability obligations and/or rights consistent with this
+      License. However, in accepting such obligations, You may act only
+      on Your own behalf and on Your sole responsibility, not on behalf
+      of any other Contributor, and only if You agree to indemnify,
+      defend, and hold each Contributor harmless for any liability
+      incurred by, or claims asserted against, such Contributor by reason
+      of your accepting any such warranty or additional liability.
+
+   END OF TERMS AND CONDITIONS
+</file>
+
+<file path=".agents/skills/frontend-design/SKILL.md">
+---
+name: frontend-design
+description: Guidance for distinctive, intentional visual design when building new UI or reshaping an existing one. Helps with aesthetic direction, typography, and making choices that don't read as templated defaults.
+license: Complete terms in LICENSE.txt
+---
+
+# Frontend Design
+
+Approach this as the design lead at a small studio known for giving every client a visual identity that could not be mistaken for anyone else's. This client has already rejected proposals that felt templated, and is paying for a distinctive point of view: make deliberate, opinionated choices about palette, typography, and layout that are specific to this brief, and take one real aesthetic risk you can justify.
+
+## Ground it in the subject
+
+If the brief does not pin down what the product or subject is, pin it yourself before designing: name one concrete subject, its audience, and the page's single job, and state your choice. If there's any information in your memory about the human's preferences, context about what they're building, or designs you've made before – use that as a hint. The subject's own world, its materials, instruments, artifacts, and vernacular, is where distinctive choices come from. Build with the brief's real content and subject matter throughout.
+
+## Design principles
+
+For web designs, the hero is a thesis. Open with the most characteristic thing in the subject's world, in whatever form makes sense for it: a headline, an image, an animation, a live demo, an interactive moment. Be deliberate with your choice: a big number with a small label, supporting stats, and a gradient accent is the template answer, only use if that's truly the best option.
+
+Typography carries the personality of the page. Pair the display and body faces deliberately, not the same families you would reach for on any other project, and set a clear type scale with intentional weights, widths, and spacing. Make the type treatment itself a memorable part of the design, not a neutral delivery vehicle for the content.
+
+Structure is information. Structural devices, numbering, eyebrows, dividers, labels, should encode something true about the content, not decorate it. Many generic designs use numbered markers (01 / 02 / 03), but that's only appropriate if the content actually is a sequence - like a real process or a typed timeline where order carries information the reader needs. Question if choices like numbered markers actually make sense before incorporating them.
+
+Leverage motion deliberately. Think about where and if animation can serve the subject: a page-load sequence, a scroll-triggered reveal, hover micro-interactions, ambient atmosphere. An orchestrated moment usually lands harder than scattered effects; choose what the direction calls for. However, sometimes less is more, and extra animation contributes to the feeling that the design is AI-generated.
+
+Match complexity to the vision. Maximalist directions need elaborate execution; minimal directions need precision in spacing, type, and detail. Elegance is executing the chosen vision well.
+
+Consider written content carefully. Often a design brief may not contain real content, and it's up to you to come up with copy. Copy can make a design feel as templated as the design itself. See the below section on writing for more guidance.
+
+## Process: brainstorm, explore, plan, critique, build, critique again
+
+For calibration: AI-generated design right now clusters around three looks: (1) a warm cream background (near #F4F1EA) with a high-contrast serif display and a terracotta accent; (2) a near-black background with a single bright acid-green or vermilion accent; (3) a broadsheet-style layout with hairline rules, zero border-radius, and dense newspaper-like columns. All three are legitimate for some briefs, but they are defaults rather than choices, and they appear regardless of subject. Where the brief pins down a visual direction, follow it exactly — the brief's own words always win, including when it asks for one of these looks. Where it leaves an axis free, don't spend that freedom on one of these defaults. Just like a human designer who's hired, there's often a careful balance between doing what you're good at and taking each project as a chance to experiment and learn.
+
+Work in two passes. First, brainstorm a short design plan based on the human's design brief: create a compact token system with color, type, layout, and signature. Color: describe the palette as 4–6 named hex values. Type: the typefaces for 2+ roles (a characterful display face that's used with restraint, a complementary body face, and a utility face for captions or data if needed). Layout: a layout concept, using one-sentence prose descriptions and ASCII wireframes to ideate and compare. Signature: the single unique element this page will be remembered by that embodies the brief in an appropriate way.
+
+Then review that plan against the brief before building: if any part of it reads like the generic default you would produce for any similar page (work through a similar prompt to see if you arrive somewhere similar) rather than a choice made for this specific brief — revise that part, say what you changed and why. Only after you've confirmed the relative uniqueness of your design plan should you start to write the code, following the revised plan exactly and deriving every color and type decision from it.
+
+When writing the code, be careful of structuring your CSS selector specificities. It's easy to generate CSS classes that cancel each other out (especially with a type-based selector like .section and a element-based selector like .cta). This can happen often with paddings/margins between sections.
+
+Try to do a lot of this planning and iteration in your thinking, and only show ideas to the user when you have higher confidence it'll delight them.
+
+## Restraint and self-critique
+
+Spend your boldness in one place. Let the signature element be the one memorable thing, keep everything around it quiet and disciplined, and cut any decoration that does not serve the brief. Not taking a risk can be a risk itself! Build to a quality floor without announcing it: responsive down to mobile, visible keyboard focus, reduced motion respected. Critique your own work as you build, taking screenshots if your environment supports it – a picture is worth 1000 tokens. Consider Chanel's advice: before leaving the house, take a look in the mirror and remove one accessory. Human creators have memory and always try to do something new, so if you have a space to quickly jot down notes about what you've tried, it can help you in future passes.
+
+## More on writing in design
+
+Words appear in a design for one reason: to make it easier to understand, and therefore easier to use. They are design material, not decoration. Bring the same intentionality to copy that you would bring to spacing and color. Before writing anything, ask what the design needs to say, and how it can best be said to help the person navigate the experience.
+
+Write from the end user's side of the screen. Name things by what people control and recognize, never by how the system is built. A person manages notifications, not webhook config. Describe what something does in plain terms rather than selling it. Being specific is always better than being clever.
+
+Use active voice as default. A control should say exactly what happens when it's used: "Save changes," not "Submit." An action keeps the same name through the whole flow, so the button that says "Publish" produces a toast that says "Published." The vocabulary of an interface is the signposting for someone navigating the product. Cohesion and consistency are how people learn their way around.
+
+Treat failure and emptiness as moments for direction, not mood. Explain what went wrong and how to fix it, in the interface's voice rather than a person's. Errors don't apologize, and they are never vague about what happened. An empty screen is an invitation to act.
+
+Keep the register conversational and tuned: plain verbs, sentence case, no filler, with tone matched to the brand and the audience. Let each element do exactly one job. A label labels, an example demonstrates, and nothing quietly does double duty.
+</file>
+
+<file path=".claude/settings.json">
+{
+  "enabledPlugins": {
+    "expo@claude-plugins-official": true
+  }
+}
+</file>
+
+<file path=".env.example">
+# ============================================
+# Library Mobile App - Environment Config
+# ============================================
+#
+# IMPORTANT: Copy this file to .env and update values for your setup
+#
+# Android Emulator: http://10.0.2.2:80/api (default - maps to host localhost)
+# iOS Simulator: http://localhost:80/api
+# Real Device (same network): http://<your-pc-ip>:80/api
+#
+# To find your PC IP on Windows:
+#   ipconfig | Select-String "IPv4"
+#
+# If login fails with "Cannot connect to server":
+#   1. Make sure Docker containers are running: docker compose up -d
+#   2. Try accessing http://localhost:80/api/healthz from your browser
+#   3. If localhost works but 10.0.2.2 doesn't, the emulator can't reach Docker
+#   4. On Windows with Docker Desktop, try restarting Docker and running:
+#      docker compose down && docker compose up -d
+
+EXPO_PUBLIC_API_URL=http://10.0.2.2:80/api
+</file>
+
+<file path=".gitignore">
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env*.local
+
+# typescript
+*.tsbuildinfo
+
+# generated native folders
+/ios
+/android
+</file>
+
+<file path="index.ts">
+import { registerRootComponent } from 'expo';
+
+import App from './App';
+
+// registerRootComponent calls AppRegistry.registerComponent('main', () => App);
+// It also ensures that whether you load the app in Expo Go or in a native build,
+// the environment is set up appropriately
+registerRootComponent(App);
+</file>
+
+<file path="LICENSE">
+The MIT License (MIT)
+
+Copyright (c) 2015-present 650 Industries, Inc. (aka Expo)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+</file>
+
+<file path="src/api/auth.ts">
+import api from './client';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AuthTokens, User } from '../types';
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface PatronLoginRequest {
+  student_code: string;
+  password: string;
+}
+
+export interface PatronRegisterRequest {
+  student_code: string;
+  password: string;
+  full_name: string;
+  class_name?: string;
+}
+
+export interface LoginResponse {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+}
+
+export interface PatronLoginResponse {
+  access_token: string;
+  token_type: string;
+  patron: any;
+}
+
+export interface FaceLoginResponse {
+  access_token: string;
+  refresh_token?: string;
+  token_type: string;
+}
+
+export const authApi = {
+  login: async (data: LoginRequest): Promise<LoginResponse> => {
+    const response = await api.post<LoginResponse>('/auth/login', data);
+    const tokens: AuthTokens = {
+      access_token: response.data.access_token,
+      refresh_token: response.data.refresh_token,
+      token_type: response.data.token_type,
+    };
+    await AsyncStorage.setItem('accessToken', tokens.access_token);
+    await AsyncStorage.setItem('refreshToken', tokens.refresh_token);
+    return response.data;
+  },
+
+  patronLogin: async (data: PatronLoginRequest): Promise<PatronLoginResponse> => {
+    console.log('patronLogin called with:', data);
+    const response = await api.post<PatronLoginResponse>('/patrons/login', data);
+    console.log('patronLogin response:', response.data);
+    await AsyncStorage.setItem('accessToken', response.data.access_token);
+    await AsyncStorage.setItem('patronData', JSON.stringify(response.data.patron));
+    console.log('patronLogin stored data');
+    return response.data;
+  },
+
+  patronRegister: async (data: PatronRegisterRequest): Promise<PatronLoginResponse> => {
+    const response = await api.post<PatronLoginResponse>('/patrons/register', data);
+    await AsyncStorage.setItem('accessToken', response.data.access_token);
+    await AsyncStorage.setItem('patronData', JSON.stringify(response.data.patron));
+    return response.data;
+  },
+
+  faceLogin: async (imageUri: string): Promise<FaceLoginResponse> => {
+    const formData = new FormData();
+    formData.append('file', {
+      uri: imageUri,
+      type: 'image/jpeg',
+      name: 'face.jpg',
+    } as any);
+    const response = await api.post<FaceLoginResponse>('/auth/face-login', formData);
+    if (response.data.access_token) {
+      await AsyncStorage.setItem('accessToken', response.data.access_token);
+    }
+    if (response.data.refresh_token) {
+      await AsyncStorage.setItem('refreshToken', response.data.refresh_token);
+    }
+    return response.data;
+  },
+
+  refreshToken: async (refreshToken: string): Promise<{ access_token: string }> => {
+    const response = await api.post('/auth/refresh', { refresh_token: refreshToken });
+    return response.data;
+  },
+
+  logout: async (): Promise<void> => {
+    await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'patronData']);
+  },
+
+  getCurrentUser: async (): Promise<User> => {
+    const response = await api.get<User>('/users/me');
+    return response.data;
+  },
+};
+</file>
+
+<file path="src/api/borrow.ts">
+import api from './client';
+import { BorrowResponse, ReturnResponse, BorrowRecord, Book } from '../types';
+
+export interface BorrowRequest {
+  barcode: string;
+}
+
+export const borrowApi = {
+  borrowBook: async (barcode: string): Promise<BorrowResponse> => {
+    const response = await api.post<BorrowResponse>('/borrow/', { barcode });
+    return response.data;
+  },
+
+  returnBook: async (barcode: string): Promise<ReturnResponse> => {
+    const response = await api.post<ReturnResponse>('/borrow/return', { barcode });
+    return response.data;
+  },
+
+  getHistory: async (status?: string): Promise<BorrowRecord[]> => {
+    const params = status ? { status_filter: status } : {};
+    const response = await api.get<BorrowRecord[]>('/borrow/history', { params });
+    return response.data;
+  },
+
+  getBooks: async (skip = 0, limit = 50): Promise<Book[]> => {
+    const response = await api.get<Book[]>('/borrow/books', {
+      params: { skip, limit },
+    });
+    return response.data;
+  },
+
+  getBook: async (isbn: string): Promise<Book> => {
+    const response = await api.get<Book>(`/borrow/book/${isbn}`);
+    return response.data;
+  },
+};
+</file>
+
+<file path="src/api/client.ts">
+import axios, { AxiosInstance, AxiosError } from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:80/api';
+
+const api: AxiosInstance = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 30000,
+});
+
+api.interceptors.request.use(
+  async (config) => {
+    const token = await AsyncStorage.getItem('accessToken');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error: AxiosError) => {
+    if (error.response?.status === 401) {
+      const refreshToken = await AsyncStorage.getItem('refreshToken');
+      if (refreshToken) {
+        try {
+          const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
+            refresh_token: refreshToken,
+          });
+          const { access_token } = response.data;
+          await AsyncStorage.setItem('accessToken', access_token);
+          if (error.config) {
+            error.config.headers.Authorization = `Bearer ${access_token}`;
+            return api.request(error.config);
+          }
+        } catch (refreshError) {
+          await AsyncStorage.multiRemove(['accessToken', 'refreshToken']);
+        }
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+export default api;
+</file>
+
+<file path="src/api/index.ts">
+export { default as api } from './client';
+export { authApi } from './auth';
+export { borrowApi } from './borrow';
+export { openLibraryApi } from './openlibrary';
+</file>
+
+<file path="src/api/openlibrary.ts">
+import axios from 'axios';
+import { OpenLibraryBook } from '../types';
+
+const OPEN_LIBRARY_API = 'https://openlibrary.org';
+
+export const openLibraryApi = {
+  getBookByIsbn: async (isbn: string): Promise<OpenLibraryBook | null> => {
+    try {
+      const cleanIsbn = isbn.replace(/[-\s]/g, '');
+      const response = await axios.get(`${OPEN_LIBRARY_API}/api/books`, {
+        params: {
+          bibkeys: `ISBN:${cleanIsbn}`,
+          format: 'json',
+          jscmd: 'data',
+        },
+        timeout: 10000,
+      });
+
+      const data = response.data;
+      const bookKey = `ISBN:${cleanIsbn}`;
+
+      if (data[bookKey]) {
+        return data[bookKey] as OpenLibraryBook;
+      }
+      return null;
+    } catch (error) {
+      console.error('OpenLibrary API error:', error);
+      return null;
+    }
+  },
+};
+</file>
+
+<file path="src/context/AuthContext.tsx">
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { User } from '../types';
+import { authApi } from '../api/auth';
+
+interface AuthContextType {
+  user: User | null;
+  patron: any | null;
+  isLoading: boolean;
+  isAuthenticated: boolean;
+  patronLogin: (studentCode: string, password: string) => Promise<void>;
+  faceLogin: (imageUri: string) => Promise<void>;
+  logout: () => Promise<void>;
+  checkAuth: () => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [patron, setPatron] = useState<any | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const checkAuth = async () => {
+    try {
+      const token = await AsyncStorage.getItem('accessToken');
+      const patronDataStr = await AsyncStorage.getItem('patronData');
+      if (token && patronDataStr) {
+        const patronData = JSON.parse(patronDataStr);
+        setPatron(patronData);
+        setUser({ id: patronData.id, email: patronData.email || '', full_name: patronData.full_name, role: 'patron' });
+      }
+    } catch (error) {
+      console.error('Auth check failed:', error);
+      await authApi.logout();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  const patronLogin = async (studentCode: string, password: string) => {
+    setIsLoading(true);
+    try {
+      console.log('AuthContext patronLogin called');
+      const response = await authApi.patronLogin({ student_code: studentCode, password });
+      console.log('AuthContext received:', response);
+      setPatron(response.patron);
+      console.log('setPatron called');
+      setUser({ id: response.patron.id, email: response.patron.email || '', full_name: response.patron.full_name, role: 'patron' });
+      console.log('setUser called');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const faceLogin = async (imageBase64: string) => {
+    setIsLoading(true);
+    try {
+      await authApi.faceLogin(imageBase64);
+      const userData = await authApi.getCurrentUser();
+      const patronInfo = { id: userData.id, email: userData.email, full_name: userData.full_name, student_code: userData.student_code };
+      await AsyncStorage.setItem('patronData', JSON.stringify(patronInfo));
+      setPatron(patronInfo);
+      setUser({ id: userData.id, email: userData.email, full_name: userData.full_name, role: 'patron' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const logout = async () => {
+    await authApi.logout();
+    setUser(null);
+    setPatron(null);
+  };
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        patron,
+        isLoading,
+        isAuthenticated: !!user,
+        patronLogin,
+        faceLogin,
+        logout,
+        checkAuth,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+}
+</file>
+
+<file path="src/i18n/vi.json">
+{
+  "common": {
+    "loading": "Đang tải...",
+    "error": "Lỗi",
+    "success": "Thành công",
+    "cancel": "Hủy",
+    "confirm": "Xác nhận",
+    "save": "Lưu",
+    "delete": "Xóa",
+    "edit": "Sửa",
+    "close": "Đóng",
+    "retry": "Thử lại",
+    "noData": "Không có dữ liệu"
+  },
+  "auth": {
+    "login": "Đăng nhập",
+    "logout": "Đăng xuất",
+    "email": "Email",
+    "password": "Mật khẩu",
+    "faceLogin": "Đăng nhập bằng khuôn mặt",
+    "faceLoginDesc": "Quét khuôn mặt để đăng nhập nhanh",
+    "forgotPassword": "Quên mật khẩu?",
+    "loginSuccess": "Đăng nhập thành công",
+    "loginFailed": "Đăng nhập thất bại",
+    "invalidCredentials": "Email hoặc mật khẩu không đúng",
+    "tokenExpired": "Phiên đăng nhập hết hạn"
+  },
+  "home": {
+    "welcome": "Xin chào",
+    "patronCard": "Thẻ thư viện",
+    "borrowing": "Sách đang mượn",
+    "returned": "Đã trả",
+    "dueDate": "Hạn trả",
+    "booksBorrowed": "sách đang mượn",
+    "noActiveBorrows": "Bạn chưa mượn cuốn sách nào"
+  },
+  "borrow": {
+    "title": "Mượn sách",
+    "scanBarcode": "Quét mã vạch",
+    "isbnPlaceholder": "Nhập mã ISBN",
+    "searchBook": "Tìm kiếm sách",
+    "bookInfo": "Thông tin sách",
+    "title_label": "Tên sách",
+    "author_label": "Tác giả",
+    "isbn_label": "ISBN",
+    "location_label": "Vị trí",
+    "confirmBorrow": "Xác nhận mượn",
+    "borrowSuccess": "Mượn sách thành công",
+    "borrowFailed": "Mượn sách thất bại",
+    "bookUnavailable": "Sách đang được mượn",
+    "alreadyBorrowed": "Bạn đã mượn sách này",
+    "mustBeInside": "Bạn phải có mặt trong thư viện để mượn sách",
+    "notFound": "Không tìm thấy sách",
+    "dueIn": "Hạn trả sau %d ngày"
+  },
+  "return": {
+    "title": "Trả sách",
+    "scanToReturn": "Quét mã vạch để trả",
+    "confirmReturn": "Xác nhận trả sách",
+    "returnSuccess": "Trả sách thành công",
+    "returnFailed": "Trả sách thất bại",
+    "noActiveBorrow": "Bạn không có bản ghi mượn sách nào đang hoạt động",
+    "bookNotFound": "Sách không tìm thấy trong hệ thống"
+  },
+  "profile": {
+    "title": "Hồ sơ",
+    "fullName": "Họ và tên",
+    "studentCode": "Mã thẻ",
+    "email": "Email",
+    "phone": "Số điện thoại",
+    "cardNumber": "Số thẻ",
+    "memberExpiry": "Ngày hết hạn",
+    "status": "Trạng thái",
+    "faceEnroll": "Đăng ký khuôn mặt",
+    "faceEnrollDesc": "Cập nhật ảnh khuôn mặt để đăng nhập bằng khuôn mặt",
+    "faceEnrolled": "Đã đăng ký khuôn mặt",
+    "faceNotEnrolled": "Chưa đăng ký khuôn mặt",
+    "updateFace": "Cập nhật khuôn mặt",
+    "logout": "Đăng xuất"
+  },
+  "camera": {
+    "title": "Đăng ký khuôn mặt",
+    "instructions": "Đặt khuôn mặt trong khung hình",
+    "angle_frontal": "Góc thẳng",
+    "angle_left": "Góc trái",
+    "angle_right": "Góc phải",
+    "angle_down": "Góc dưới",
+    "capture": "Chụp ảnh",
+    "retake": "Chụp lại",
+    "uploading": "Đang tải lên...",
+    "enrollSuccess": "Đăng ký khuôn mặt thành công",
+    "enrollFailed": "Đăng ký khuôn mặt thất bại"
+  },
+  "nav": {
+    "home": "Trang chủ",
+    "borrow": "Mượn",
+    "return": "Trả",
+    "profile": "Hồ sơ"
+  },
+  "errors": {
+    "network": "Lỗi kết nối mạng",
+    "server": "Lỗi máy chủ",
+    "unauthorized": "Vui lòng đăng nhập",
+    "forbidden": "Bạn không có quyền truy cập",
+    "notFound": "Không tìm thấy",
+    "unknown": "Đã xảy ra lỗi không xác định"
+  }
+}
+</file>
+
+<file path="src/navigation/AppNavigator.tsx">
+import React, { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Animated } from 'react-native';
+import { NavigationContainer, DarkTheme } from '@react-navigation/native';
+import { createStackNavigator } from '@react-navigation/stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { useAuth } from '../context/AuthContext';
+import { colors } from '../theme/colors';
+
+import LoginScreen from '../screens/LoginScreen';
+import FaceLoginScreen from '../screens/FaceLoginScreen';
+import RegisterScreen from '../screens/RegisterScreen';
+import HomeScreen from '../screens/HomeScreen';
+import BorrowScreen from '../screens/BorrowScreen';
+import ProfileScreen from '../screens/ProfileScreen';
+import FaceCameraScreen from '../screens/FaceCameraScreen';
+
+import { AuthStackParamList, MainTabParamList, MainStackParamList } from './types';
+
+const AuthStack = createStackNavigator<AuthStackParamList>();
+const MainTab = createBottomTabNavigator<MainTabParamList>();
+const MainStack = createStackNavigator<MainStackParamList>();
+const RootStack = createStackNavigator();
+
+function AuthNavigator() {
+  return (
+    <AuthStack.Navigator
+      screenOptions={{
+        headerShown: false,
+        cardStyle: { backgroundColor: colors.background },
+      }}
+    >
+      <AuthStack.Screen name="Login" component={LoginScreen} />
+      <AuthStack.Screen name="Register" component={RegisterScreen} />
+      <AuthStack.Screen
+        name="FaceLogin"
+        component={FaceLoginScreen}
+        options={{
+          headerShown: true,
+          headerTitle: 'Đăng nhập khuôn mặt',
+          headerStyle: { backgroundColor: colors.surface },
+          headerTintColor: colors.text,
+        }}
+      />
+    </AuthStack.Navigator>
+  );
+}
+
+function MainTabNavigator() {
+  return (
+    <MainTab.Navigator
+      screenOptions={{
+        tabBarStyle: {
+          backgroundColor: colors.surface,
+          borderTopColor: colors.border,
+          paddingTop: 6,
+        },
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textSecondary,
+        headerStyle: {
+          backgroundColor: colors.surface,
+        },
+        headerTintColor: colors.text,
+      }}
+    >
+      <MainTab.Screen
+        name="Home"
+        component={HomeScreen}
+        options={{
+          title: 'Trang chủ',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="home" size={size} color={color} />
+          ),
+        }}
+      />
+      <MainTab.Screen
+        name="Borrow"
+        component={BorrowScreen}
+        options={{
+          title: 'Mượn sách',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="book-plus" size={size} color={color} />
+          ),
+        }}
+      />
+      <MainTab.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{
+          title: 'Hồ sơ',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="account" size={size} color={color} />
+          ),
+        }}
+      />
+    </MainTab.Navigator>
+  );
+}
+
+function MainStackNavigator() {
+  return (
+    <MainStack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: colors.surface },
+        headerTintColor: colors.text,
+      }}
+    >
+      <MainStack.Screen
+        name="MainTabs"
+        component={MainTabNavigator}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="FaceCamera"
+        component={FaceCameraScreen}
+        options={{
+          title: 'Cập nhật khuôn mặt',
+          presentation: 'modal',
+        }}
+      />
+    </MainStack.Navigator>
+  );
+}
+
+const navigationTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    background: colors.background,
+    card: colors.surface,
+    text: colors.text,
+    primary: colors.primary,
+    border: colors.border,
+  },
+};
+
+export default function AppNavigator() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
+
+  return (
+    <NavigationContainer theme={navigationTheme}>
+      <RootStack.Navigator screenOptions={{ headerShown: false }}>
+        {isAuthenticated ? (
+          <RootStack.Screen name="Main" component={MainStackNavigator} />
+        ) : (
+          <RootStack.Screen name="Auth" component={AuthNavigator} />
+        )}
+      </RootStack.Navigator>
+    </NavigationContainer>
+  );
+}
+
+function LoadingScreen() {
+  const opacity = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [opacity]);
+
+  return (
+    <View style={loadingStyles.container}>
+      <View style={loadingStyles.logoCircle}>
+        <Text style={loadingStyles.logoText}>TV</Text>
+      </View>
+      <Animated.Text style={[loadingStyles.brand, { opacity }]}>
+        Thư Viện
+      </Animated.Text>
+    </View>
+  );
+}
+
+const loadingStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logoCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  logoText: {
+    color: colors.background,
+    fontSize: 32,
+    fontWeight: '800',
+    letterSpacing: 3,
+  },
+  brand: {
+    color: colors.primary,
+    fontSize: 20,
+    fontWeight: '600',
+    letterSpacing: 4,
+  },
+});
+</file>
+
+<file path="src/navigation/types.ts">
+import { NavigatorScreenParams } from '@react-navigation/native';
+
+export type AuthStackParamList = {
+  Login: undefined;
+  Register: undefined;
+  FaceLogin: undefined;
+};
+
+export type MainTabParamList = {
+  Home: undefined;
+  Borrow: undefined;
+  Profile: undefined;
+};
+
+export type MainStackParamList = {
+  MainTabs: NavigatorScreenParams<MainTabParamList>;
+  FaceCamera: undefined;
+};
+
+export type RootStackParamList = {
+  Auth: NavigatorScreenParams<AuthStackParamList>;
+  Main: NavigatorScreenParams<MainStackParamList>;
+};
+
+declare global {
+  namespace ReactNavigation {
+    interface RootParamList extends RootStackParamList {}
+  }
+}
+</file>
+
+<file path="src/screens/BorrowScreen.tsx">
+import React, { useState } from 'react';
+import { View, StyleSheet, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Text, Button, Surface, TextInput, ActivityIndicator, Card } from 'react-native-paper';
+import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
+import { borrowApi } from '../api/borrow';
+import { openLibraryApi } from '../api/openlibrary';
+import { Book, OpenLibraryBook } from '../types';
+import { colors } from '../theme/colors';
+
+interface BorrowScreenProps {
+  navigation: any;
+}
+
+export default function BorrowScreen({ navigation }: BorrowScreenProps) {
+  const [scanned, setScanned] = useState(false);
+  const [isbn, setIsbn] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [book, setBook] = useState<OpenLibraryBook | null>(null);
+  const [localBook, setLocalBook] = useState<Book | null>(null);
+  const [isBorrowing, setIsBorrowing] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
+
+  const searchBook = async (isbnToSearch: string) => {
+    if (!isbnToSearch.trim()) return;
+
+    setIsSearching(true);
+    try {
+      try {
+        const localBookData = await borrowApi.getBook(isbnToSearch.trim());
+        setLocalBook(localBookData);
+      } catch {
+      }
+
+      const openLibraryBook = await openLibraryApi.getBookByIsbn(isbnToSearch.trim());
+      if (openLibraryBook) {
+        setBook(openLibraryBook);
+      } else if (!localBook) {
+        Alert.alert('Không tìm thấy', 'Không tìm thấy sách với ISBN này');
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+      Alert.alert('Lỗi', 'Không thể tìm kiếm sách');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleBarCodeScanned = (result: BarcodeScanningResult) => {
+    if (scanned || !result.data) return;
+    setScanned(true);
+    setIsbn(result.data);
+    searchBook(result.data);
+  };
+
+  const handleBorrow = async () => {
+    if (!isbn.trim()) return;
+
+    setIsBorrowing(true);
+    try {
+      const result = await borrowApi.borrowBook(isbn.trim());
+      if (result.status === 'success') {
+        Alert.alert('Thành công', result.message, [
+          { text: 'OK', onPress: () => resetState() },
+        ]);
+      }
+    } catch (error: any) {
+      const message = error?.response?.data?.detail || 'Mượn sách thất bại';
+      Alert.alert('Lỗi', message);
+    } finally {
+      setIsBorrowing(false);
+    }
+  };
+
+  const resetState = () => {
+    setScanned(false);
+    setIsbn('');
+    setBook(null);
+    setLocalBook(null);
+  };
+
+  const displayBook = book || (localBook ? {
+    title: localBook.title,
+    author: localBook.author,
+    cover: localBook.cover_url ? { medium: localBook.cover_url } : undefined
+  } : null);
+
+  if (!permission) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <ActivityIndicator color={colors.primary} />
+      </SafeAreaView>
+    );
+  }
+
+  if (!permission.granted) {
+    return (
+      <SafeAreaView style={styles.permissionContainer} edges={['bottom']}>
+        <Text style={styles.permissionText}>Cần quyền camera để quét mã vạch</Text>
+        <Button mode="contained" onPress={requestPermission} style={styles.permissionButton}>
+          Cấp quyền
+        </Button>
+        <View style={styles.divider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.orText}>hoặc nhập ISBN thủ công</Text>
+          <View style={styles.dividerLine} />
+        </View>
+        <TextInput
+          label="ISBN"
+          value={isbn}
+          onChangeText={setIsbn}
+          mode="outlined"
+          style={styles.isbnInput}
+          outlineStyle={styles.inputOutline}
+          activeOutlineColor={colors.primary}
+          right={<TextInput.Icon icon="magnify" onPress={() => searchBook(isbn)} color={colors.primary} />}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      {!scanned ? (
+        <View style={styles.scannerContainer}>
+          <CameraView
+            style={styles.camera}
+            facing="back"
+            barcodeScannerSettings={{
+              barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
+            }}
+            onBarcodeScanned={handleBarCodeScanned}
+          >
+            <View style={styles.overlay}>
+              <View style={styles.scanArea}>
+                <View style={[styles.corner, styles.topLeft]} />
+                <View style={[styles.corner, styles.topRight]} />
+                <View style={[styles.corner, styles.bottomLeft]} />
+                <View style={[styles.corner, styles.bottomRight]} />
+              </View>
+              <Text style={styles.scanText}>Đặt mã vạch trong khung hình</Text>
+            </View>
+          </CameraView>
+
+          <Surface style={styles.manualInput} elevation={0}>
+            <View style={styles.manualAccent} />
+            <Text variant="bodyMedium" style={styles.manualLabel}>Hoặc nhập ISBN thủ công:</Text>
+            <TextInput
+              label="ISBN"
+              value={isbn}
+              onChangeText={setIsbn}
+              mode="outlined"
+              style={styles.isbnInputFull}
+              outlineStyle={styles.inputOutline}
+              activeOutlineColor={colors.primary}
+              right={<TextInput.Icon icon="magnify" onPress={() => searchBook(isbn)} disabled={isSearching} color={colors.primary} />}
+            />
+          </Surface>
+        </View>
+      ) : (
+        <View style={styles.resultContainer}>
+          {isSearching ? (
+            <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
+          ) : displayBook ? (
+            <Card style={styles.bookCard}>
+              <View style={styles.cardAccent} />
+              {displayBook.cover?.medium && (
+                <Card.Cover source={{ uri: displayBook.cover.medium }} style={styles.cover} />
+              )}
+              <Card.Content>
+                <Text variant="titleLarge" style={styles.bookTitle}>
+                  {displayBook.title}
+                </Text>
+                {'authors' in displayBook && displayBook.authors ? (
+                  <Text variant="bodyMedium" style={styles.bookAuthor}>
+                    {displayBook.authors[0]?.name}
+                  </Text>
+                ) : 'author' in displayBook && displayBook.author ? (
+                  <Text variant="bodyMedium" style={styles.bookAuthor}>
+                    {displayBook.author}
+                  </Text>
+                ) : null}
+                <Text variant="bodySmall" style={styles.isbnLabel}>
+                  ISBN: {isbn}
+                </Text>
+                {localBook?.shelf_location && (
+                  <Text variant="bodySmall" style={styles.locationLabel}>
+                    Vị trí: {localBook.shelf_location}
+                  </Text>
+                )}
+              </Card.Content>
+              <Card.Actions style={styles.cardActions}>
+                <Button
+                  mode="outlined"
+                  onPress={resetState}
+                  style={styles.cardActionButton}
+                  labelStyle={styles.cardActionButtonLabel}
+                >
+                  Quét lại
+                </Button>
+                <Button
+                  mode="contained"
+                  onPress={handleBorrow}
+                  loading={isBorrowing}
+                  disabled={isBorrowing}
+                  style={styles.cardActionButton}
+                  labelStyle={styles.cardActionButtonLabel}
+                >
+                  Xác nhận mượn
+                </Button>
+              </Card.Actions>
+            </Card>
+          ) : null}
+        </View>
+      )}
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  permissionContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: colors.background,
+  },
+  permissionText: {
+    color: colors.text,
+    fontSize: 16,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  permissionButton: {
+    borderRadius: 6,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 24,
+    paddingHorizontal: 16,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.divider,
+  },
+  orText: {
+    color: colors.textSecondary,
+    marginHorizontal: 12,
+    fontSize: 12,
+  },
+  isbnInput: {
+    width: '80%',
+    marginTop: 4,
+    backgroundColor: 'transparent',
+  },
+  inputOutline: {
+    borderRadius: 6,
+    borderColor: colors.border,
+  },
+  scannerContainer: {
+    flex: 1,
+  },
+  camera: {
+    flex: 1,
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scanArea: {
+    width: 280,
+    height: 150,
+    borderRadius: 8,
+    position: 'relative',
+  },
+  corner: {
+    position: 'absolute',
+    width: 36,
+    height: 36,
+    borderColor: colors.primary,
+    borderWidth: 2,
+  },
+  topLeft: {
+    top: 0,
+    left: 0,
+    borderRightWidth: 0,
+    borderBottomWidth: 0,
+    borderTopLeftRadius: 8,
+  },
+  topRight: {
+    top: 0,
+    right: 0,
+    borderLeftWidth: 0,
+    borderBottomWidth: 0,
+    borderTopRightRadius: 8,
+  },
+  bottomLeft: {
+    bottom: 0,
+    left: 0,
+    borderRightWidth: 0,
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 8,
+  },
+  bottomRight: {
+    bottom: 0,
+    right: 0,
+    borderLeftWidth: 0,
+    borderTopWidth: 0,
+    borderBottomRightRadius: 8,
+  },
+  scanText: {
+    color: colors.text,
+    marginTop: 20,
+    fontSize: 16,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  manualInput: {
+    padding: 16,
+    backgroundColor: colors.surface,
+    position: 'relative',
+    overflow: 'hidden',
+    borderTopWidth: 0.5,
+    borderTopColor: colors.border,
+  },
+  manualAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+    backgroundColor: colors.primary,
+  },
+  manualLabel: {
+    color: colors.textSecondary,
+    marginBottom: 8,
+    fontSize: 13,
+  },
+  isbnInputFull: {
+    marginTop: 4,
+    backgroundColor: 'transparent',
+  },
+  resultContainer: {
+    flex: 1,
+    padding: 16,
+    justifyContent: 'center',
+  },
+  loader: {
+    alignSelf: 'center',
+  },
+  bookCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+    overflow: 'hidden',
+    position: 'relative',
+    borderWidth: 0.5,
+    borderColor: colors.border,
+  },
+  cardAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+    backgroundColor: colors.primary,
+    zIndex: 1,
+  },
+  cover: {
+    height: 200,
+    resizeMode: 'contain',
+    backgroundColor: colors.surfaceVariant,
+  },
+  bookTitle: {
+    color: colors.text,
+    marginTop: 12,
+    fontWeight: '700',
+    fontSize: 18,
+  },
+  bookAuthor: {
+    color: colors.textSecondary,
+    marginTop: 4,
+    fontSize: 14,
+  },
+  isbnLabel: {
+    color: colors.textSecondary,
+    marginTop: 8,
+    fontSize: 13,
+  },
+  locationLabel: {
+    color: colors.primary,
+    marginTop: 4,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  cardActions: {
+    padding: 12,
+    gap: 8,
+  },
+  cardActionButton: {
+    borderRadius: 6,
+  },
+  cardActionButtonLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+});
+</file>
+
+<file path="src/screens/FaceCameraScreen.tsx">
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { View, StyleSheet, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Text, Button, Surface, ProgressBar, Avatar } from 'react-native-paper';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import api from '../api/client';
+import { useAuth } from '../context/AuthContext';
+import { colors } from '../theme/colors';
+
+const ANGLES = ['frontal', 'right', 'left', 'down'] as const;
+const ANGLE_LABELS: Record<string, string> = {
+  frontal: 'Mặt thẳng',
+  right: 'Quay phải',
+  left: 'Quay trái',
+  down: 'Cuối xuống',
+};
+const ANGLE_INSTRUCTIONS: Record<string, string> = {
+  frontal: 'Nhìn thẳng vào camera',
+  right: 'Từ từ quay đầu sang phải',
+  left: 'Từ từ quay đầu sang trái',
+  down: 'Cuối nhẹ đầu xuống',
+};
+const COUNTDOWN_SECONDS = 3;
+
+interface FaceCameraScreenProps {
+  navigation: any;
+}
+
+export default function FaceCameraScreen({ navigation }: FaceCameraScreenProps) {
+  const { patron } = useAuth();
+  const [permission, requestPermission] = useCameraPermissions();
+  const [currentAngleIndex, setCurrentAngleIndex] = useState(0);
+  const [capturedPhotos, setCapturedPhotos] = useState<Record<string, string>>({});
+  const [isUploading, setIsUploading] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [isAutoAdvancing, setIsAutoAdvancing] = useState(false);
+  const cameraRef = useRef<CameraView>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const currentAngle = ANGLES[currentAngleIndex];
+  const progress = Object.keys(capturedPhotos).length / ANGLES.length;
+  const allCaptured = Object.keys(capturedPhotos).length === ANGLES.length;
+
+  const clearTimers = useCallback(() => {
+    if (countdownRef.current) {
+      clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
+    if (advanceTimerRef.current) {
+      clearTimeout(advanceTimerRef.current);
+      advanceTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (countdownRef.current) clearInterval(countdownRef.current);
+      if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (permission?.granted && !capturedPhotos[ANGLES[currentAngleIndex]]) {
+      startCountdown();
+    }
+    return () => {
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+        countdownRef.current = null;
+      }
+    };
+  }, [permission, currentAngleIndex, capturedPhotos]);
+
+  const startCountdown = () => {
+    clearTimers();
+    setCountdown(COUNTDOWN_SECONDS);
+    let count = COUNTDOWN_SECONDS;
+    countdownRef.current = setInterval(() => {
+      count--;
+      if (count <= 0) {
+        clearTimers();
+        setCountdown(0);
+        capturePhoto();
+      } else {
+        setCountdown(count);
+      }
+    }, 1000);
+  };
+
+  const capturePhoto = async () => {
+    if (!cameraRef.current) return;
+
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        base64: true,
+        quality: 0.8,
+      });
+      if (photo?.base64) {
+        setCapturedPhotos((prev) => ({
+          ...prev,
+          [currentAngle]: photo.base64!,
+        }));
+        if (currentAngleIndex < ANGLES.length - 1) {
+          setIsAutoAdvancing(true);
+          advanceTimerRef.current = setTimeout(() => {
+            setIsAutoAdvancing(false);
+            setCurrentAngleIndex((prev) => prev + 1);
+          }, 800);
+        }
+      }
+    } catch (error) {
+      console.error('Capture error:', error);
+    }
+  };
+
+  const retakeAngle = (angle: string) => {
+    clearTimers();
+    setCapturedPhotos((prev) => {
+      const updated = { ...prev };
+      delete updated[angle];
+      return updated;
+    });
+    const idx = ANGLES.indexOf(angle as typeof ANGLES[number]);
+    if (idx >= 0) setCurrentAngleIndex(idx);
+  };
+
+  const uploadAllPhotos = async () => {
+    if (Object.keys(capturedPhotos).length !== ANGLES.length) {
+      Alert.alert('Thiếu ảnh', 'Vui lòng chụp đủ 4 góc khuôn mặt');
+      return;
+    }
+
+    if (!patron?.id) {
+      Alert.alert('Lỗi', 'Không tìm thấy thông tin tài khoản');
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      for (const angle of ANGLES) {
+        const formData = new FormData();
+        formData.append('image_data', capturedPhotos[angle]);
+        formData.append('angle', angle);
+        await api.post(`/patrons/${patron.id}/enroll-face`, formData);
+      }
+      Alert.alert('Thành công', 'Đăng ký khuôn mặt thành công!', [
+        { text: 'OK', onPress: () => navigation.goBack() },
+      ]);
+    } catch (error: any) {
+      const message = error?.response?.data?.detail || 'Đăng ký khuôn mặt thất bại';
+      Alert.alert('Lỗi', message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  if (!permission) {
+    return <SafeAreaView style={styles.container} />;
+  }
+
+  if (!permission.granted) {
+    return (
+      <SafeAreaView style={styles.permissionContainer} edges={['bottom']}>
+        <Text style={styles.permissionText}>Cần quyền camera để đăng ký khuôn mặt</Text>
+        <Button mode="contained" onPress={requestPermission} style={styles.permissionButton}>
+          Cấp quyền
+        </Button>
+        <Button mode="text" onPress={() => navigation.goBack()} style={styles.backButton}>
+          Quay lại
+        </Button>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      <View style={styles.progressContainer}>
+        <ProgressBar progress={progress} color={colors.primary} style={styles.progressBar} />
+        <Text style={styles.progressText}>
+          {Object.keys(capturedPhotos).length} / {ANGLES.length} góc
+        </Text>
+      </View>
+
+      <View style={styles.angleTabs}>
+        {ANGLES.map((angle, index) => (
+          <View
+            key={angle}
+            style={[
+              styles.angleTab,
+              index === currentAngleIndex && !capturedPhotos[angle] && styles.angleTabActive,
+              capturedPhotos[angle] && styles.angleTabDone,
+            ]}
+          >
+            <Text
+              style={[
+                styles.angleTabText,
+                index === currentAngleIndex && !capturedPhotos[angle] && styles.angleTabTextActive,
+              ]}
+            >
+              {ANGLE_LABELS[angle]}
+            </Text>
+            {capturedPhotos[angle] && (
+              <Avatar.Icon size={16} icon="check" style={styles.angleCheck} />
+            )}
+          </View>
+        ))}
+      </View>
+
+      <CameraView ref={cameraRef} style={styles.camera} facing="front">
+        <View style={styles.overlay}>
+          <View style={styles.faceGuide}>
+            <View style={[styles.guideCorner, styles.topLeft]} />
+            <View style={[styles.guideCorner, styles.topRight]} />
+            <View style={[styles.guideCorner, styles.bottomLeft]} />
+            <View style={[styles.guideCorner, styles.bottomRight]} />
+          </View>
+          <Text style={styles.instruction}>
+            {capturedPhotos[currentAngle]
+              ? 'Đã chụp'
+              : ANGLE_INSTRUCTIONS[currentAngle]}
+          </Text>
+
+          {countdown !== null && countdown > 0 && !capturedPhotos[currentAngle] && (
+            <View style={styles.countdownOverlay}>
+              <Text style={styles.countdownText}>{countdown}</Text>
+            </View>
+          )}
+
+          {allCaptured && (
+            <Button
+              mode="contained"
+              onPress={uploadAllPhotos}
+              loading={isUploading}
+              disabled={isUploading}
+              style={styles.submitOverlayButton}
+              labelStyle={styles.submitOverlayLabel}
+            >
+              Hoàn tất
+            </Button>
+          )}
+        </View>
+      </CameraView>
+
+      <Surface style={styles.controls} elevation={0}>
+        <View style={styles.anglePreviewRow}>
+          {ANGLES.map((angle) => (
+            <View key={angle} style={styles.anglePreviewItem}>
+              <View
+                style={[
+                  styles.anglePreviewDot,
+                  capturedPhotos[angle]
+                    ? styles.anglePreviewDone
+                    : angle === currentAngle
+                    ? styles.anglePreviewActive
+                    : styles.anglePreviewPending,
+                ]}
+              />
+              <Text
+                style={[
+                  styles.anglePreviewLabel,
+                  angle === currentAngle && styles.anglePreviewLabelActive,
+                ]}
+                numberOfLines={1}
+              >
+                {ANGLE_LABELS[angle]}
+              </Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.controlActions}>
+          {allCaptured ? (
+            <Button
+              mode="contained"
+              onPress={uploadAllPhotos}
+              loading={isUploading}
+              disabled={isUploading}
+              style={styles.submitButton}
+              labelStyle={styles.submitButtonLabel}
+            >
+              Hoàn tất
+            </Button>
+          ) : (
+            <>
+              <Button
+                mode="outlined"
+                onPress={() => retakeAngle(currentAngle)}
+                style={styles.retakeButton}
+                labelStyle={styles.retakeButtonLabel}
+                disabled={!capturedPhotos[currentAngle] || isAutoAdvancing}
+              >
+                Chụp lại
+              </Button>
+              <Button
+                mode="text"
+                onPress={() => {
+                  clearTimers();
+                  navigation.goBack();
+                }}
+                textColor={colors.textSecondary}
+                style={styles.cancelButton}
+                labelStyle={styles.cancelButtonLabel}
+              >
+                Hủy
+              </Button>
+            </>
+          )}
+        </View>
+      </Surface>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  permissionContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: colors.background,
+  },
+  permissionText: {
+    color: colors.text,
+    fontSize: 16,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  permissionButton: {
+    borderRadius: 6,
+  },
+  backButton: {
+    marginTop: 16,
+  },
+  progressContainer: {
+    padding: 12,
+    paddingHorizontal: 16,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.border,
+  },
+  progressBar: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.surfaceVariant,
+  },
+  progressText: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    marginTop: 6,
+    textAlign: 'center',
+  },
+  angleTabs: {
+    flexDirection: 'row',
+    backgroundColor: colors.surface,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    gap: 6,
+  },
+  angleTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    borderRadius: 6,
+    backgroundColor: colors.surfaceVariant,
+    gap: 4,
+  },
+  angleTabActive: {
+    backgroundColor: colors.primary,
+  },
+  angleTabDone: {
+    backgroundColor: colors.success,
+  },
+  angleTabText: {
+    color: colors.textSecondary,
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  angleTabTextActive: {
+    color: colors.background,
+    fontWeight: '700',
+  },
+  angleCheck: {
+    backgroundColor: 'transparent',
+  },
+  camera: {
+    flex: 1,
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  faceGuide: {
+    width: 220,
+    height: 280,
+    borderRadius: 110,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    position: 'relative',
+  },
+  guideCorner: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    borderColor: colors.secondary,
+    borderWidth: 2,
+  },
+  topLeft: {
+    top: -2,
+    left: -2,
+    borderRightWidth: 0,
+    borderBottomWidth: 0,
+    borderTopLeftRadius: 110,
+  },
+  topRight: {
+    top: -2,
+    right: -2,
+    borderLeftWidth: 0,
+    borderBottomWidth: 0,
+    borderTopRightRadius: 110,
+  },
+  bottomLeft: {
+    bottom: -2,
+    left: -2,
+    borderRightWidth: 0,
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 110,
+  },
+  bottomRight: {
+    bottom: -2,
+    right: -2,
+    borderLeftWidth: 0,
+    borderTopWidth: 0,
+    borderBottomRightRadius: 110,
+  },
+  instruction: {
+    color: colors.text,
+    marginTop: 20,
+    fontSize: 15,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  countdownOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  countdownText: {
+    color: colors.primary,
+    fontSize: 72,
+    fontWeight: '800',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
+  },
+  submitOverlayButton: {
+    marginTop: 24,
+    borderRadius: 6,
+  },
+  submitOverlayLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  controls: {
+    padding: 16,
+    paddingTop: 12,
+    backgroundColor: colors.surface,
+    borderTopWidth: 0.5,
+    borderTopColor: colors.border,
+  },
+  anglePreviewRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  anglePreviewItem: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  anglePreviewDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  anglePreviewPending: {
+    backgroundColor: colors.border,
+  },
+  anglePreviewActive: {
+    backgroundColor: colors.primary,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  anglePreviewDone: {
+    backgroundColor: colors.success,
+  },
+  anglePreviewLabel: {
+    color: colors.textDisabled,
+    fontSize: 9,
+  },
+  anglePreviewLabelActive: {
+    color: colors.text,
+    fontWeight: '600',
+  },
+  controlActions: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  submitButton: {
+    width: '100%',
+    borderRadius: 6,
+  },
+  submitButtonLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  retakeButton: {
+    borderRadius: 6,
+  },
+  retakeButtonLabel: {
+    fontSize: 13,
+  },
+  cancelButton: {
+    marginTop: 2,
+  },
+  cancelButtonLabel: {
+    fontSize: 13,
+  },
+});
+</file>
+
+<file path="src/screens/FaceLoginScreen.tsx">
+import React, { useState, useRef } from 'react';
+import { View, StyleSheet, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Text, Button, Surface } from 'react-native-paper';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useAuth } from '../context/AuthContext';
+import { colors } from '../theme/colors';
+
+interface FaceLoginScreenProps {
+  navigation: any;
+}
+
+export default function FaceLoginScreen({ navigation }: FaceLoginScreenProps) {
+  const [permission, requestPermission] = useCameraPermissions();
+  const [isCapturing, setIsCapturing] = useState(false);
+  const cameraRef = useRef<CameraView>(null);
+  const { faceLogin } = useAuth();
+
+  const captureFace = async () => {
+    if (!cameraRef.current || isCapturing) return;
+
+    setIsCapturing(true);
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.8,
+      });
+      if (photo?.uri) {
+        await faceLogin(photo.uri);
+      }
+    } catch (error: any) {
+      const message = error?.response?.data?.detail || error?.message || 'Đăng nhập thất bại';
+      Alert.alert('Lỗi', message);
+    } finally {
+      setIsCapturing(false);
+    }
+  };
+
+  if (!permission) {
+    return <SafeAreaView style={styles.container} />;
+  }
+
+  if (!permission.granted) {
+    return (
+      <SafeAreaView style={styles.permissionContainer} edges={['bottom']}>
+        <Text style={styles.permissionText}>Cần quyền camera để đăng nhập bằng khuôn mặt</Text>
+        <Button mode="contained" onPress={requestPermission} style={styles.permissionButton}>
+          Cấp quyền
+        </Button>
+        <Button mode="text" onPress={() => navigation.goBack()} style={styles.backButton}>
+          Quay lại đăng nhập bằng mật khẩu
+        </Button>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      <CameraView
+        ref={cameraRef}
+        style={styles.camera}
+        facing="front"
+      >
+        <View style={styles.overlay}>
+          <View style={styles.faceGuide}>
+            <View style={[styles.guideCorner, styles.topLeft]} />
+            <View style={[styles.guideCorner, styles.topRight]} />
+            <View style={[styles.guideCorner, styles.bottomLeft]} />
+            <View style={[styles.guideCorner, styles.bottomRight]} />
+          </View>
+          <Text style={styles.instruction}>
+            Đặt khuôn mặt trong khung hình và giữ yên
+          </Text>
+        </View>
+      </CameraView>
+
+      <Surface style={styles.controls} elevation={0}>
+        <Text style={styles.hint}>
+          {isCapturing ? 'Đang xử lý...' : 'Nhấn nút để đăng nhập'}
+        </Text>
+        <Button
+          mode="contained"
+          onPress={captureFace}
+          loading={isCapturing}
+          disabled={isCapturing}
+          style={styles.captureButton}
+          contentStyle={styles.captureButtonContent}
+          labelStyle={styles.captureButtonLabel}
+          icon="face-recognition"
+        >
+          Đăng nhập bằng khuôn mặt
+        </Button>
+        <Button
+          mode="text"
+          onPress={() => navigation.goBack()}
+          textColor={colors.textSecondary}
+          style={styles.backLink}
+          labelStyle={styles.backLinkLabel}
+        >
+          Quay lại đăng nhập bằng mật khẩu
+        </Button>
+      </Surface>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  permissionContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: colors.background,
+  },
+  permissionText: {
+    color: colors.text,
+    fontSize: 16,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  permissionButton: {
+    borderRadius: 6,
+  },
+  backButton: {
+    marginTop: 16,
+  },
+  camera: {
+    flex: 1,
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  faceGuide: {
+    width: 220,
+    height: 280,
+    borderRadius: 110,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    position: 'relative',
+  },
+  guideCorner: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    borderColor: colors.secondary,
+    borderWidth: 2,
+  },
+  topLeft: {
+    top: -2,
+    left: -2,
+    borderRightWidth: 0,
+    borderBottomWidth: 0,
+    borderTopLeftRadius: 110,
+  },
+  topRight: {
+    top: -2,
+    right: -2,
+    borderLeftWidth: 0,
+    borderBottomWidth: 0,
+    borderTopRightRadius: 110,
+  },
+  bottomLeft: {
+    bottom: -2,
+    left: -2,
+    borderRightWidth: 0,
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 110,
+  },
+  bottomRight: {
+    bottom: -2,
+    right: -2,
+    borderLeftWidth: 0,
+    borderTopWidth: 0,
+    borderBottomRightRadius: 110,
+  },
+  instruction: {
+    color: colors.text,
+    marginTop: 24,
+    fontSize: 16,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  controls: {
+    padding: 24,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    alignItems: 'center',
+    borderTopWidth: 0.5,
+    borderTopColor: colors.border,
+  },
+  hint: {
+    color: colors.textSecondary,
+    marginBottom: 16,
+    fontSize: 14,
+  },
+  captureButton: {
+    width: '100%',
+    marginBottom: 8,
+    borderRadius: 6,
+  },
+  captureButtonContent: {
+    paddingVertical: 10,
+  },
+  captureButtonLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  backLink: {
+    marginTop: 4,
+  },
+  backLinkLabel: {
+    fontSize: 13,
+  },
+});
+</file>
+
+<file path="src/screens/HomeScreen.tsx">
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Text, Surface, Button, Avatar, Badge, useTheme } from 'react-native-paper';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { useAuth } from '../context/AuthContext';
+import { borrowApi } from '../api/borrow';
+import { BorrowRecord } from '../types';
+import { colors } from '../theme/colors';
+import { formatDate, getDaysUntil, isOverdue } from '../utils/dateUtils';
+
+interface HomeScreenProps {
+  navigation: any;
+}
+
+export default function HomeScreen({ navigation }: HomeScreenProps) {
+  const { user } = useAuth();
+  const theme = useTheme();
+  const [borrows, setBorrows] = useState<BorrowRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadBorrows = async () => {
+    try {
+      const history = await borrowApi.getHistory('borrowed');
+      setBorrows(history);
+    } catch (error) {
+      console.error('Failed to load borrows:', error);
+    }
+  };
+
+  useEffect(() => {
+    loadBorrows();
+  }, []);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadBorrows();
+    setRefreshing(false);
+  };
+
+  const activeBorrows = borrows.filter((b) => b.status === 'borrowed');
+  const overdueCount = activeBorrows.filter((b) => isOverdue(b.due_at)).length;
+
+  return (
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <ScrollView
+      style={styles.flex}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+    >
+      <View style={styles.headerAccent} />
+      <Surface style={styles.header} elevation={0}>
+        <View style={styles.avatarRow}>
+          <Avatar.Text size={56} label={user?.full_name?.[0] || user?.email?.[0] || 'U'} color={colors.background} style={styles.avatar} />
+          <View style={styles.greetingBlock}>
+            <Text variant="titleMedium" style={styles.greeting}>
+              Xin chào
+            </Text>
+            <Text variant="titleLarge" style={styles.userName}>
+              {user?.full_name || user?.email}
+            </Text>
+          </View>
+        </View>
+        <Text variant="bodyMedium" style={styles.subtitle}>
+          Chào mừng đến với Thư Viện
+        </Text>
+      </Surface>
+
+      <View style={styles.statsRow}>
+        <Surface style={styles.statCard} elevation={0}>
+          <View style={styles.bookmarkEdge} />
+          <Text variant="displaySmall" style={styles.statNumber}>
+            {activeBorrows.length}
+          </Text>
+          <Text variant="bodySmall" style={styles.statLabel}>
+            Sách đang mượn
+          </Text>
+        </Surface>
+        <Surface style={[styles.statCard, overdueCount > 0 && styles.statCardWarning]} elevation={0}>
+          <View style={[styles.bookmarkEdge, overdueCount > 0 && styles.bookmarkEdgeWarning]} />
+          <Text variant="displaySmall" style={[styles.statNumber, overdueCount > 0 && styles.warningText]}>
+            {overdueCount}
+          </Text>
+          <Text variant="bodySmall" style={styles.statLabel}>
+            Quá hạn
+          </Text>
+        </Surface>
+      </View>
+
+      <View style={styles.actions}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate('Borrow')}
+        >
+          <Surface style={styles.actionInner} elevation={0}>
+            <View style={styles.actionIcon}>
+              <MaterialCommunityIcons name="book-plus" size={20} color={colors.background} />
+            </View>
+            <Text style={styles.actionLabel}>Mượn sách</Text>
+          </Surface>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.actionButton}
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate('Borrow')}
+        >
+          <Surface style={styles.actionInner} elevation={0}>
+            <View style={styles.actionIconSecondary}>
+              <MaterialCommunityIcons name="history" size={20} color={colors.text} />
+            </View>
+            <Text style={styles.actionLabel}>Lịch sử</Text>
+          </Surface>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.section}>
+        <Text variant="titleMedium" style={styles.sectionTitle}>
+          Sách đang mượn
+        </Text>
+        {activeBorrows.length === 0 ? (
+          <Surface style={styles.emptyCard} elevation={0}>
+            <MaterialCommunityIcons name="bookshelf" size={36} color={colors.textSecondary} />
+            <Text variant="bodyMedium" style={styles.emptyText}>
+              Bạn chưa mượn cuốn sách nào
+            </Text>
+            <Button
+              mode="contained"
+              onPress={() => navigation.navigate('Borrow')}
+              style={styles.emptyButton}
+              labelStyle={styles.emptyButtonLabel}
+            >
+              Mượn sách ngay
+            </Button>
+          </Surface>
+        ) : (
+          activeBorrows.map((record) => {
+            const daysLeft = getDaysUntil(record.due_at);
+            const overdue = daysLeft < 0;
+            return (
+              <Surface key={record.id} style={styles.borrowCard} elevation={0}>
+                <View style={[styles.bookmarkBar, overdue ? styles.bookmarkBarOverdue : styles.bookmarkBarActive]} />
+                <View style={styles.borrowContent}>
+                  <View style={styles.borrowHeader}>
+                    <Text variant="titleMedium" style={styles.bookTitle} numberOfLines={1}>
+                      {record.book_id}
+                    </Text>
+                    <Badge
+                      style={[styles.badge, overdue ? styles.badgeOverdue : styles.badgeActive]}
+                      size={22}
+                    >
+                      {overdue ? 'Quá hạn' : `Còn ${daysLeft} ngày`}
+                    </Badge>
+                  </View>
+                  <Text variant="bodySmall" style={styles.borrowInfo}>
+                    Mượn: {formatDate(record.borrow_at)}
+                  </Text>
+                  <Text variant="bodySmall" style={styles.borrowInfo}>
+                    Hạn trả: {formatDate(record.due_at)}
+                  </Text>
+                </View>
+              </Surface>
+            );
+          })
+        )}
+      </View>
+    </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  flex: {
+    flex: 1,
+  },
+  headerAccent: {
+    height: 4,
+    backgroundColor: colors.primary,
+  },
+  header: {
+    padding: 20,
+    paddingBottom: 12,
+    backgroundColor: colors.surface,
+  },
+  avatarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  avatar: {
+    backgroundColor: colors.primary,
+  },
+  greetingBlock: {
+    flex: 1,
+  },
+  greeting: {
+    color: colors.textSecondary,
+  },
+  userName: {
+    color: colors.text,
+    fontWeight: '700',
+    marginTop: -2,
+  },
+  subtitle: {
+    color: colors.textSecondary,
+    marginTop: 10,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    padding: 16,
+    paddingBottom: 8,
+    gap: 12,
+  },
+  statCard: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 8,
+    backgroundColor: colors.surface,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  bookmarkEdge: {
+    position: 'absolute',
+    left: 0,
+    top: 8,
+    bottom: 8,
+    width: 3,
+    backgroundColor: colors.primary,
+    borderRadius: 2,
+  },
+  bookmarkEdgeWarning: {
+    backgroundColor: colors.warning,
+  },
+  statCardWarning: {
+    borderColor: colors.warning,
+    borderWidth: 0.5,
+  },
+  statNumber: {
+    color: colors.primary,
+    fontWeight: '700',
+    fontSize: 32,
+    lineHeight: 38,
+  },
+  warningText: {
+    color: colors.warning,
+  },
+  statLabel: {
+    color: colors.textSecondary,
+    marginTop: 4,
+    fontSize: 12,
+  },
+  actions: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    gap: 12,
+    marginBottom: 8,
+  },
+  actionButton: {
+    flex: 1,
+  },
+  actionInner: {
+    padding: 14,
+    borderRadius: 8,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 10,
+    borderWidth: 0.5,
+    borderColor: colors.border,
+  },
+  actionIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionIconSecondary: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: colors.secondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionLabel: {
+    color: colors.text,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  section: {
+    padding: 16,
+    paddingTop: 8,
+  },
+  sectionTitle: {
+    color: colors.text,
+    marginBottom: 12,
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  emptyCard: {
+    padding: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 0.5,
+    borderColor: colors.border,
+  },
+  emptyText: {
+    color: colors.textSecondary,
+    marginBottom: 16,
+  },
+  emptyButton: {
+    borderRadius: 6,
+  },
+  emptyButtonLabel: {
+    fontSize: 14,
+  },
+  borrowCard: {
+    marginBottom: 10,
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+    flexDirection: 'row',
+    overflow: 'hidden',
+    borderWidth: 0.5,
+    borderColor: colors.border,
+  },
+  bookmarkBar: {
+    width: 3,
+    borderRadius: 2,
+  },
+  bookmarkBarActive: {
+    backgroundColor: colors.primary,
+  },
+  bookmarkBarOverdue: {
+    backgroundColor: colors.error,
+  },
+  borrowContent: {
+    flex: 1,
+    padding: 14,
+  },
+  borrowHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  bookTitle: {
+    color: colors.text,
+    flex: 1,
+    marginRight: 8,
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  badge: {
+    borderRadius: 4,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  badgeOverdue: {
+    backgroundColor: colors.error,
+  },
+  badgeActive: {
+    backgroundColor: colors.success,
+  },
+  borrowInfo: {
+    color: colors.textSecondary,
+    marginTop: 2,
+    fontSize: 13,
+  },
+});
+</file>
+
+<file path="src/screens/LoginScreen.tsx">
+import React, { useState } from 'react';
+import { View, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { TextInput, Button, Text, Surface, useTheme } from 'react-native-paper';
+import { useAuth } from '../context/AuthContext';
+import { colors } from '../theme/colors';
+
+interface LoginScreenProps {
+  navigation: any;
+}
+
+export default function LoginScreen({ navigation }: LoginScreenProps) {
+  const [studentCode, setStudentCode] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const { patronLogin } = useAuth();
+  const theme = useTheme();
+
+  const handleLogin = async () => {
+    if (!studentCode.trim() || !password.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập mã sinh viên và mật khẩu');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await patronLogin(studentCode.trim(), password);
+    } catch (error: any) {
+      console.log('Login error:', error);
+      let message = 'Đăng nhập thất bại';
+      if (error.response?.data?.detail) {
+        message = error.response.data.detail;
+      } else if (error.code === 'ECONNABORTED') {
+        message = 'Kết nối quá lâu. Vui lòng thử lại.';
+      } else if (!error.response) {
+        message = 'Không thể kết nối server. Vui lòng kiểm tra mạng.';
+      }
+      Alert.alert('Lỗi', message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View style={styles.content}>
+          <View style={styles.brandSection}>
+            <View style={styles.logoCircle}>
+              <Text style={styles.logoText}>TV</Text>
+            </View>
+            <Text variant="displaySmall" style={styles.title}>
+              Thư Viện
+            </Text>
+            <Text variant="bodyLarge" style={styles.subtitle}>
+              Đăng nhập để tiếp tục
+            </Text>
+          </View>
+
+          <Surface style={styles.form} elevation={0}>
+            <View style={styles.formAccent} />
+            <TextInput
+              label="Mã sinh viên"
+              value={studentCode}
+              onChangeText={setStudentCode}
+              mode="outlined"
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={styles.input}
+              outlineStyle={styles.inputOutline}
+              left={<TextInput.Icon icon="account" color={colors.textSecondary} />}
+              activeOutlineColor={colors.primary}
+            />
+
+            <TextInput
+              label="Mật khẩu"
+              value={password}
+              onChangeText={setPassword}
+              mode="outlined"
+              secureTextEntry={!showPassword}
+              style={styles.input}
+              outlineStyle={styles.inputOutline}
+              left={<TextInput.Icon icon="lock" color={colors.textSecondary} />}
+              right={
+                <TextInput.Icon
+                  icon={showPassword ? 'eye-off' : 'eye'}
+                  onPress={() => setShowPassword(!showPassword)}
+                  color={colors.textSecondary}
+                />
+              }
+              activeOutlineColor={colors.primary}
+            />
+
+            <Button
+              mode="contained"
+              onPress={handleLogin}
+              loading={isLoading}
+              disabled={isLoading}
+              style={styles.button}
+              contentStyle={styles.buttonContent}
+              labelStyle={styles.buttonLabel}
+            >
+              Đăng nhập
+            </Button>
+
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text variant="bodySmall" style={styles.dividerText}>
+                hoặc
+              </Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <Button
+              mode="outlined"
+              onPress={() => navigation.navigate('FaceLogin')}
+              style={styles.faceButton}
+              contentStyle={styles.faceButtonContent}
+              labelStyle={styles.faceButtonLabel}
+              icon="face-recognition"
+            >
+              Đăng nhập bằng khuôn mặt
+            </Button>
+
+            <Button
+              mode="text"
+              onPress={() => navigation.navigate('Register')}
+              style={styles.registerButton}
+              labelStyle={styles.registerLabel}
+            >
+              Chưa có tài khoản? Đăng ký ngay
+            </Button>
+          </Surface>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  flex: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: 24,
+  },
+  brandSection: {
+    alignItems: 'center',
+    marginBottom: 36,
+  },
+  logoCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  logoText: {
+    color: colors.background,
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: 2,
+  },
+  title: {
+    color: colors.text,
+    fontWeight: '700',
+    fontSize: 32,
+  },
+  subtitle: {
+    color: colors.textSecondary,
+    marginTop: 6,
+  },
+  form: {
+    padding: 24,
+    borderRadius: 8,
+    backgroundColor: colors.surface,
+    position: 'relative',
+    overflow: 'hidden',
+    borderWidth: 0.5,
+    borderColor: colors.border,
+  },
+  formAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+    backgroundColor: colors.primary,
+    borderTopRightRadius: 2,
+    borderBottomRightRadius: 2,
+  },
+  input: {
+    marginBottom: 16,
+    backgroundColor: 'transparent',
+  },
+  inputOutline: {
+    borderRadius: 6,
+    borderColor: colors.border,
+  },
+  button: {
+    marginTop: 8,
+    borderRadius: 6,
+  },
+  buttonContent: {
+    paddingVertical: 10,
+  },
+  buttonLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 24,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.divider,
+  },
+  dividerText: {
+    color: colors.textSecondary,
+    marginHorizontal: 16,
+    fontSize: 12,
+  },
+  faceButton: {
+    borderColor: colors.primary,
+    borderRadius: 6,
+  },
+  faceButtonContent: {
+    paddingVertical: 8,
+  },
+  faceButtonLabel: {
+    fontSize: 14,
+  },
+  registerButton: {
+    marginTop: 16,
+  },
+  registerLabel: {
+    fontSize: 13,
+  },
+});
+</file>
+
+<file path="src/screens/ProfileScreen.tsx">
+import React from 'react';
+import { View, StyleSheet, ScrollView, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Text, Surface, List, Button, Avatar, Divider } from 'react-native-paper';
+import { useAuth } from '../context/AuthContext';
+import { colors } from '../theme/colors';
+
+interface ProfileScreenProps {
+  navigation: any;
+}
+
+export default function ProfileScreen({ navigation }: ProfileScreenProps) {
+  const { user, patron, logout } = useAuth();
+
+  const handleLogout = () => {
+    Alert.alert('Đăng xuất', 'Bạn có chắc muốn đăng xuất?', [
+      { text: 'Hủy', style: 'cancel' },
+      { text: 'Đăng xuất', onPress: logout, style: 'destructive' },
+    ]);
+  };
+
+  return (
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <ScrollView style={styles.flex}>
+      <Surface style={styles.header} elevation={0}>
+        <View style={styles.avatarWrapper}>
+          <Avatar.Text size={72} label={user?.full_name?.[0] || user?.email?.[0] || 'U'} color={colors.background} style={styles.avatar} />
+        </View>
+        <Text variant="headlineSmall" style={styles.name}>
+          {user?.full_name || 'Người dùng'}
+        </Text>
+        <Text variant="bodyMedium" style={styles.email}>
+          {user?.email}
+        </Text>
+        {patron?.student_code && (
+          <Text variant="bodySmall" style={styles.studentCode}>
+            MSSV: {patron.student_code}
+          </Text>
+        )}
+        <View style={styles.roleBadge}>
+          <Text variant="bodySmall" style={styles.role}>
+            {user?.role === 'admin' ? 'Quản trị viên' : 'Độc giả'}
+          </Text>
+        </View>
+      </Surface>
+
+      <Surface style={styles.section} elevation={0}>
+        <View style={styles.sectionAccent} />
+        <List.Section>
+          <List.Subheader style={styles.subheader}>Tài khoản</List.Subheader>
+
+          <List.Item
+            title="Họ và tên"
+            titleStyle={styles.itemTitle}
+            description={user?.full_name || 'Chưa cập nhật'}
+            descriptionStyle={styles.itemDescription}
+            left={(props) => <List.Icon {...props} icon="account" color={colors.primary} />}
+          />
+          <Divider style={styles.divider} />
+          <List.Item
+            title="Email"
+            titleStyle={styles.itemTitle}
+            description={user?.email}
+            descriptionStyle={styles.itemDescription}
+            left={(props) => <List.Icon {...props} icon="email" color={colors.primary} />}
+          />
+          <Divider style={styles.divider} />
+          {patron?.student_code && (
+            <>
+              <List.Item
+                title="MSSV"
+                titleStyle={styles.itemTitle}
+                description={patron.student_code}
+                descriptionStyle={styles.itemDescription}
+                left={(props) => <List.Icon {...props} icon="card-account-details" color={colors.primary} />}
+              />
+              <Divider style={styles.divider} />
+            </>
+          )}
+          <List.Item
+            title="Vai trò"
+            titleStyle={styles.itemTitle}
+            description={user?.role === 'admin' ? 'Quản trị viên' : 'Độc giả'}
+            descriptionStyle={styles.itemDescription}
+            left={(props) => <List.Icon {...props} icon="shield-account" color={colors.primary} />}
+          />
+        </List.Section>
+      </Surface>
+
+      <Surface style={styles.section} elevation={0}>
+        <View style={styles.sectionAccent} />
+        <List.Section>
+          <List.Subheader style={styles.subheader}>Khuôn mặt</List.Subheader>
+
+          <List.Item
+            title="Đăng ký khuôn mặt"
+            titleStyle={styles.itemTitle}
+            description="Cập nhật ảnh khuôn mặt để đăng nhập bằng khuôn mặt"
+            descriptionStyle={styles.itemDescription}
+            left={(props) => <List.Icon {...props} icon="face-recognition" color={colors.primary} />}
+            right={(props) => (
+              <Button
+                mode="contained"
+                onPress={() => navigation.navigate('FaceCamera')}
+                style={styles.updateButton}
+                labelStyle={styles.updateButtonLabel}
+              >
+                Cập nhật
+              </Button>
+            )}
+          />
+        </List.Section>
+      </Surface>
+
+      <View style={styles.actions}>
+        <Button
+          mode="outlined"
+          onPress={handleLogout}
+          style={styles.logoutButton}
+          labelStyle={styles.logoutLabel}
+          icon="logout"
+        >
+          Đăng xuất
+        </Button>
+      </View>
+
+      <View style={styles.versionRow}>
+        <Text variant="bodySmall" style={styles.version}>
+          Thư Viện App
+        </Text>
+        <Text variant="bodySmall" style={styles.versionSeparator}>•</Text>
+        <Text variant="bodySmall" style={styles.version}>
+          v1.0.0
+        </Text>
+      </View>
+    </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  flex: {
+    flex: 1,
+  },
+  header: {
+    padding: 32,
+    paddingTop: 24,
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.border,
+  },
+  avatarWrapper: {
+    padding: 3,
+    borderRadius: 40,
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  avatar: {
+    backgroundColor: colors.primary,
+  },
+  name: {
+    color: colors.text,
+    marginTop: 16,
+    fontWeight: '700',
+  },
+  email: {
+    color: colors.textSecondary,
+    marginTop: 4,
+  },
+  studentCode: {
+    color: colors.secondary,
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  roleBadge: {
+    marginTop: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    borderRadius: 4,
+    backgroundColor: colors.surfaceVariant,
+  },
+  role: {
+    color: colors.primary,
+    fontWeight: '600',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    fontSize: 11,
+  },
+  section: {
+    margin: 16,
+    marginBottom: 0,
+    borderRadius: 8,
+    backgroundColor: colors.surface,
+    overflow: 'hidden',
+    position: 'relative',
+    borderWidth: 0.5,
+    borderColor: colors.border,
+  },
+  sectionAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+    backgroundColor: colors.primary,
+  },
+  subheader: {
+    color: colors.primary,
+    fontWeight: '600',
+    fontSize: 13,
+    letterSpacing: 0.5,
+  },
+  itemTitle: {
+    color: colors.text,
+    fontSize: 14,
+  },
+  itemDescription: {
+    color: colors.textSecondary,
+    fontSize: 13,
+  },
+  divider: {
+    backgroundColor: colors.divider,
+    height: 0.5,
+  },
+  updateButton: {
+    borderRadius: 6,
+  },
+  updateButtonLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  actions: {
+    padding: 16,
+  },
+  logoutButton: {
+    borderColor: colors.error,
+    borderRadius: 6,
+  },
+  logoutLabel: {
+    color: colors.error,
+    fontSize: 14,
+  },
+  versionRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginVertical: 16,
+    gap: 6,
+  },
+  version: {
+    color: colors.textDisabled,
+    fontSize: 12,
+  },
+  versionSeparator: {
+    color: colors.textDisabled,
+    fontSize: 10,
+  },
+});
+</file>
+
+<file path="src/screens/RegisterScreen.tsx">
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { View, StyleSheet, Alert, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { TextInput, Button, Text, Surface, ProgressBar, Avatar } from 'react-native-paper';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import api from '../api/client';
+import { authApi } from '../api/auth';
+import { colors } from '../theme/colors';
+
+const ANGLES = ['frontal', 'right', 'left', 'down'] as const;
+const ANGLE_LABELS: Record<string, string> = {
+  frontal: 'Mặt thẳng',
+  right: 'Quay phải',
+  left: 'Quay trái',
+  down: 'Cuối xuống',
+};
+const ANGLE_INSTRUCTIONS: Record<string, string> = {
+  frontal: 'Nhìn thẳng vào camera',
+  right: 'Từ từ quay đầu sang phải',
+  left: 'Từ từ quay đầu sang trái',
+  down: 'Cuối nhẹ đầu xuống',
+};
+const COUNTDOWN_SECONDS = 3;
+
+interface RegisterScreenProps {
+  navigation: any;
+}
+
+export default function RegisterScreen({ navigation }: RegisterScreenProps) {
+  const [step, setStep] = useState<'form' | 'face'>('form');
+  const [studentCode, setStudentCode] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [className, setClassName] = useState('');
+  const [permission, requestPermission] = useCameraPermissions();
+  const [currentAngleIndex, setCurrentAngleIndex] = useState(0);
+  const [capturedPhotos, setCapturedPhotos] = useState<Record<string, string>>({});
+  const [isUploading, setIsUploading] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [isAutoAdvancing, setIsAutoAdvancing] = useState(false);
+  const cameraRef = useRef<CameraView>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const currentAngle = ANGLES[currentAngleIndex];
+  const progress = Object.keys(capturedPhotos).length / ANGLES.length;
+  const allCaptured = Object.keys(capturedPhotos).length === ANGLES.length;
+
+  const clearTimers = useCallback(() => {
+    if (countdownRef.current) {
+      clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
+    if (advanceTimerRef.current) {
+      clearTimeout(advanceTimerRef.current);
+      advanceTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (countdownRef.current) clearInterval(countdownRef.current);
+      if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (step === 'face' && permission?.granted && !capturedPhotos[ANGLES[currentAngleIndex]]) {
+      startCountdown();
+    }
+    return () => {
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+        countdownRef.current = null;
+      }
+    };
+  }, [step, permission, currentAngleIndex, capturedPhotos]);
+
+  const startCountdown = () => {
+    clearTimers();
+    setCountdown(COUNTDOWN_SECONDS);
+    let count = COUNTDOWN_SECONDS;
+    countdownRef.current = setInterval(() => {
+      count--;
+      if (count <= 0) {
+        clearTimers();
+        setCountdown(0);
+        capturePhoto();
+      } else {
+        setCountdown(count);
+      }
+    }, 1000);
+  };
+
+  const capturePhoto = async () => {
+    if (!cameraRef.current) return;
+
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        base64: true,
+        quality: 0.8,
+      });
+      if (photo?.base64) {
+        setCapturedPhotos((prev) => ({
+          ...prev,
+          [currentAngle]: photo.base64!,
+        }));
+        if (currentAngleIndex < ANGLES.length - 1) {
+          setIsAutoAdvancing(true);
+          advanceTimerRef.current = setTimeout(() => {
+            setIsAutoAdvancing(false);
+            setCurrentAngleIndex((prev) => prev + 1);
+          }, 800);
+        }
+      }
+    } catch (error) {
+      console.error('Capture error:', error);
+    }
+  };
+
+  const retakeAngle = (angle: string) => {
+    clearTimers();
+    setCapturedPhotos((prev) => {
+      const updated = { ...prev };
+      delete updated[angle];
+      return updated;
+    });
+    const idx = ANGLES.indexOf(angle as typeof ANGLES[number]);
+    if (idx >= 0) setCurrentAngleIndex(idx);
+  };
+
+  const validateForm = () => {
+    if (!studentCode.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập mã sinh viên');
+      return false;
+    }
+    if (studentCode.length < 4) {
+      Alert.alert('Lỗi', 'Mã sinh viên phải có ít nhất 4 ký tự');
+      return false;
+    }
+    if (!fullName.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập họ tên');
+      return false;
+    }
+    if (!password) {
+      Alert.alert('Lỗi', 'Vui lòng nhập mật khẩu');
+      return false;
+    }
+    if (password.length < 6) {
+      Alert.alert('Lỗi', 'Mật khẩu phải có ít nhất 6 ký tự');
+      return false;
+    }
+    if (password !== confirmPassword) {
+      Alert.alert('Lỗi', 'Mật khẩu xác nhận không khớp');
+      return false;
+    }
+    return true;
+  };
+
+  const handleContinueToFace = () => {
+    if (validateForm()) {
+      setStep('face');
+    }
+  };
+
+  const handleRegister = async () => {
+    if (Object.keys(capturedPhotos).length !== ANGLES.length) {
+      Alert.alert('Thiếu ảnh', 'Vui lòng chụp đủ 4 góc khuôn mặt');
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const registerResponse = await authApi.patronRegister({
+        student_code: studentCode.trim(),
+        password: password,
+        full_name: fullName.trim(),
+        class_name: className.trim() || undefined,
+      });
+
+      const { patron } = registerResponse;
+
+      for (const angle of ANGLES) {
+        const formData = new FormData();
+        formData.append('image_data', capturedPhotos[angle]);
+        formData.append('angle', angle);
+        await api.post(`/patrons/${patron.id}/enroll-face`, formData);
+      }
+
+      Alert.alert('Thành công', 'Đăng ký tài khoản thành công!', [
+        { text: 'Đăng nhập ngay', onPress: () => navigation.replace('Login') },
+      ]);
+    } catch (error: any) {
+      const message = error?.response?.data?.detail || 'Đăng ký thất bại';
+      Alert.alert('Lỗi', message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  if (step === 'face') {
+    if (!permission) {
+      return <SafeAreaView style={styles.container} />;
+    }
+
+    if (!permission.granted) {
+      return (
+        <SafeAreaView style={styles.permissionContainer}>
+          <Text style={styles.permissionText}>Cần quyền camera để đăng ký khuôn mặt</Text>
+          <Button mode="contained" onPress={requestPermission} style={styles.permissionButton}>
+            Cấp quyền
+          </Button>
+          <Button mode="text" onPress={() => setStep('form')} style={styles.backButton}>
+            Quay lại
+          </Button>
+        </SafeAreaView>
+      );
+    }
+
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.progressContainer}>
+          <ProgressBar progress={progress} color={colors.primary} style={styles.progressBar} />
+          <Text style={styles.progressText}>
+            {Object.keys(capturedPhotos).length} / {ANGLES.length} góc
+          </Text>
+        </View>
+
+        <View style={styles.angleTabs}>
+          {ANGLES.map((angle, index) => (
+            <View
+              key={angle}
+              style={[
+                styles.angleTab,
+                index === currentAngleIndex && !capturedPhotos[angle] && styles.angleTabActive,
+                capturedPhotos[angle] && styles.angleTabDone,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.angleTabText,
+                  index === currentAngleIndex && !capturedPhotos[angle] && styles.angleTabTextActive,
+                ]}
+              >
+                {ANGLE_LABELS[angle]}
+              </Text>
+              {capturedPhotos[angle] && (
+                <Avatar.Icon size={16} icon="check" style={styles.angleCheck} />
+              )}
+            </View>
+          ))}
+        </View>
+
+        <CameraView ref={cameraRef} style={styles.camera} facing="front">
+          <View style={styles.overlay}>
+            <View style={styles.faceGuide}>
+              <View style={[styles.guideCorner, styles.topLeft]} />
+              <View style={[styles.guideCorner, styles.topRight]} />
+              <View style={[styles.guideCorner, styles.bottomLeft]} />
+              <View style={[styles.guideCorner, styles.bottomRight]} />
+            </View>
+            <Text style={styles.instruction}>
+              {capturedPhotos[currentAngle]
+                ? 'Đã chụp'
+                : ANGLE_INSTRUCTIONS[currentAngle]}
+            </Text>
+
+            {countdown !== null && countdown > 0 && !capturedPhotos[currentAngle] && (
+              <View style={styles.countdownOverlay}>
+                <Text style={styles.countdownText}>{countdown}</Text>
+              </View>
+            )}
+
+            {allCaptured && (
+              <Button
+                mode="contained"
+                onPress={handleRegister}
+                loading={isUploading}
+                disabled={isUploading}
+                style={styles.submitOverlayButton}
+                labelStyle={styles.submitOverlayLabel}
+              >
+                Hoàn tất đăng ký
+              </Button>
+            )}
+          </View>
+        </CameraView>
+
+        <Surface style={styles.controls} elevation={0}>
+          <View style={styles.anglePreviewRow}>
+            {ANGLES.map((angle) => (
+              <View key={angle} style={styles.anglePreviewItem}>
+                <View
+                  style={[
+                    styles.anglePreviewDot,
+                    capturedPhotos[angle]
+                      ? styles.anglePreviewDone
+                      : angle === currentAngle
+                      ? styles.anglePreviewActive
+                      : styles.anglePreviewPending,
+                  ]}
+                />
+                <Text
+                  style={[
+                    styles.anglePreviewLabel,
+                    angle === currentAngle && styles.anglePreviewLabelActive,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {ANGLE_LABELS[angle]}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.controlActions}>
+            {allCaptured ? (
+              <Button
+                mode="contained"
+                onPress={handleRegister}
+                loading={isUploading}
+                disabled={isUploading}
+                style={styles.submitButton}
+                labelStyle={styles.submitButtonLabel}
+              >
+                Hoàn tất đăng ký
+              </Button>
+            ) : (
+              <>
+                <Button
+                  mode="outlined"
+                  onPress={() => retakeAngle(currentAngle)}
+                  style={styles.retakeButton}
+                  labelStyle={styles.retakeButtonLabel}
+                  disabled={!capturedPhotos[currentAngle] || isAutoAdvancing}
+                >
+                  Chụp lại
+                </Button>
+                <Button
+                  mode="text"
+                  onPress={() => {
+                    clearTimers();
+                    setStep('form');
+                  }}
+                  textColor={colors.textSecondary}
+                  style={styles.cancelButton}
+                  labelStyle={styles.cancelButtonLabel}
+                >
+                  Hủy
+                </Button>
+              </>
+            )}
+          </View>
+        </Surface>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <ScrollView style={styles.flex} contentContainerStyle={styles.scrollContent}>
+        <Surface style={styles.formContainer} elevation={0}>
+          <View style={styles.formAccent} />
+          <Text style={styles.formTitle}>Đăng ký tài khoản</Text>
+          <Text style={styles.formSubtitle}>Nhập thông tin để đăng ký tài khoản mới</Text>
+
+          <TextInput
+            label="Mã sinh viên"
+            value={studentCode}
+            onChangeText={setStudentCode}
+            mode="outlined"
+            style={styles.input}
+            outlineStyle={styles.inputOutline}
+            autoCapitalize="none"
+            left={<TextInput.Icon icon="account" color={colors.textSecondary} />}
+            activeOutlineColor={colors.primary}
+          />
+
+          <TextInput
+            label="Họ và tên"
+            value={fullName}
+            onChangeText={setFullName}
+            mode="outlined"
+            style={styles.input}
+            outlineStyle={styles.inputOutline}
+            left={<TextInput.Icon icon="account-outline" color={colors.textSecondary} />}
+            activeOutlineColor={colors.primary}
+          />
+
+          <TextInput
+            label="Lớp (không bắt buộc)"
+            value={className}
+            onChangeText={setClassName}
+            mode="outlined"
+            style={styles.input}
+            outlineStyle={styles.inputOutline}
+            left={<TextInput.Icon icon="school" color={colors.textSecondary} />}
+            activeOutlineColor={colors.primary}
+          />
+
+          <TextInput
+            label="Mật khẩu"
+            value={password}
+            onChangeText={setPassword}
+            mode="outlined"
+            style={styles.input}
+            outlineStyle={styles.inputOutline}
+            secureTextEntry
+            left={<TextInput.Icon icon="lock" color={colors.textSecondary} />}
+            activeOutlineColor={colors.primary}
+          />
+
+          <TextInput
+            label="Xác nhận mật khẩu"
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            mode="outlined"
+            style={styles.input}
+            outlineStyle={styles.inputOutline}
+            secureTextEntry
+            left={<TextInput.Icon icon="lock-check" color={colors.textSecondary} />}
+            activeOutlineColor={colors.primary}
+          />
+
+          <Button
+            mode="contained"
+            onPress={handleContinueToFace}
+            style={styles.continueButton}
+            contentStyle={styles.continueButtonContent}
+            labelStyle={styles.continueButtonLabel}
+          >
+            Tiếp tục đăng ký khuôn mặt
+          </Button>
+
+          <Button
+            mode="text"
+            onPress={() => navigation.goBack()}
+            textColor={colors.textSecondary}
+            style={styles.loginLink}
+            labelStyle={styles.loginLinkLabel}
+          >
+            Đã có tài khoản? Đăng nhập
+          </Button>
+        </Surface>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  flex: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: 16,
+  },
+  permissionContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: colors.background,
+  },
+  permissionText: {
+    color: colors.text,
+    fontSize: 16,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  permissionButton: {
+    borderRadius: 6,
+  },
+  backButton: {
+    marginTop: 16,
+  },
+  formContainer: {
+    padding: 24,
+    borderRadius: 8,
+    backgroundColor: colors.surface,
+    position: 'relative',
+    overflow: 'hidden',
+    borderWidth: 0.5,
+    borderColor: colors.border,
+  },
+  formAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+    backgroundColor: colors.primary,
+    borderTopRightRadius: 2,
+    borderBottomRightRadius: 2,
+  },
+  formTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  formSubtitle: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginBottom: 24,
+  },
+  input: {
+    marginBottom: 16,
+    backgroundColor: 'transparent',
+  },
+  inputOutline: {
+    borderRadius: 6,
+    borderColor: colors.border,
+  },
+  continueButton: {
+    marginTop: 8,
+    borderRadius: 6,
+  },
+  continueButtonContent: {
+    paddingVertical: 10,
+  },
+  continueButtonLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  loginLink: {
+    marginTop: 16,
+  },
+  loginLinkLabel: {
+    fontSize: 13,
+  },
+  progressContainer: {
+    padding: 12,
+    paddingHorizontal: 16,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.border,
+  },
+  progressBar: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.surfaceVariant,
+  },
+  progressText: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    marginTop: 6,
+    textAlign: 'center',
+  },
+  angleTabs: {
+    flexDirection: 'row',
+    backgroundColor: colors.surface,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    gap: 6,
+  },
+  angleTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    borderRadius: 6,
+    backgroundColor: colors.surfaceVariant,
+    gap: 4,
+  },
+  angleTabActive: {
+    backgroundColor: colors.primary,
+  },
+  angleTabDone: {
+    backgroundColor: colors.success,
+  },
+  angleTabText: {
+    color: colors.textSecondary,
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  angleTabTextActive: {
+    color: colors.background,
+    fontWeight: '700',
+  },
+  angleCheck: {
+    backgroundColor: 'transparent',
+  },
+  camera: {
+    flex: 1,
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  faceGuide: {
+    width: 220,
+    height: 280,
+    borderRadius: 110,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    position: 'relative',
+  },
+  guideCorner: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    borderColor: colors.secondary,
+    borderWidth: 2,
+  },
+  topLeft: {
+    top: -2,
+    left: -2,
+    borderRightWidth: 0,
+    borderBottomWidth: 0,
+    borderTopLeftRadius: 110,
+  },
+  topRight: {
+    top: -2,
+    right: -2,
+    borderLeftWidth: 0,
+    borderBottomWidth: 0,
+    borderTopRightRadius: 110,
+  },
+  bottomLeft: {
+    bottom: -2,
+    left: -2,
+    borderRightWidth: 0,
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 110,
+  },
+  bottomRight: {
+    bottom: -2,
+    right: -2,
+    borderLeftWidth: 0,
+    borderTopWidth: 0,
+    borderBottomRightRadius: 110,
+  },
+  instruction: {
+    color: colors.text,
+    marginTop: 20,
+    fontSize: 15,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  countdownOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  countdownText: {
+    color: colors.primary,
+    fontSize: 72,
+    fontWeight: '800',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
+  },
+  submitOverlayButton: {
+    marginTop: 24,
+    borderRadius: 6,
+  },
+  submitOverlayLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  controls: {
+    padding: 16,
+    paddingTop: 12,
+    backgroundColor: colors.surface,
+    borderTopWidth: 0.5,
+    borderTopColor: colors.border,
+  },
+  anglePreviewRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  anglePreviewItem: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  anglePreviewDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  anglePreviewPending: {
+    backgroundColor: colors.border,
+  },
+  anglePreviewActive: {
+    backgroundColor: colors.primary,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  anglePreviewDone: {
+    backgroundColor: colors.success,
+  },
+  anglePreviewLabel: {
+    color: colors.textDisabled,
+    fontSize: 9,
+  },
+  anglePreviewLabelActive: {
+    color: colors.text,
+    fontWeight: '600',
+  },
+  controlActions: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  submitButton: {
+    width: '100%',
+    borderRadius: 6,
+  },
+  submitButtonLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  retakeButton: {
+    borderRadius: 6,
+  },
+  retakeButtonLabel: {
+    fontSize: 13,
+  },
+  cancelButton: {
+    marginTop: 2,
+  },
+  cancelButtonLabel: {
+    fontSize: 13,
+  },
+});
+</file>
+
+<file path="src/screens/ReturnScreen.tsx">
+import React, { useState } from 'react';
+import { View, StyleSheet, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Text, Button, Surface, TextInput, ActivityIndicator, Card } from 'react-native-paper';
+import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
+import { borrowApi } from '../api/borrow';
+import { openLibraryApi } from '../api/openlibrary';
+import { BorrowRecord } from '../types';
+import { colors } from '../theme/colors';
+
+interface ReturnScreenProps {
+  navigation: any;
+}
+
+export default function ReturnScreen({ navigation }: ReturnScreenProps) {
+  const [scanned, setScanned] = useState(false);
+  const [isbn, setIsbn] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [activeRecord, setActiveRecord] = useState<BorrowRecord | null>(null);
+  const [bookTitle, setBookTitle] = useState<string>('');
+  const [bookCover, setBookCover] = useState<string | null>(null);
+  const [isReturning, setIsReturning] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
+
+  const searchActiveBorrow = async (isbnToSearch: string) => {
+    setIsSearching(true);
+    try {
+      const history = await borrowApi.getHistory('borrowed');
+      if (history.length > 0) {
+        setActiveRecord(history[0]);
+      }
+
+      const openLibraryBook = await openLibraryApi.getBookByIsbn(isbnToSearch.trim());
+      if (openLibraryBook) {
+        setBookTitle(openLibraryBook.title);
+        setBookCover(openLibraryBook.cover?.medium || null);
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleBarCodeScanned = (result: BarcodeScanningResult) => {
+    if (scanned || !result.data) return;
+    setScanned(true);
+    setIsbn(result.data);
+    searchActiveBorrow(result.data);
+  };
+
+  const handleReturn = async () => {
+    if (!isbn.trim()) return;
+
+    setIsReturning(true);
+    try {
+      const result = await borrowApi.returnBook(isbn.trim());
+      if (result.status === 'success') {
+        Alert.alert('Thành công', result.message, [
+          { text: 'OK', onPress: () => resetState() },
+        ]);
+      }
+    } catch (error: any) {
+      const message = error?.response?.data?.detail || 'Trả sách thất bại';
+      Alert.alert('Lỗi', message);
+    } finally {
+      setIsReturning(false);
+    }
+  };
+
+  const resetState = () => {
+    setScanned(false);
+    setIsbn('');
+    setActiveRecord(null);
+    setBookTitle('');
+    setBookCover(null);
+  };
+
+  if (!permission) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <ActivityIndicator color={colors.primary} />
+      </SafeAreaView>
+    );
+  }
+
+  if (!permission.granted) {
+    return (
+      <SafeAreaView style={styles.permissionContainer} edges={['bottom']}>
+        <Text style={styles.permissionText}>Cần quyền camera để quét mã vạch</Text>
+        <Button mode="contained" onPress={requestPermission} style={styles.permissionButton}>
+          Cấp quyền
+        </Button>
+        <View style={styles.divider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.orText}>hoặc nhập ISBN thủ công</Text>
+          <View style={styles.dividerLine} />
+        </View>
+        <TextInput
+          label="ISBN"
+          value={isbn}
+          onChangeText={setIsbn}
+          mode="outlined"
+          style={styles.isbnInput}
+          outlineStyle={styles.inputOutline}
+          activeOutlineColor={colors.primary}
+          right={<TextInput.Icon icon="magnify" onPress={() => searchActiveBorrow(isbn)} color={colors.primary} />}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      {!scanned ? (
+        <View style={styles.scannerContainer}>
+          <CameraView
+            style={styles.camera}
+            facing="back"
+            barcodeScannerSettings={{
+              barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
+            }}
+            onBarcodeScanned={handleBarCodeScanned}
+          >
+            <View style={styles.overlay}>
+              <View style={styles.scanArea}>
+                <View style={[styles.corner, styles.topLeft]} />
+                <View style={[styles.corner, styles.topRight]} />
+                <View style={[styles.corner, styles.bottomLeft]} />
+                <View style={[styles.corner, styles.bottomRight]} />
+              </View>
+              <Text style={styles.scanText}>Đặt mã vạch trong khung hình</Text>
+            </View>
+          </CameraView>
+
+          <Surface style={styles.manualInput} elevation={0}>
+            <View style={styles.manualAccent} />
+            <Text variant="bodyMedium" style={styles.manualLabel}>Hoặc nhập ISBN thủ công:</Text>
+            <TextInput
+              label="ISBN"
+              value={isbn}
+              onChangeText={setIsbn}
+              mode="outlined"
+              style={styles.isbnInputFull}
+              outlineStyle={styles.inputOutline}
+              activeOutlineColor={colors.primary}
+              right={
+                <TextInput.Icon
+                  icon="magnify"
+                  onPress={() => searchActiveBorrow(isbn)}
+                  disabled={isSearching}
+                  color={colors.primary}
+                />
+              }
+            />
+          </Surface>
+        </View>
+      ) : (
+        <View style={styles.resultContainer}>
+          {isSearching ? (
+            <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
+          ) : (
+            <Card style={styles.returnCard}>
+              <View style={styles.cardAccent} />
+              {bookCover && (
+                <Card.Cover source={{ uri: bookCover }} style={styles.cover} />
+              )}
+              <Card.Content>
+                <Text variant="titleLarge" style={styles.bookTitle}>
+                  {bookTitle || `ISBN: ${isbn}`}
+                </Text>
+                <Text variant="bodyMedium" style={styles.isbnLabel}>
+                  ISBN: {isbn}
+                </Text>
+                <Text variant="bodyMedium" style={styles.instructionText}>
+                  Xác nhận trả sách này?
+                </Text>
+              </Card.Content>
+              <Card.Actions style={styles.cardActions}>
+                <Button
+                  mode="outlined"
+                  onPress={resetState}
+                  style={styles.cardActionButton}
+                  labelStyle={styles.cardActionButtonLabel}
+                >
+                  Quét lại
+                </Button>
+                <Button
+                  mode="contained"
+                  onPress={handleReturn}
+                  loading={isReturning}
+                  disabled={isReturning}
+                  style={styles.cardActionButton}
+                  labelStyle={styles.cardActionButtonLabel}
+                >
+                  Xác nhận trả
+                </Button>
+              </Card.Actions>
+            </Card>
+          )}
+        </View>
+      )}
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  permissionContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: colors.background,
+  },
+  permissionText: {
+    color: colors.text,
+    fontSize: 16,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  permissionButton: {
+    borderRadius: 6,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 24,
+    paddingHorizontal: 16,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.divider,
+  },
+  orText: {
+    color: colors.textSecondary,
+    marginHorizontal: 12,
+    fontSize: 12,
+  },
+  isbnInput: {
+    width: '80%',
+    marginTop: 4,
+    backgroundColor: 'transparent',
+  },
+  inputOutline: {
+    borderRadius: 6,
+    borderColor: colors.border,
+  },
+  scannerContainer: {
+    flex: 1,
+  },
+  camera: {
+    flex: 1,
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scanArea: {
+    width: 280,
+    height: 150,
+    borderRadius: 8,
+    position: 'relative',
+  },
+  corner: {
+    position: 'absolute',
+    width: 36,
+    height: 36,
+    borderColor: colors.primary,
+    borderWidth: 2,
+  },
+  topLeft: {
+    top: 0,
+    left: 0,
+    borderRightWidth: 0,
+    borderBottomWidth: 0,
+    borderTopLeftRadius: 8,
+  },
+  topRight: {
+    top: 0,
+    right: 0,
+    borderLeftWidth: 0,
+    borderBottomWidth: 0,
+    borderTopRightRadius: 8,
+  },
+  bottomLeft: {
+    bottom: 0,
+    left: 0,
+    borderRightWidth: 0,
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 8,
+  },
+  bottomRight: {
+    bottom: 0,
+    right: 0,
+    borderLeftWidth: 0,
+    borderTopWidth: 0,
+    borderBottomRightRadius: 8,
+  },
+  scanText: {
+    color: colors.text,
+    marginTop: 20,
+    fontSize: 16,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  manualInput: {
+    padding: 16,
+    backgroundColor: colors.surface,
+    position: 'relative',
+    overflow: 'hidden',
+    borderTopWidth: 0.5,
+    borderTopColor: colors.border,
+  },
+  manualAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+    backgroundColor: colors.primary,
+  },
+  manualLabel: {
+    color: colors.textSecondary,
+    marginBottom: 8,
+    fontSize: 13,
+  },
+  isbnInputFull: {
+    marginTop: 4,
+    backgroundColor: 'transparent',
+  },
+  resultContainer: {
+    flex: 1,
+    padding: 16,
+    justifyContent: 'center',
+  },
+  loader: {
+    alignSelf: 'center',
+  },
+  returnCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+    overflow: 'hidden',
+    position: 'relative',
+    borderWidth: 0.5,
+    borderColor: colors.border,
+  },
+  cardAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+    backgroundColor: colors.primary,
+    zIndex: 1,
+  },
+  cover: {
+    height: 200,
+    resizeMode: 'contain',
+    backgroundColor: colors.surfaceVariant,
+  },
+  bookTitle: {
+    color: colors.text,
+    marginTop: 12,
+    fontWeight: '700',
+    fontSize: 18,
+  },
+  isbnLabel: {
+    color: colors.textSecondary,
+    marginTop: 4,
+    fontSize: 13,
+  },
+  instructionText: {
+    color: colors.primary,
+    marginTop: 16,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  cardActions: {
+    padding: 12,
+    gap: 8,
+  },
+  cardActionButton: {
+    borderRadius: 6,
+  },
+  cardActionButtonLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+});
+</file>
+
+<file path="src/theme/colors.ts">
+export const colors = {
+  primary: '#D4A853',
+  primaryDark: '#A88430',
+  secondary: '#3A7D6B',
+  background: '#0D1117',
+  surface: '#1A1F2B',
+  surfaceVariant: '#252A38',
+  error: '#C44E4E',
+  errorDark: '#8B3030',
+  success: '#4A8C5C',
+  warning: '#C49A3C',
+  text: '#E8E0D0',
+  textSecondary: '#9A9488',
+  textDisabled: '#5A5550',
+  border: '#2A2F3A',
+  divider: '#1F2430',
+  overlay: 'rgba(0, 0, 0, 0.7)',
+  card: '#1A1F2B',
+  notification: '#C44E4E',
+  bookmark: '#D4A853',
+  glow: 'rgba(212, 168, 83, 0.08)',
+};
+
+export type Colors = typeof colors;
+</file>
+
+<file path="src/theme/DarkTheme.ts">
+import { MD3DarkTheme, configureFonts } from 'react-native-paper';
+import { colors } from './colors';
+
+const fontConfig = {
+  fontFamily: 'System',
+};
+
+export const DarkTheme = {
+  ...MD3DarkTheme,
+  dark: true,
+  colors: {
+    ...MD3DarkTheme.colors,
+    primary: colors.primary,
+    primaryContainer: colors.surfaceVariant,
+    secondary: colors.secondary,
+    secondaryContainer: colors.surfaceVariant,
+    tertiary: colors.warning,
+    background: colors.background,
+    surface: colors.surface,
+    surfaceVariant: colors.surfaceVariant,
+    error: colors.error,
+    errorContainer: colors.errorDark,
+    onPrimary: colors.background,
+    onSecondary: colors.text,
+    onTertiary: colors.background,
+    onBackground: colors.text,
+    onSurface: colors.text,
+    onSurfaceVariant: colors.textSecondary,
+    onError: colors.text,
+    outline: colors.border,
+    outlineVariant: colors.divider,
+    inverseSurface: colors.surfaceVariant,
+    inverseOnSurface: colors.text,
+    inversePrimary: colors.primary,
+    shadow: colors.border,
+    surfaceTint: colors.primary,
+    elevation: {
+      level0: 'transparent',
+      level1: colors.surface,
+      level2: colors.surfaceVariant,
+      level3: '#2A2F3A',
+      level4: '#2F3540',
+      level5: '#353B48',
+    },
+    custom: {
+      bookmark: colors.bookmark,
+      glow: colors.glow,
+      textDisabled: colors.textDisabled,
+      success: colors.success,
+      warning: colors.warning,
+    },
+  },
+  roundness: 6,
+  fonts: configureFonts({ config: fontConfig }),
+};
+
+export type AppTheme = typeof DarkTheme;
+</file>
+
+<file path="src/types/index.ts">
+export interface User {
+  id: string;
+  email: string;
+  full_name?: string;
+  role: string;
+  student_code?: string;
+}
+
+export interface AuthTokens {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+}
+
+export interface Book {
+  id: string;
+  isbn: string;
+  title: string;
+  author?: string;
+  cover_url?: string;
+  shelf_location?: string;
+  is_available: boolean;
+}
+
+export interface BorrowRecord {
+  id: string;
+  patron_id: string;
+  book_id: string;
+  borrow_at: string;
+  due_at: string;
+  return_at?: string;
+  shelf_location?: string;
+  status: 'borrowed' | 'returned' | 'overdue';
+}
+
+export interface BorrowResponse {
+  status: 'success' | 'error';
+  message: string;
+  record?: BorrowRecord;
+  book?: Book;
+}
+
+export interface ReturnResponse {
+  status: 'success' | 'error';
+  message: string;
+  record?: BorrowRecord;
+}
+
+export interface Patron {
+  id: string;
+  full_name: string;
+  student_code: string;
+  email?: string;
+  phone?: string;
+  card_number: string;
+  membership_expiry: string;
+  status: string;
+  current_status?: string;
+  has_face: boolean;
+}
+
+export interface OpenLibraryBook {
+  title: string;
+  authors?: { name: string }[];
+  cover?: {
+    medium?: string;
+    small?: string;
+    large?: string;
+  };
+  publishers?: { name: string }[];
+  number_of_pages?: number;
+  publish_date?: string;
+}
+
+export interface CameraEvent {
+  camera_id: string;
+  status: 'granted' | 'unknown' | 'spoof' | 'expired' | 'wrong_direction' | 'already_granted';
+  patron_id?: string;
+  full_name?: string;
+  student_code?: string;
+  score?: number;
+  access_type?: 'entry' | 'exit';
+  bbox?: number[];
+  landmarks?: number[][];
+}
+</file>
+
+<file path="src/utils/dateUtils.ts">
+export const formatDate = (dateString: string): string => {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+};
+
+export const formatDateTime = (dateString: string): string => {
+  const date = new Date(dateString);
+  return date.toLocaleString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+export const getDaysUntil = (dateString: string): number => {
+  const now = new Date();
+  const target = new Date(dateString);
+  const diffTime = target.getTime() - now.getTime();
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+};
+
+export const isOverdue = (dueDate: string): boolean => {
+  return getDaysUntil(dueDate) < 0;
+};
+</file>
+
+<file path="tsconfig.json">
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true
+  }
+}
+</file>
+
+<file path="app.json">
+{
+  "expo": {
+    "name": "Thư Viện",
+    "slug": "LibraryMobileApp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.library.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Ứng dụng cần quyền camera để đăng nhập bằng khuôn mặt và quét mã vạch sách"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#121212",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "com.library.app",
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Ứng dụng cần quyền camera để đăng nhập bằng khuôn mặt và quét mã vạch sách"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "library-mobile-app"
+      }
+    }
+  }
+}
+</file>
+
+<file path="App.tsx">
+import 'react-native-gesture-handler';
+import { StatusBar } from 'expo-status-bar';
+import React from 'react';
+import { PaperProvider } from 'react-native-paper';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { StyleSheet } from 'react-native';
+
+import { AuthProvider } from './src/context/AuthContext';
+import AppNavigator from './src/navigation/AppNavigator';
+import { DarkTheme } from './src/theme/DarkTheme';
+
+export default function App() {
+  return (
+    <GestureHandlerRootView style={styles.container}>
+      <SafeAreaProvider>
+        <PaperProvider theme={DarkTheme}>
+          <AuthProvider>
+            <StatusBar style="light" />
+            <AppNavigator />
+          </AuthProvider>
+        </PaperProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+});
+</file>
+
+<file path="package.json">
+{
+  "name": "librarymobileapp",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "dependencies": {
+    "@expo/vector-icons": "^15.1.1",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-navigation/bottom-tabs": "^7.18.0",
+    "@react-navigation/native": "^7.3.1",
+    "@react-navigation/stack": "^7.10.3",
+    "axios": "^1.17.0",
+    "expo": "~56.0.11",
+    "expo-camera": "^56.0.8",
+    "expo-face-detector": "^13.0.2",
+    "expo-file-system": "~56.0.8",
+    "expo-status-bar": "~56.0.4",
+    "react": "19.2.3",
+    "react-native": "0.85.3",
+    "react-native-gesture-handler": "~2.31.1",
+    "react-native-paper": "^5.15.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "^4.25.2",
+    "react-native-vector-icons": "^10.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "@types/react-native-vector-icons": "^6.4.18",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
+  },
+  "private": true
+}
+</file>
+
+</files>
