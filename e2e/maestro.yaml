@@ -1,0 +1,29 @@
+appId: com.library.mobile
+name: LibraryMobileApp
+version: 1.0.0
+runtime:
+  type:-android
+  locale: vi_VN
+
+flows:
+  - name: login-flow.yaml
+    description: Patron login with student code and password
+
+  - name: face-login-flow.yaml
+    description: Face login using camera capture
+
+  - name: borrow-flow.yaml
+    description: Borrow a book by scanning barcode
+
+  - name: return-flow.yaml
+    description: Return a borrowed book
+
+  - name: 401-handling-flow.yaml
+    description: Test that 401 triggers logout and redirect to login
+
+  - name: face-capture-flow.yaml
+    description: Register face using AutoFaceCapture component
+
+environment:
+  baseUrl: "http://10.0.2.2:80/api"
+  apiTimeout: 30000

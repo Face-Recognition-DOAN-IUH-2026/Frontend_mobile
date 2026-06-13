@@ -5,6 +5,8 @@ import { Text, Button, Surface, TextInput, ActivityIndicator, Card } from 'react
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
 import { borrowApi } from '../api/borrow';
 import { openLibraryApi } from '../api/openlibrary';
+import { authApi } from '../api/auth';
+import { useAuth } from '../context/AuthContext';
 import { Book, OpenLibraryBook } from '../types';
 import { colors } from '../theme/colors';
 
@@ -13,6 +15,7 @@ interface BorrowScreenProps {
 }
 
 export default function BorrowScreen({ navigation }: BorrowScreenProps) {
+  const { patron } = useAuth();
   const [scanned, setScanned] = useState(false);
   const [isbn, setIsbn] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -58,6 +61,21 @@ export default function BorrowScreen({ navigation }: BorrowScreenProps) {
 
     setIsBorrowing(true);
     try {
+      try {
+        const patronData = await authApi.getCurrentPatron();
+        const status = patronData.current_status || patronData.currentStatus;
+        if (status !== 'inside') {
+          Alert.alert('Không thể mượn', 'Bạn phải đi qua cổng vào thư viện trước khi mượn sách');
+          setIsBorrowing(false);
+          return;
+        }
+      } catch (checkError) {
+        console.error('Failed to check patron status:', checkError);
+        Alert.alert('Lỗi', 'Không thể xác minh trạng thái. Vui lòng thử lại.');
+        setIsBorrowing(false);
+        return;
+      }
+
       const result = await borrowApi.borrowBook(isbn.trim());
       if (result.status === 'success') {
         Alert.alert('Thành công', result.message, [

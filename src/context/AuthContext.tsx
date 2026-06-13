@@ -28,7 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (token && patronDataStr) {
         const patronData = JSON.parse(patronDataStr);
         setPatron(patronData);
-        setUser({ id: patronData.id, email: patronData.email || '', full_name: patronData.full_name, role: 'patron', password_auto_generated: patronData.password_auto_generated });
+        setUser({ id: patronData.id, email: patronData.email || '', full_name: patronData.fullName, role: 'patron' });
       }
     } catch (error) {
       console.error('Auth check failed:', error);
@@ -48,9 +48,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('AuthContext patronLogin called');
       const response = await authApi.patronLogin({ student_code: studentCode, password });
       console.log('AuthContext received:', response);
-      setPatron(response.patron);
+      setPatron(response.user);
       console.log('setPatron called');
-      setUser({ id: response.patron.id, email: response.patron.email || '', full_name: response.patron.full_name, role: 'patron', password_auto_generated: response.patron.password_auto_generated });
+      setUser({ id: response.user.id, email: response.user.email || '', full_name: response.user.fullName, role: 'patron' });
       console.log('setUser called');
     } finally {
       setIsLoading(false);
@@ -64,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const patronData = await authApi.getCurrentPatron();
       await AsyncStorage.setItem('patronData', JSON.stringify(patronData));
       setPatron(patronData);
-      setUser({ id: patronData.id, email: patronData.email || '', full_name: patronData.full_name, role: 'patron', password_auto_generated: patronData.password_auto_generated });
+      setUser({ id: patronData.id, email: patronData.email || '', full_name: patronData.fullName, role: 'patron' });
     } finally {
       setIsLoading(false);
     }

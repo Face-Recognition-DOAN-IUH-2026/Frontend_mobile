@@ -27,8 +27,9 @@ export interface LoginResponse {
 
 export interface PatronLoginResponse {
   access_token: string;
+  refresh_token?: string;
   token_type: string;
-  patron: any;
+  user: any;
 }
 
 export interface FaceLoginResponse {
@@ -55,7 +56,10 @@ export const authApi = {
     const response = await api.post<PatronLoginResponse>('/patrons/login', data);
     console.log('patronLogin response:', response.data);
     await AsyncStorage.setItem('accessToken', response.data.access_token);
-    await AsyncStorage.setItem('patronData', JSON.stringify(response.data.patron));
+    if (response.data.refresh_token) {
+      await AsyncStorage.setItem('refreshToken', response.data.refresh_token);
+    }
+    await AsyncStorage.setItem('patronData', JSON.stringify(response.data.user));
     console.log('patronLogin stored data');
     return response.data;
   },

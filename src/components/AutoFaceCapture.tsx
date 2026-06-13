@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, StyleSheet, Dimensions } from 'react-native';
 import { Text } from 'react-native-paper';
 import { CameraView, useCameraPermissions, FaceDetectionResult } from 'expo-camera';
-import * as FaceDetector from 'expo-face-detector';
 import { colors } from '../theme/colors';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -171,13 +170,6 @@ export default function AutoFaceCapture({
         style={styles.camera}
         facing="front"
         onFacesDetected={handleFacesDetected}
-        faceDetectorSettings={{
-          mode: FaceDetector.FaceDetectorMode.fast,
-          detectLandmarks: FaceDetector.FaceDetectorLandmarks.none,
-          runClassifications: FaceDetector.FaceDetectorClassifications.none,
-          minDetectionInterval: 100,
-          tracking: true,
-        }}
       >
         <View style={styles.overlay}>
           <View style={styles.ovalContainer}>

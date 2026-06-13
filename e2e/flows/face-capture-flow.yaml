@@ -1,0 +1,241 @@
+appId: com.library.mobile
+name: Face Capture Flow
+description: Test face registration using AutoFaceCapture component
+
+startApp:
+    clearState: true
+
+steps:
+  - launchApp:
+      clearState: true
+
+  - assertVisible:
+      text: "Đăng nhập"
+      timeout: 10000
+
+  - tapOn:
+      placeholder: "Mã số sinh viên"
+
+  - inputText:
+      text: "TEST001"
+
+  - tapOn:
+      placeholder: "Mật khẩu"
+
+  - inputText:
+      text: "password123"
+
+  - tapOn:
+      text: "Đăng nhập"
+
+  - waitForNavigation:
+      timeout: 15000
+
+  - tapOn:
+      id: "profile-tab"
+
+  - waitForNavigation:
+      timeout: 5000
+
+  - tapOn:
+      text: "Đăng ký khuôn mặt"
+      timeout: 5000
+
+  - waitForNavigation:
+      timeout: 5000
+
+  - assertVisible:
+      text: "Đăng ký khuôn mặt"
+      timeout: 5000
+
+  - waitFor:
+      condition: "Camera active"
+      timeout: 5000
+
+  - assertVisible:
+      text: "Đưa khuôn mặt vào khung"
+      timeout: 3000
+
+  - waitFor:
+      condition: "Face detected"
+      timeout: 10000
+
+  - assertVisible:
+      text: "Giữ nguyên..."
+      timeout: 3000
+
+  - waitFor:
+      condition: "Countdown started"
+      timeout: 5000
+
+  - assertVisible:
+      text: "3"
+      timeout: 3000
+
+  - waitFor:
+      condition: "Photo captured"
+      timeout: 5000
+
+  - assertVisible:
+      text: "Đăng ký thành công"
+      timeout: 10000
+
+---
+
+name: Face Capture Flow - Face Not Detected
+appId: com.library.mobile
+
+steps:
+  - launchApp:
+      clearState: true
+
+  - assertVisible:
+      text: "Đăng nhập"
+      timeout: 10000
+
+  - tapOn:
+      placeholder: "Mã số sinh viên"
+
+  - inputText:
+      text: "TEST001"
+
+  - tapOn:
+      placeholder: "Mật khẩu"
+
+  - inputText:
+      text: "password123"
+
+  - tapOn:
+      text: "Đăng nhập"
+
+  - waitForNavigation:
+      timeout: 15000
+
+  - tapOn:
+      id: "profile-tab"
+
+  - tapOn:
+      text: "Đăng ký khuôn mặt"
+
+  - waitFor:
+      condition: "Camera active"
+      timeout: 5000
+
+  - waitFor:
+      condition: "No face detected"
+      timeout: 10000
+
+  - assertVisible:
+      text: "Không phát hiện khuôn mặt"
+      timeout: 3000
+
+  - tapOn:
+      text: "Thử lại"
+      timeout: 3000
+
+  - assertVisible:
+      text: "Đưa khuôn mặt vào khung"
+      timeout: 3000
+
+---
+
+name: Face Capture Flow - Multiple Angles
+appId: com.library.mobile
+
+steps:
+  - launchApp:
+      clearState: true
+
+  - assertVisible:
+      text: "Đăng nhập"
+      timeout: 10000
+
+  - tapOn:
+      placeholder: "Mã số sinh viên"
+
+  - inputText:
+      text: "TEST001"
+
+  - tapOn:
+      placeholder: "Mật khẩu"
+
+  - inputText:
+      text: "password123"
+
+  - tapOn:
+      text: "Đăng nhập"
+
+  - waitForNavigation:
+      timeout: 15000
+
+  - tapOn:
+      id: "profile-tab"
+
+  - tapOn:
+      text: "Đăng ký khuôn mặt 4 góc"
+
+  - waitForNavigation:
+      timeout: 5000
+
+  - assertVisible:
+      text: "Chụp ảnh 4 góc"
+      timeout: 5000
+
+  - tapOn:
+      text: "Góc 1: Chính diện"
+      timeout: 3000
+
+  - waitFor:
+      condition: "Camera ready"
+      timeout: 5000
+
+  - tapOn:
+      id: "capture"
+
+  - waitFor:
+      condition: "Frontal captured"
+      timeout: 5000
+
+  - tapOn:
+      text: "Góc 2: Nhìn phải"
+      timeout: 3000
+
+  - tapOn:
+      id: "capture"
+
+  - waitFor:
+      condition: "Right captured"
+      timeout: 5000
+
+  - tapOn:
+      text: "Góc 3: Nhìn trái"
+      timeout: 3000
+
+  - tapOn:
+      id: "capture"
+
+  - waitFor:
+      condition: "Left captured"
+      timeout: 5000
+
+  - tapOn:
+      text: "Góc 4: Nhìn xuống"
+      timeout: 3000
+
+  - tapOn:
+      id: "capture"
+
+  - waitFor:
+      condition: "Down captured"
+      timeout: 5000
+
+  - tapOn:
+      text: "Hoàn tất"
+      timeout: 3000
+
+  - waitFor:
+      timeout: 10000
+
+  - assertVisible:
+      text: "Đăng ký hoàn tất"
+      timeout: 8000

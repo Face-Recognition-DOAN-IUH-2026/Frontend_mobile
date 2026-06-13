@@ -1,0 +1,89 @@
+appId: com.library.mobile
+name: Patron Login Flow
+description: Test patron login with student code and password
+
+startApp:
+    clearState: true
+
+steps:
+  - launchApp:
+      clearState: true
+
+  - assertVisible:
+      text: "Đăng nhập"
+      timeout: 10000
+
+  - tapOn:
+      placeholder: "Mã số sinh viên"
+
+  - inputText:
+      text: "TEST001"
+
+  - tapOn:
+      placeholder: "Mật khẩu"
+
+  - inputText:
+      text: "password123"
+
+  - tapOn:
+      text: "Đăng nhập"
+      timeout: 5000
+
+  - waitForNavigation:
+      timeout: 15000
+
+  - assertVisible:
+      text: "Trang chủ"
+      timeout: 10000
+
+---
+
+name: Patron Login Flow - Invalid Credentials
+appId: com.library.mobile
+
+steps:
+  - launchApp
+
+  - assertVisible:
+      text: "Đăng nhập"
+      timeout: 5000
+
+  - tapOn:
+      placeholder: "Mã số sinh viên"
+
+  - inputText:
+      text: "INVALID"
+
+  - tapOn:
+      placeholder: "Mật khẩu"
+
+  - inputText:
+      text: "wrongpassword"
+
+  - tapOn:
+      text: "Đăng nhập"
+      timeout: 3000
+
+  - assertVisible:
+      text: "Sai mã sinh viên hoặc mật khẩu"
+      timeout: 5000
+
+---
+
+name: Patron Login Flow - Empty Fields
+appId: com.library.mobile
+
+steps:
+  - launchApp
+
+  - assertVisible:
+      text: "Đăng nhập"
+      timeout: 5000
+
+  - tapOn:
+      text: "Đăng nhập"
+      timeout: 3000
+
+  - assertVisible:
+      text: "Vui lòng nhập đầy đủ thông tin"
+      timeout: 3000

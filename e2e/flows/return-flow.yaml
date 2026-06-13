@@ -1,0 +1,121 @@
+appId: com.library.mobile
+name: Return Book Flow
+description: Test returning a borrowed book
+
+startApp:
+    clearState: true
+
+steps:
+  - launchApp:
+      clearState: true
+
+  - assertVisible:
+      text: "Đăng nhập"
+      timeout: 10000
+
+  - tapOn:
+      placeholder: "Mã số sinh viên"
+
+  - inputText:
+      text: "STAFF001"
+
+  - tapOn:
+      placeholder: "Mật khẩu"
+
+  - inputText:
+      text: "password123"
+
+  - tapOn:
+      text: "Đăng nhập"
+
+  - waitForNavigation:
+      timeout: 15000
+
+  - tapOn:
+      id: "return-tab"
+
+  - waitForNavigation:
+      timeout: 5000
+
+  - assertVisible:
+      text: "Trả sách"
+      timeout: 5000
+
+  - tapOn:
+      text: "Quét mã vạch"
+
+  - tapOn:
+      id: "simulate-scan"
+
+  - inputText:
+      text: "RETURN-BARCODE"
+
+  - tapOn:
+      text: "Tìm kiếm"
+
+  - waitFor:
+      condition: "Borrow record found"
+      timeout: 10000
+
+  - tapOn:
+      text: "Trả sách"
+
+  - waitFor:
+      timeout: 10000
+
+  - assertVisible:
+      text: "Trả sách thành công"
+      timeout: 8000
+
+---
+
+name: Return Flow - No Active Borrow
+appId: com.library.mobile
+
+steps:
+  - launchApp:
+      clearState: true
+
+  - assertVisible:
+      text: "Đăng nhập"
+      timeout: 10000
+
+  - tapOn:
+      placeholder: "Mã số sinh viên"
+
+  - inputText:
+      text: "STAFF001"
+
+  - tapOn:
+      placeholder: "Mật khẩu"
+
+  - inputText:
+      text: "password123"
+
+  - tapOn:
+      text: "Đăng nhập"
+
+  - waitForNavigation:
+      timeout: 15000
+
+  - tapOn:
+      id: "return-tab"
+
+  - tapOn:
+      text: "Quét mã vạch"
+
+  - tapOn:
+      id: "simulate-scan"
+
+  - inputText:
+      text: "NOT-BORROWED"
+
+  - tapOn:
+      text: "Tìm kiếm"
+
+  - waitFor:
+      timeout: 5000
+
+  - assertVisible:
+      text: "Không tìm thấy bản ghi mượn"
+      timeout: 5000

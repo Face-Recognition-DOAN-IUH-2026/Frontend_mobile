@@ -1,0 +1,86 @@
+appId: com.library.mobile
+name: Face Login Flow
+description: Test patron face login using camera capture
+
+startApp:
+    clearState: true
+
+steps:
+  - launchApp:
+      clearState: true
+
+  - assertVisible:
+      text: "Đăng nhập"
+      timeout: 10000
+
+  - tapOn:
+      text: "Đăng nhập khuôn mặt"
+      timeout: 5000
+
+  - waitForNavigation:
+      timeout: 5000
+
+  - assertVisible:
+      text: "Đăng nhập bằng khuôn mặt"
+      timeout: 5000
+
+  - tapOn:
+      id: "face-capture-button"
+      timeout: 5000
+
+  - waitFor:
+      condition: "Camera permission granted"
+      timeout: 10000
+
+  - tapOn:
+      id: "capture-button"
+      timeout: 3000
+
+  - waitForNavigation:
+      timeout: 10000
+
+---
+
+name: Face Login Flow - Camera Permission Denied
+appId: com.library.mobile
+
+steps:
+  - launchApp
+
+  - tapOn:
+      text: "Đăng nhập khuôn mặt"
+      timeout: 3000
+
+  - denyPermissions:
+      - CAMERA
+
+  - assertVisible:
+      text: "Không thể truy cập camera"
+      timeout: 5000
+
+---
+
+name: Face Login Flow - Face Not Recognized
+appId: com.library.mobile
+
+steps:
+  - launchApp
+
+  - tapOn:
+      text: "Đăng nhập khuôn mặt"
+      timeout: 3000
+
+  - tapOn:
+      id: "face-capture-button"
+      timeout: 3000
+
+  - waitFor:
+      timeout: 5000
+
+  - tapOn:
+      id: "capture-button"
+      timeout: 3000
+
+  - assertVisible:
+      text: "Không nhận diện được khuôn mặt"
+      timeout: 8000

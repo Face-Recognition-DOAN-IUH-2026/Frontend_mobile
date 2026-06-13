@@ -1,0 +1,112 @@
+appId: com.library.mobile
+name: 401 Handling Flow
+description: Test that 401 Unauthorized triggers logout and redirect to login
+
+startApp:
+    clearState: true
+
+steps:
+  - launchApp:
+      clearState: true
+
+  - assertVisible:
+      text: "Đăng nhập"
+      timeout: 10000
+
+  - tapOn:
+      placeholder: "Mã số sinh viên"
+
+  - inputText:
+      text: "TEST001"
+
+  - tapOn:
+      placeholder: "Mật khẩu"
+
+  - inputText:
+      text: "password123"
+
+  - tapOn:
+      text: "Đăng nhập"
+
+  - waitForNavigation:
+      timeout: 15000
+
+  - assertVisible:
+      text: "Trang chủ"
+      timeout: 5000
+
+  - clearKeychain:
+      removeKeys:
+        - "accessToken"
+        - "refreshToken"
+
+  - tapOn:
+      id: "borrow-tab"
+
+  - waitFor:
+      condition: "App detects expired token"
+      timeout: 5000
+
+  - waitForNavigation:
+      timeout: 10000
+
+  - assertVisible:
+      text: "Đăng nhập"
+      timeout: 8000
+
+  - assertNotVisible:
+      text: "Trang chủ"
+      timeout: 3000
+
+---
+
+name: 401 Handling - Token Refresh Fails
+appId: com.library.mobile
+
+steps:
+  - launchApp:
+      clearState: true
+
+  - assertVisible:
+      text: "Đăng nhập"
+      timeout: 10000
+
+  - tapOn:
+      placeholder: "Mã số sinh viên"
+
+  - inputText:
+      text: "TEST001"
+
+  - tapOn:
+      placeholder: "Mật khẩu"
+
+  - inputText:
+      text: "password123"
+
+  - tapOn:
+      text: "Đăng nhập"
+
+  - waitForNavigation:
+      timeout: 15000
+
+  - clearKeychain:
+      removeKeys:
+        - "refreshToken"
+
+  - tapOn:
+      id: "borrow-tab"
+
+  - waitFor:
+      condition: "Refresh token fails"
+      timeout: 5000
+
+  - waitForNavigation:
+      timeout: 10000
+
+  - assertVisible:
+      text: "Đăng nhập"
+      timeout: 8000
+
+  - assertVisible:
+      text: "Phiên đăng nhập hết hạn"
+      timeout: 5000
