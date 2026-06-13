@@ -12,7 +12,7 @@ export const borrowApi = {
   },
 
   returnBook: async (barcode: string): Promise<ReturnResponse> => {
-    const response = await api.post<ReturnResponse>('/borrow/return', { barcode });
+    const response = await api.post<ReturnResponse>('/borrow/staff-return', { barcode });
     return response.data;
   },
 

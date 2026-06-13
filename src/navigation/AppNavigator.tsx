@@ -14,6 +14,7 @@ import HomeScreen from '../screens/HomeScreen';
 import BorrowScreen from '../screens/BorrowScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import FaceCameraScreen from '../screens/FaceCameraScreen';
+import ChangePasswordScreen from '../screens/ChangePasswordScreen';
 
 import { AuthStackParamList, MainTabParamList, MainStackParamList } from './types';
 
@@ -116,6 +117,14 @@ function MainStackNavigator() {
         options={{
           title: 'Cập nhật khuôn mặt',
           presentation: 'modal',
+        }}
+      />
+      <MainStack.Screen
+        name="ChangePassword"
+        component={ChangePasswordScreen}
+        options={{
+          title: 'Đổi mật khẩu',
+          presentation: 'card',
         }}
       />
     </MainStack.Navigator>

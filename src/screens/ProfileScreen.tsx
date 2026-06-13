@@ -90,6 +90,31 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       <Surface style={styles.section} elevation={0}>
         <View style={styles.sectionAccent} />
         <List.Section>
+          <List.Subheader style={styles.subheader}>Bảo mật</List.Subheader>
+
+          <List.Item
+            title="Đổi mật khẩu"
+            titleStyle={styles.itemTitle}
+            description="Thay đổi mật khẩu đăng nhập"
+            descriptionStyle={styles.itemDescription}
+            left={(props) => <List.Icon {...props} icon="lock-reset" color={colors.primary} />}
+            right={(props) => (
+              <Button
+                mode="contained"
+                onPress={() => navigation.navigate('ChangePassword')}
+                style={styles.updateButton}
+                labelStyle={styles.updateButtonLabel}
+              >
+                Đổi
+              </Button>
+            )}
+          />
+        </List.Section>
+      </Surface>
+
+      <Surface style={styles.section} elevation={0}>
+        <View style={styles.sectionAccent} />
+        <List.Section>
           <List.Subheader style={styles.subheader}>Khuôn mặt</List.Subheader>
 
           <List.Item

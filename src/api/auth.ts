@@ -97,4 +97,15 @@ export const authApi = {
     const response = await api.get<User>('/users/me');
     return response.data;
   },
+
+  getCurrentPatron: async (): Promise<any> => {
+    const response = await api.get<any>('/patrons/me');
+    return response.data;
+  },
+
+  changePassword: async (patronId: string, newPassword: string): Promise<void> => {
+    await api.put(`/patrons/${patronId}/password`, {
+      new_password: newPassword,
+    });
+  },
 };

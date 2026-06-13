@@ -14,7 +14,7 @@ interface HomeScreenProps {
 }
 
 export default function HomeScreen({ navigation }: HomeScreenProps) {
-  const { user } = useAuth();
+  const { user, patron } = useAuth();
   const theme = useTheme();
   const [borrows, setBorrows] = useState<BorrowRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -86,6 +86,36 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           </Text>
         </Surface>
       </View>
+
+      {patron?.password_auto_generated && (
+        <View style={styles.passwordBanner}>
+          <Surface style={styles.passwordBannerInner} elevation={0}>
+            <View style={styles.passwordBannerAccent} />
+            <View style={styles.passwordBannerContent}>
+              <View style={styles.passwordBannerIcon}>
+                <MaterialCommunityIcons name="shield-alert" size={20} color={colors.warning} />
+              </View>
+              <View style={styles.passwordBannerText}>
+                <Text variant="bodyMedium" style={styles.passwordBannerTitle}>
+                  Mật khẩu mặc định
+                </Text>
+                <Text variant="bodySmall" style={styles.passwordBannerDesc}>
+                  Bạn đang sử dụng mật khẩu mặc định. Đổi mật khẩu để bảo mật tài khoản.
+                </Text>
+              </View>
+            </View>
+            <Button
+              mode="contained"
+              onPress={() => navigation.navigate('ChangePassword')}
+              style={styles.passwordBannerButton}
+              labelStyle={styles.passwordBannerButtonLabel}
+              compact
+            >
+              Đổi mật khẩu
+            </Button>
+          </Surface>
+        </View>
+      )}
 
       <View style={styles.actions}>
         <TouchableOpacity
@@ -372,5 +402,65 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 2,
     fontSize: 13,
+  },
+  passwordBanner: {
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  passwordBannerInner: {
+    padding: 14,
+    borderRadius: 8,
+    backgroundColor: colors.surface,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 0.5,
+    borderColor: colors.warning,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  passwordBannerAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+    backgroundColor: colors.warning,
+  },
+  passwordBannerContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingRight: 10,
+  },
+  passwordBannerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: colors.surfaceVariant,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  passwordBannerText: {
+    flex: 1,
+  },
+  passwordBannerTitle: {
+    color: colors.text,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  passwordBannerDesc: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginTop: 1,
+  },
+  passwordBannerButton: {
+    borderRadius: 6,
+    backgroundColor: colors.warning,
+  },
+  passwordBannerButtonLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.background,
   },
 });

@@ -28,7 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (token && patronDataStr) {
         const patronData = JSON.parse(patronDataStr);
         setPatron(patronData);
-        setUser({ id: patronData.id, email: patronData.email || '', full_name: patronData.full_name, role: 'patron' });
+        setUser({ id: patronData.id, email: patronData.email || '', full_name: patronData.full_name, role: 'patron', password_auto_generated: patronData.password_auto_generated });
       }
     } catch (error) {
       console.error('Auth check failed:', error);
@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('AuthContext received:', response);
       setPatron(response.patron);
       console.log('setPatron called');
-      setUser({ id: response.patron.id, email: response.patron.email || '', full_name: response.patron.full_name, role: 'patron' });
+      setUser({ id: response.patron.id, email: response.patron.email || '', full_name: response.patron.full_name, role: 'patron', password_auto_generated: response.patron.password_auto_generated });
       console.log('setUser called');
     } finally {
       setIsLoading(false);
@@ -61,11 +61,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     try {
       await authApi.faceLogin(imageBase64);
-      const userData = await authApi.getCurrentUser();
-      const patronInfo = { id: userData.id, email: userData.email, full_name: userData.full_name, student_code: userData.student_code };
-      await AsyncStorage.setItem('patronData', JSON.stringify(patronInfo));
-      setPatron(patronInfo);
-      setUser({ id: userData.id, email: userData.email, full_name: userData.full_name, role: 'patron' });
+      const patronData = await authApi.getCurrentPatron();
+      await AsyncStorage.setItem('patronData', JSON.stringify(patronData));
+      setPatron(patronData);
+      setUser({ id: patronData.id, email: patronData.email || '', full_name: patronData.full_name, role: 'patron', password_auto_generated: patronData.password_auto_generated });
     } finally {
       setIsLoading(false);
     }
