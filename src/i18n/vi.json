@@ -1,0 +1,108 @@
+{
+  "common": {
+    "loading": "Đang tải...",
+    "error": "Lỗi",
+    "success": "Thành công",
+    "cancel": "Hủy",
+    "confirm": "Xác nhận",
+    "save": "Lưu",
+    "delete": "Xóa",
+    "edit": "Sửa",
+    "close": "Đóng",
+    "retry": "Thử lại",
+    "noData": "Không có dữ liệu"
+  },
+  "auth": {
+    "login": "Đăng nhập",
+    "logout": "Đăng xuất",
+    "email": "Email",
+    "password": "Mật khẩu",
+    "faceLogin": "Đăng nhập bằng khuôn mặt",
+    "faceLoginDesc": "Quét khuôn mặt để đăng nhập nhanh",
+    "forgotPassword": "Quên mật khẩu?",
+    "loginSuccess": "Đăng nhập thành công",
+    "loginFailed": "Đăng nhập thất bại",
+    "invalidCredentials": "Email hoặc mật khẩu không đúng",
+    "tokenExpired": "Phiên đăng nhập hết hạn"
+  },
+  "home": {
+    "welcome": "Xin chào",
+    "patronCard": "Thẻ thư viện",
+    "borrowing": "Sách đang mượn",
+    "returned": "Đã trả",
+    "dueDate": "Hạn trả",
+    "booksBorrowed": "sách đang mượn",
+    "noActiveBorrows": "Bạn chưa mượn cuốn sách nào"
+  },
+  "borrow": {
+    "title": "Mượn sách",
+    "scanBarcode": "Quét mã vạch",
+    "isbnPlaceholder": "Nhập mã ISBN",
+    "searchBook": "Tìm kiếm sách",
+    "bookInfo": "Thông tin sách",
+    "title_label": "Tên sách",
+    "author_label": "Tác giả",
+    "isbn_label": "ISBN",
+    "location_label": "Vị trí",
+    "confirmBorrow": "Xác nhận mượn",
+    "borrowSuccess": "Mượn sách thành công",
+    "borrowFailed": "Mượn sách thất bại",
+    "bookUnavailable": "Sách đang được mượn",
+    "alreadyBorrowed": "Bạn đã mượn sách này",
+    "mustBeInside": "Bạn phải có mặt trong thư viện để mượn sách",
+    "notFound": "Không tìm thấy sách",
+    "dueIn": "Hạn trả sau %d ngày"
+  },
+  "return": {
+    "title": "Trả sách",
+    "scanToReturn": "Quét mã vạch để trả",
+    "confirmReturn": "Xác nhận trả sách",
+    "returnSuccess": "Trả sách thành công",
+    "returnFailed": "Trả sách thất bại",
+    "noActiveBorrow": "Bạn không có bản ghi mượn sách nào đang hoạt động",
+    "bookNotFound": "Sách không tìm thấy trong hệ thống"
+  },
+  "profile": {
+    "title": "Hồ sơ",
+    "fullName": "Họ và tên",
+    "studentCode": "Mã thẻ",
+    "email": "Email",
+    "phone": "Số điện thoại",
+    "cardNumber": "Số thẻ",
+    "memberExpiry": "Ngày hết hạn",
+    "status": "Trạng thái",
+    "faceEnroll": "Đăng ký khuôn mặt",
+    "faceEnrollDesc": "Cập nhật ảnh khuôn mặt để đăng nhập bằng khuôn mặt",
+    "faceEnrolled": "Đã đăng ký khuôn mặt",
+    "faceNotEnrolled": "Chưa đăng ký khuôn mặt",
+    "updateFace": "Cập nhật khuôn mặt",
+    "logout": "Đăng xuất"
+  },
+  "camera": {
+    "title": "Đăng ký khuôn mặt",
+    "instructions": "Đặt khuôn mặt trong khung hình",
+    "angle_frontal": "Góc thẳng",
+    "angle_left": "Góc trái",
+    "angle_right": "Góc phải",
+    "angle_down": "Góc dưới",
+    "capture": "Chụp ảnh",
+    "retake": "Chụp lại",
+    "uploading": "Đang tải lên...",
+    "enrollSuccess": "Đăng ký khuôn mặt thành công",
+    "enrollFailed": "Đăng ký khuôn mặt thất bại"
+  },
+  "nav": {
+    "home": "Trang chủ",
+    "borrow": "Mượn",
+    "return": "Trả",
+    "profile": "Hồ sơ"
+  },
+  "errors": {
+    "network": "Lỗi kết nối mạng",
+    "server": "Lỗi máy chủ",
+    "unauthorized": "Vui lòng đăng nhập",
+    "forbidden": "Bạn không có quyền truy cập",
+    "notFound": "Không tìm thấy",
+    "unknown": "Đã xảy ra lỗi không xác định"
+  }
+}
