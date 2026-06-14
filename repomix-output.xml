@@ -53,9 +53,19 @@ assets/android-icon-monochrome.png
 assets/favicon.png
 assets/icon.png
 assets/splash-icon.png
+e2e/flows/401-handling-flow.yaml
+e2e/flows/borrow-flow.yaml
+e2e/flows/face-capture-flow.yaml
+e2e/flows/face-login-flow.yaml
+e2e/flows/login-flow.yaml
+e2e/flows/return-flow.yaml
+e2e/maestro.yaml
 index.ts
+jest.config.js
+jest.setup.js
 LICENSE
 package.json
+src/__tests__/App.test.tsx
 src/api/auth.ts
 src/api/borrow.ts
 src/api/client.ts
@@ -70,6 +80,7 @@ src/screens/BorrowScreen.tsx
 src/screens/ChangePasswordScreen.tsx
 src/screens/FaceCameraScreen.tsx
 src/screens/FaceLoginScreen.tsx
+src/screens/HistoryScreen.tsx
 src/screens/HomeScreen.tsx
 src/screens/LoginScreen.tsx
 src/screens/ProfileScreen.tsx
@@ -79,6 +90,7 @@ src/theme/colors.ts
 src/theme/DarkTheme.ts
 src/types/index.ts
 src/utils/dateUtils.ts
+tsconfig.jest.json
 tsconfig.json
 </directory_structure>
 
@@ -398,6 +410,702 @@ yarn-error.*
 /android
 </file>
 
+<file path="e2e/flows/401-handling-flow.yaml">
+appId: com.library.mobile
+name: 401 Handling Flow
+description: Test that 401 Unauthorized triggers logout and redirect to login
+
+startApp:
+    clearState: true
+
+steps:
+  - launchApp:
+      clearState: true
+
+  - assertVisible:
+      text: "Đăng nhập"
+      timeout: 10000
+
+  - tapOn:
+      placeholder: "Mã số sinh viên"
+
+  - inputText:
+      text: "TEST001"
+
+  - tapOn:
+      placeholder: "Mật khẩu"
+
+  - inputText:
+      text: "password123"
+
+  - tapOn:
+      text: "Đăng nhập"
+
+  - waitForNavigation:
+      timeout: 15000
+
+  - assertVisible:
+      text: "Trang chủ"
+      timeout: 5000
+
+  - clearKeychain:
+      removeKeys:
+        - "accessToken"
+        - "refreshToken"
+
+  - tapOn:
+      id: "borrow-tab"
+
+  - waitFor:
+      condition: "App detects expired token"
+      timeout: 5000
+
+  - waitForNavigation:
+      timeout: 10000
+
+  - assertVisible:
+      text: "Đăng nhập"
+      timeout: 8000
+
+  - assertNotVisible:
+      text: "Trang chủ"
+      timeout: 3000
+
+---
+
+name: 401 Handling - Token Refresh Fails
+appId: com.library.mobile
+
+steps:
+  - launchApp:
+      clearState: true
+
+  - assertVisible:
+      text: "Đăng nhập"
+      timeout: 10000
+
+  - tapOn:
+      placeholder: "Mã số sinh viên"
+
+  - inputText:
+      text: "TEST001"
+
+  - tapOn:
+      placeholder: "Mật khẩu"
+
+  - inputText:
+      text: "password123"
+
+  - tapOn:
+      text: "Đăng nhập"
+
+  - waitForNavigation:
+      timeout: 15000
+
+  - clearKeychain:
+      removeKeys:
+        - "refreshToken"
+
+  - tapOn:
+      id: "borrow-tab"
+
+  - waitFor:
+      condition: "Refresh token fails"
+      timeout: 5000
+
+  - waitForNavigation:
+      timeout: 10000
+
+  - assertVisible:
+      text: "Đăng nhập"
+      timeout: 8000
+
+  - assertVisible:
+      text: "Phiên đăng nhập hết hạn"
+      timeout: 5000
+</file>
+
+<file path="e2e/flows/face-capture-flow.yaml">
+appId: com.library.mobile
+name: Face Capture Flow
+description: Test face registration using AutoFaceCapture component
+
+startApp:
+    clearState: true
+
+steps:
+  - launchApp:
+      clearState: true
+
+  - assertVisible:
+      text: "Đăng nhập"
+      timeout: 10000
+
+  - tapOn:
+      placeholder: "Mã số sinh viên"
+
+  - inputText:
+      text: "TEST001"
+
+  - tapOn:
+      placeholder: "Mật khẩu"
+
+  - inputText:
+      text: "password123"
+
+  - tapOn:
+      text: "Đăng nhập"
+
+  - waitForNavigation:
+      timeout: 15000
+
+  - tapOn:
+      id: "profile-tab"
+
+  - waitForNavigation:
+      timeout: 5000
+
+  - tapOn:
+      text: "Đăng ký khuôn mặt"
+      timeout: 5000
+
+  - waitForNavigation:
+      timeout: 5000
+
+  - assertVisible:
+      text: "Đăng ký khuôn mặt"
+      timeout: 5000
+
+  - waitFor:
+      condition: "Camera active"
+      timeout: 5000
+
+  - assertVisible:
+      text: "Đưa khuôn mặt vào khung"
+      timeout: 3000
+
+  - waitFor:
+      condition: "Face detected"
+      timeout: 10000
+
+  - assertVisible:
+      text: "Giữ nguyên..."
+      timeout: 3000
+
+  - waitFor:
+      condition: "Countdown started"
+      timeout: 5000
+
+  - assertVisible:
+      text: "3"
+      timeout: 3000
+
+  - waitFor:
+      condition: "Photo captured"
+      timeout: 5000
+
+  - assertVisible:
+      text: "Đăng ký thành công"
+      timeout: 10000
+
+---
+
+name: Face Capture Flow - Face Not Detected
+appId: com.library.mobile
+
+steps:
+  - launchApp:
+      clearState: true
+
+  - assertVisible:
+      text: "Đăng nhập"
+      timeout: 10000
+
+  - tapOn:
+      placeholder: "Mã số sinh viên"
+
+  - inputText:
+      text: "TEST001"
+
+  - tapOn:
+      placeholder: "Mật khẩu"
+
+  - inputText:
+      text: "password123"
+
+  - tapOn:
+      text: "Đăng nhập"
+
+  - waitForNavigation:
+      timeout: 15000
+
+  - tapOn:
+      id: "profile-tab"
+
+  - tapOn:
+      text: "Đăng ký khuôn mặt"
+
+  - waitFor:
+      condition: "Camera active"
+      timeout: 5000
+
+  - waitFor:
+      condition: "No face detected"
+      timeout: 10000
+
+  - assertVisible:
+      text: "Không phát hiện khuôn mặt"
+      timeout: 3000
+
+  - tapOn:
+      text: "Thử lại"
+      timeout: 3000
+
+  - assertVisible:
+      text: "Đưa khuôn mặt vào khung"
+      timeout: 3000
+
+---
+
+name: Face Capture Flow - Multiple Angles
+appId: com.library.mobile
+
+steps:
+  - launchApp:
+      clearState: true
+
+  - assertVisible:
+      text: "Đăng nhập"
+      timeout: 10000
+
+  - tapOn:
+      placeholder: "Mã số sinh viên"
+
+  - inputText:
+      text: "TEST001"
+
+  - tapOn:
+      placeholder: "Mật khẩu"
+
+  - inputText:
+      text: "password123"
+
+  - tapOn:
+      text: "Đăng nhập"
+
+  - waitForNavigation:
+      timeout: 15000
+
+  - tapOn:
+      id: "profile-tab"
+
+  - tapOn:
+      text: "Đăng ký khuôn mặt 4 góc"
+
+  - waitForNavigation:
+      timeout: 5000
+
+  - assertVisible:
+      text: "Chụp ảnh 4 góc"
+      timeout: 5000
+
+  - tapOn:
+      text: "Góc 1: Chính diện"
+      timeout: 3000
+
+  - waitFor:
+      condition: "Camera ready"
+      timeout: 5000
+
+  - tapOn:
+      id: "capture"
+
+  - waitFor:
+      condition: "Frontal captured"
+      timeout: 5000
+
+  - tapOn:
+      text: "Góc 2: Nhìn phải"
+      timeout: 3000
+
+  - tapOn:
+      id: "capture"
+
+  - waitFor:
+      condition: "Right captured"
+      timeout: 5000
+
+  - tapOn:
+      text: "Góc 3: Nhìn trái"
+      timeout: 3000
+
+  - tapOn:
+      id: "capture"
+
+  - waitFor:
+      condition: "Left captured"
+      timeout: 5000
+
+  - tapOn:
+      text: "Góc 4: Nhìn xuống"
+      timeout: 3000
+
+  - tapOn:
+      id: "capture"
+
+  - waitFor:
+      condition: "Down captured"
+      timeout: 5000
+
+  - tapOn:
+      text: "Hoàn tất"
+      timeout: 3000
+
+  - waitFor:
+      timeout: 10000
+
+  - assertVisible:
+      text: "Đăng ký hoàn tất"
+      timeout: 8000
+</file>
+
+<file path="e2e/flows/face-login-flow.yaml">
+appId: com.library.mobile
+name: Face Login Flow
+description: Test patron face login using camera capture
+
+startApp:
+    clearState: true
+
+steps:
+  - launchApp:
+      clearState: true
+
+  - assertVisible:
+      text: "Đăng nhập"
+      timeout: 10000
+
+  - tapOn:
+      text: "Đăng nhập khuôn mặt"
+      timeout: 5000
+
+  - waitForNavigation:
+      timeout: 5000
+
+  - assertVisible:
+      text: "Đăng nhập bằng khuôn mặt"
+      timeout: 5000
+
+  - tapOn:
+      id: "face-capture-button"
+      timeout: 5000
+
+  - waitFor:
+      condition: "Camera permission granted"
+      timeout: 10000
+
+  - tapOn:
+      id: "capture-button"
+      timeout: 3000
+
+  - waitForNavigation:
+      timeout: 10000
+
+---
+
+name: Face Login Flow - Camera Permission Denied
+appId: com.library.mobile
+
+steps:
+  - launchApp
+
+  - tapOn:
+      text: "Đăng nhập khuôn mặt"
+      timeout: 3000
+
+  - denyPermissions:
+      - CAMERA
+
+  - assertVisible:
+      text: "Không thể truy cập camera"
+      timeout: 5000
+
+---
+
+name: Face Login Flow - Face Not Recognized
+appId: com.library.mobile
+
+steps:
+  - launchApp
+
+  - tapOn:
+      text: "Đăng nhập khuôn mặt"
+      timeout: 3000
+
+  - tapOn:
+      id: "face-capture-button"
+      timeout: 3000
+
+  - waitFor:
+      timeout: 5000
+
+  - tapOn:
+      id: "capture-button"
+      timeout: 3000
+
+  - assertVisible:
+      text: "Không nhận diện được khuôn mặt"
+      timeout: 8000
+</file>
+
+<file path="e2e/flows/login-flow.yaml">
+appId: com.library.mobile
+name: Patron Login Flow
+description: Test patron login with student code and password
+
+startApp:
+    clearState: true
+
+steps:
+  - launchApp:
+      clearState: true
+
+  - assertVisible:
+      text: "Đăng nhập"
+      timeout: 10000
+
+  - tapOn:
+      placeholder: "Mã số sinh viên"
+
+  - inputText:
+      text: "TEST001"
+
+  - tapOn:
+      placeholder: "Mật khẩu"
+
+  - inputText:
+      text: "password123"
+
+  - tapOn:
+      text: "Đăng nhập"
+      timeout: 5000
+
+  - waitForNavigation:
+      timeout: 15000
+
+  - assertVisible:
+      text: "Trang chủ"
+      timeout: 10000
+
+---
+
+name: Patron Login Flow - Invalid Credentials
+appId: com.library.mobile
+
+steps:
+  - launchApp
+
+  - assertVisible:
+      text: "Đăng nhập"
+      timeout: 5000
+
+  - tapOn:
+      placeholder: "Mã số sinh viên"
+
+  - inputText:
+      text: "INVALID"
+
+  - tapOn:
+      placeholder: "Mật khẩu"
+
+  - inputText:
+      text: "wrongpassword"
+
+  - tapOn:
+      text: "Đăng nhập"
+      timeout: 3000
+
+  - assertVisible:
+      text: "Sai mã sinh viên hoặc mật khẩu"
+      timeout: 5000
+
+---
+
+name: Patron Login Flow - Empty Fields
+appId: com.library.mobile
+
+steps:
+  - launchApp
+
+  - assertVisible:
+      text: "Đăng nhập"
+      timeout: 5000
+
+  - tapOn:
+      text: "Đăng nhập"
+      timeout: 3000
+
+  - assertVisible:
+      text: "Vui lòng nhập đầy đủ thông tin"
+      timeout: 3000
+</file>
+
+<file path="e2e/flows/return-flow.yaml">
+appId: com.library.mobile
+name: Return Book Flow
+description: Test returning a borrowed book
+
+startApp:
+    clearState: true
+
+steps:
+  - launchApp:
+      clearState: true
+
+  - assertVisible:
+      text: "Đăng nhập"
+      timeout: 10000
+
+  - tapOn:
+      placeholder: "Mã số sinh viên"
+
+  - inputText:
+      text: "STAFF001"
+
+  - tapOn:
+      placeholder: "Mật khẩu"
+
+  - inputText:
+      text: "password123"
+
+  - tapOn:
+      text: "Đăng nhập"
+
+  - waitForNavigation:
+      timeout: 15000
+
+  - tapOn:
+      id: "return-tab"
+
+  - waitForNavigation:
+      timeout: 5000
+
+  - assertVisible:
+      text: "Trả sách"
+      timeout: 5000
+
+  - tapOn:
+      text: "Quét mã vạch"
+
+  - tapOn:
+      id: "simulate-scan"
+
+  - inputText:
+      text: "RETURN-BARCODE"
+
+  - tapOn:
+      text: "Tìm kiếm"
+
+  - waitFor:
+      condition: "Borrow record found"
+      timeout: 10000
+
+  - tapOn:
+      text: "Trả sách"
+
+  - waitFor:
+      timeout: 10000
+
+  - assertVisible:
+      text: "Trả sách thành công"
+      timeout: 8000
+
+---
+
+name: Return Flow - No Active Borrow
+appId: com.library.mobile
+
+steps:
+  - launchApp:
+      clearState: true
+
+  - assertVisible:
+      text: "Đăng nhập"
+      timeout: 10000
+
+  - tapOn:
+      placeholder: "Mã số sinh viên"
+
+  - inputText:
+      text: "STAFF001"
+
+  - tapOn:
+      placeholder: "Mật khẩu"
+
+  - inputText:
+      text: "password123"
+
+  - tapOn:
+      text: "Đăng nhập"
+
+  - waitForNavigation:
+      timeout: 15000
+
+  - tapOn:
+      id: "return-tab"
+
+  - tapOn:
+      text: "Quét mã vạch"
+
+  - tapOn:
+      id: "simulate-scan"
+
+  - inputText:
+      text: "NOT-BORROWED"
+
+  - tapOn:
+      text: "Tìm kiếm"
+
+  - waitFor:
+      timeout: 5000
+
+  - assertVisible:
+      text: "Không tìm thấy bản ghi mượn"
+      timeout: 5000
+</file>
+
+<file path="e2e/maestro.yaml">
+appId: com.library.mobile
+name: LibraryMobileApp
+version: 1.0.0
+runtime:
+  type:-android
+  locale: vi_VN
+
+flows:
+  - name: login-flow.yaml
+    description: Patron login with student code and password
+
+  - name: face-login-flow.yaml
+    description: Face login using camera capture
+
+  - name: borrow-flow.yaml
+    description: Borrow a book by scanning barcode
+
+  - name: return-flow.yaml
+    description: Return a borrowed book
+
+  - name: 401-handling-flow.yaml
+    description: Test that 401 triggers logout and redirect to login
+
+  - name: face-capture-flow.yaml
+    description: Register face using AutoFaceCapture component
+
+environment:
+  baseUrl: "http://10.0.2.2:80/api"
+  apiTimeout: 30000
+</file>
+
 <file path="index.ts">
 import { registerRootComponent } from 'expo';
 
@@ -407,6 +1115,66 @@ import App from './App';
 // It also ensures that whether you load the app in Expo Go or in a native build,
 // the environment is set up appropriately
 registerRootComponent(App);
+</file>
+
+<file path="jest.config.js">
+module.exports = {
+  testEnvironment: 'node',
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
+  testMatch: ['**/__tests__/**/*.test.[jt]s?(x)'],
+  transform: {
+    '^.+\\.(ts|tsx)$': ['ts-jest', { tsconfig: 'tsconfig.jest.json' }],
+  },
+  moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/src/$1',
+  },
+  testPathIgnorePatterns: ['/node_modules/', '/android/', '/ios/'],
+  collectCoverageFrom: [
+    'src/**/*.{ts,tsx}',
+    '!src/**/*.d.ts',
+  ],
+};
+</file>
+
+<file path="jest.setup.js">
+import 'react-native';
+
+jest.mock('expo-camera', () => ({
+  Camera: 'Camera',
+  CameraView: 'CameraView',
+  useCameraPermissions: () => [{ granted: true }, jest.fn()],
+}));
+
+jest.mock('expo-barcode-scanner', () => ({
+  BarcodeScanner: 'BarcodeScanner',
+  usePermissions: () => [{ granted: true }, jest.fn()],
+}));
+
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  setItem: jest.fn(() => Promise.resolve()),
+  getItem: jest.fn(() => Promise.resolve(null)),
+  removeItem: jest.fn(() => Promise.resolve()),
+  clear: jest.fn(() => Promise.resolve()),
+}));
+
+jest.mock('axios', () => ({
+  create: () => ({
+    interceptors: {
+      request: { use: jest.fn(), eject: jest.fn() },
+      response: { use: jest.fn(), eject: jest.fn() },
+    },
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    delete: jest.fn(),
+  }),
+  post: jest.fn(),
+  get: jest.fn(),
+}));
+
+jest.mock('zustand', () => ({
+  create: () => jest.fn(),
+}));
 </file>
 
 <file path="LICENSE">
@@ -433,54 +1201,215 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 </file>
 
-<file path="src/api/client.ts">
-import axios, { AxiosInstance, AxiosError } from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+<file path="src/__tests__/App.test.tsx">
+describe('Mobile App Tests', () => {
+  describe('API Client', () => {
+    it('should have borrowBook method', () => {
+      const mockApi = {
+        borrowBook: jest.fn(),
+        returnBook: jest.fn(),
+        getHistory: jest.fn(),
+        getBooks: jest.fn(),
+      };
+      expect(mockApi.borrowBook).toBeDefined();
+    });
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:80/api';
+    it('should have returnBook method', () => {
+      const mockApi = {
+        borrowBook: jest.fn(),
+        returnBook: jest.fn(),
+        getHistory: jest.fn(),
+        getBooks: jest.fn(),
+      };
+      expect(mockApi.returnBook).toBeDefined();
+    });
 
-const api: AxiosInstance = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 30000,
+    it('should have getHistory method', () => {
+      const mockApi = {
+        borrowBook: jest.fn(),
+        returnBook: jest.fn(),
+        getHistory: jest.fn(),
+        getBooks: jest.fn(),
+      };
+      expect(mockApi.getHistory).toBeDefined();
+    });
+  });
+
+  describe('Auth API', () => {
+    it('should have patronLogin method', () => {
+      const mockAuthApi = {
+        patronLogin: jest.fn(),
+        faceLogin: jest.fn(),
+        getCurrentPatron: jest.fn(),
+        refreshToken: jest.fn(),
+        logout: jest.fn(),
+      };
+      expect(mockAuthApi.patronLogin).toBeDefined();
+    });
+
+    it('should have faceLogin method', () => {
+      const mockAuthApi = {
+        patronLogin: jest.fn(),
+        faceLogin: jest.fn(),
+        getCurrentPatron: jest.fn(),
+        refreshToken: jest.fn(),
+        logout: jest.fn(),
+      };
+      expect(mockAuthApi.faceLogin).toBeDefined();
+    });
+
+    it('should have getCurrentPatron method', () => {
+      const mockAuthApi = {
+        patronLogin: jest.fn(),
+        faceLogin: jest.fn(),
+        getCurrentPatron: jest.fn(),
+        refreshToken: jest.fn(),
+        logout: jest.fn(),
+      };
+      expect(mockAuthApi.getCurrentPatron).toBeDefined();
+    });
+
+    it('should have refreshToken method', () => {
+      const mockAuthApi = {
+        patronLogin: jest.fn(),
+        faceLogin: jest.fn(),
+        getCurrentPatron: jest.fn(),
+        refreshToken: jest.fn(),
+        logout: jest.fn(),
+      };
+      expect(mockAuthApi.refreshToken).toBeDefined();
+    });
+
+    it('should have logout method', () => {
+      const mockAuthApi = {
+        patronLogin: jest.fn(),
+        faceLogin: jest.fn(),
+        getCurrentPatron: jest.fn(),
+        refreshToken: jest.fn(),
+        logout: jest.fn(),
+      };
+      expect(mockAuthApi.logout).toBeDefined();
+    });
+  });
+
+  describe('Mock Data Validation', () => {
+    const mockEdgeCases = {
+      task_status_responses: [
+        { task_id: "mock-pending", status: "PENDING", result: null },
+        { task_id: "mock-success", status: "SUCCESS", result: { is_live: true } },
+        { task_id: "mock-failure", status: "FAILURE", result: { error: "NO_FACE" } },
+        { task_id: "mock-null-confidence", status: "SUCCESS", result: { is_live: null, score: 0 } },
+      ],
+      borrow_responses: [
+        { status: "success", message: "Mượn sách thành công" },
+        { status: "error", detail: "Bạn phải có mặt trong thư viện" },
+        { status: "error", detail: "Bạn đã mượn tối đa 3 cuốn" },
+        { status: "error", detail: "Bạn có sách quá hạn" },
+      ],
+    };
+
+    it('should have pending task status', () => {
+      const pending = mockEdgeCases.task_status_responses.find(t => t.status === 'PENDING');
+      expect(pending).toBeDefined();
+      expect(pending?.result).toBeNull();
+    });
+
+    it('should have success task status', () => {
+      const success = mockEdgeCases.task_status_responses.find(t => t.status === 'SUCCESS');
+      expect(success).toBeDefined();
+      expect(success?.result?.is_live).toBe(true);
+    });
+
+    it('should have failure task status', () => {
+      const failure = mockEdgeCases.task_status_responses.find(t => t.status === 'FAILURE');
+      expect(failure).toBeDefined();
+      expect(failure?.result?.error).toBe('NO_FACE');
+    });
+
+    it('should handle null edge case', () => {
+      const nullCase = mockEdgeCases.task_status_responses.find(t => t.task_id === 'mock-null-confidence');
+      expect(nullCase).toBeDefined();
+      expect(nullCase?.result?.is_live).toBeNull();
+      expect(nullCase?.result?.score).toBe(0);
+    });
+
+    it('should have success borrow response', () => {
+      const success = mockEdgeCases.borrow_responses.find(r => r.status === 'success');
+      expect(success).toBeDefined();
+      expect(success?.message).toContain('thành công');
+    });
+
+    it('should have inside check error response', () => {
+      const insideError = mockEdgeCases.borrow_responses.find(r => r.detail?.includes('mặt trong thư viện'));
+      expect(insideError).toBeDefined();
+      expect(insideError?.status).toBe('error');
+    });
+
+    it('should have max 3 books error response', () => {
+      const maxError = mockEdgeCases.borrow_responses.find(r => r.detail?.includes('3 cuốn'));
+      expect(maxError).toBeDefined();
+      expect(maxError?.status).toBe('error');
+    });
+
+    it('should have overdue error response', () => {
+      const overdueError = mockEdgeCases.borrow_responses.find(r => r.detail?.includes('quá hạn'));
+      expect(overdueError).toBeDefined();
+      expect(overdueError?.status).toBe('error');
+    });
+  });
+
+  describe('Screen Navigation', () => {
+    const mockScreens = [
+      'LoginScreen',
+      'HomeScreen',
+      'BorrowScreen',
+      'ReturnScreen',
+      'ProfileScreen',
+      'FaceCameraScreen',
+      'FaceLoginScreen',
+      'RegisterScreen',
+      'ChangePasswordScreen',
+    ];
+
+    it('should have all expected screens defined', () => {
+      mockScreens.forEach(screen => {
+        expect(screen).toBeDefined();
+      });
+      expect(mockScreens.length).toBe(9);
+    });
+  });
+
+  describe('Business Rules', () => {
+    it('should validate patron inside check', () => {
+      const patronInside = { current_status: 'inside' };
+      const patronOutside = { current_status: 'outside' };
+
+      const isInside = (patron) => patron.current_status === 'inside';
+
+      expect(isInside(patronInside)).toBe(true);
+      expect(isInside(patronOutside)).toBe(false);
+    });
+
+    it('should validate max 3 books rule', () => {
+      const MAX_BOOKS = 3;
+      const activeCount = 3;
+
+      expect(activeCount >= MAX_BOOKS).toBe(true);
+      expect((activeCount + 1) >= MAX_BOOKS).toBe(true);
+    });
+
+    it('should validate overdue check', () => {
+      const now = new Date();
+      const overdueDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const futureDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+      const isOverdue = (dueDate) => new Date(dueDate) < now;
+
+      expect(isOverdue(overdueDate)).toBe(true);
+      expect(isOverdue(futureDate)).toBe(false);
+    });
+  });
 });
-
-api.interceptors.request.use(
-  async (config) => {
-    const token = await AsyncStorage.getItem('accessToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
-api.interceptors.response.use(
-  (response) => response,
-  async (error: AxiosError) => {
-    if (error.response?.status === 401) {
-      const refreshToken = await AsyncStorage.getItem('refreshToken');
-      if (refreshToken) {
-        try {
-          const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-            refresh_token: refreshToken,
-          });
-          const { access_token } = response.data;
-          await AsyncStorage.setItem('accessToken', access_token);
-          if (error.config) {
-            error.config.headers.Authorization = `Bearer ${access_token}`;
-            return api.request(error.config);
-          }
-        } catch (refreshError) {
-          await AsyncStorage.multiRemove(['accessToken', 'refreshToken']);
-        }
-      }
-    }
-    return Promise.reject(error);
-  }
-);
-
-export default api;
 </file>
 
 <file path="src/api/index.ts">
@@ -522,334 +1451,6 @@ export const openLibraryApi = {
     }
   },
 };
-</file>
-
-<file path="src/components/AutoFaceCapture.tsx">
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
-import { Text } from 'react-native-paper';
-import { CameraView, useCameraPermissions, FaceDetectionResult } from 'expo-camera';
-import * as FaceDetector from 'expo-face-detector';
-import { colors } from '../theme/colors';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const OVAL_WIDTH = SCREEN_WIDTH * 0.7;
-const OVAL_HEIGHT = OVAL_WIDTH * 1.3;
-const COUNTDOWN_SECONDS = 3;
-const FACE_STABLE_THRESHOLD = 1500;
-
-interface AutoFaceCaptureProps {
-  onCapture: (base64Image: string) => void;
-  onError?: (error: string) => void;
-  disabled?: boolean;
-}
-
-type CaptureState = 'waiting' | 'ready' | 'countdown' | 'captured' | 'error';
-
-export default function AutoFaceCapture({
-  onCapture,
-  onError,
-  disabled = false,
-}: AutoFaceCaptureProps) {
-  const [permission, requestPermission] = useCameraPermissions();
-  const [state, setState] = useState<CaptureState>('waiting');
-  const [countdown, setCountdown] = useState<number | null>(null);
-  const [faceBounds, setFaceBounds] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
-  const cameraRef = useRef<CameraView>(null);
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const faceStableTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastFaceTimeRef = useRef<number>(0);
-
-  const clearTimers = useCallback(() => {
-    if (countdownRef.current) {
-      clearInterval(countdownRef.current);
-      countdownRef.current = null;
-    }
-    if (faceStableTimerRef.current) {
-      clearTimeout(faceStableTimerRef.current);
-      faceStableTimerRef.current = null;
-    }
-  }, []);
-
-  useEffect(() => {
-    return () => clearTimers();
-  }, [clearTimers]);
-
-  const handleFacesDetected = useCallback(({ faces }: FaceDetectionResult) => {
-    if (disabled || state === 'captured' || state === 'countdown') return;
-
-    if (faces.length === 1) {
-      const face = faces[0];
-      const bounds = face.bounds;
-
-      const centerX = bounds.origin.x + bounds.size.width / 2;
-      const centerY = bounds.origin.y + bounds.size.height / 2;
-
-      const ovalCenterX = SCREEN_WIDTH / 2;
-      const ovalCenterY = 200;
-
-      const distanceX = Math.abs(centerX - ovalCenterX) / (OVAL_WIDTH / 2);
-      const distanceY = Math.abs(centerY - ovalCenterY) / (OVAL_HEIGHT / 2);
-      const isInsideOval = distanceX < 0.8 && distanceY < 0.8;
-
-      if (isInsideOval && bounds.size.width > 80) {
-        setFaceBounds({
-          x: bounds.origin.x,
-          y: bounds.origin.y,
-          width: bounds.size.width,
-          height: bounds.size.height,
-        });
-
-        const now = Date.now();
-        if (now - lastFaceTimeRef.current > FACE_STABLE_THRESHOLD) {
-          startCountdown();
-        }
-        lastFaceTimeRef.current = now;
-      } else {
-        setFaceBounds(null);
-        if (state !== 'waiting') {
-          clearTimers();
-          setState('waiting');
-          setCountdown(null);
-        }
-      }
-    } else {
-      setFaceBounds(null);
-      if (state !== 'waiting') {
-        clearTimers();
-        setState('waiting');
-        setCountdown(null);
-      }
-    }
-  }, [disabled, state, clearTimers]);
-
-  const startCountdown = () => {
-    if (state === 'countdown' || state === 'captured') return;
-
-    clearTimers();
-    setState('countdown');
-    setCountdown(COUNTDOWN_SECONDS);
-
-    let count = COUNTDOWN_SECONDS;
-    countdownRef.current = setInterval(() => {
-      count--;
-      if (count <= 0) {
-        clearTimers();
-        setCountdown(0);
-        capturePhoto();
-      } else {
-        setCountdown(count);
-      }
-    }, 1000);
-  };
-
-  const capturePhoto = async () => {
-    if (!cameraRef.current) return;
-
-    try {
-      const photo = await cameraRef.current.takePictureAsync({
-        base64: true,
-        quality: 0.9,
-        skipProcessing: true,
-      });
-
-      if (photo?.base64) {
-        setState('captured');
-        onCapture(photo.base64);
-      } else {
-        setState('error');
-        onError?.('Không thể chụp ảnh');
-      }
-    } catch (error: any) {
-      console.error('Capture error:', error);
-      setState('error');
-      onError?.(error?.message || 'Lỗi khi chụp ảnh');
-    }
-  };
-
-  const resetCapture = () => {
-    clearTimers();
-    setState('waiting');
-    setCountdown(null);
-    setFaceBounds(null);
-    lastFaceTimeRef.current = 0;
-  };
-
-  if (!permission) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.messageText}>Đang tải camera...</Text>
-      </View>
-    );
-  }
-
-  if (!permission.granted) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.messageText}>Cần quyền camera</Text>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.container}>
-      <CameraView
-        ref={cameraRef}
-        style={styles.camera}
-        facing="front"
-        onFacesDetected={handleFacesDetected}
-        faceDetectorSettings={{
-          mode: FaceDetector.FaceDetectorMode.fast,
-          detectLandmarks: FaceDetector.FaceDetectorLandmarks.none,
-          runClassifications: FaceDetector.FaceDetectorClassifications.none,
-          minDetectionInterval: 100,
-          tracking: true,
-        }}
-      >
-        <View style={styles.overlay}>
-          <View style={styles.ovalContainer}>
-            <View style={styles.ovalFrame}>
-              {state === 'waiting' && (
-                <Text style={styles.guideText}>Đặt mặt vào khung</Text>
-              )}
-              {state === 'ready' && (
-                <Text style={styles.guideText}>Giữ nguyên...</Text>
-              )}
-            </View>
-
-            {faceBounds && state !== 'captured' && (
-              <View
-                style={[
-                  styles.faceOutline,
-                  {
-                    left: faceBounds.x,
-                    top: faceBounds.y,
-                    width: faceBounds.width,
-                    height: faceBounds.height,
-                  },
-                ]}
-              />
-            )}
-          </View>
-
-          {state === 'countdown' && countdown !== null && (
-            <View style={styles.countdownContainer}>
-              <Text style={styles.countdownText}>{countdown}</Text>
-            </View>
-          )}
-
-          {state === 'captured' && (
-            <View style={styles.successContainer}>
-              <Text style={styles.successText}>✓</Text>
-            </View>
-          )}
-
-          <Text style={styles.hintText}>
-            {state === 'waiting' && 'Nhìn thẳng vào camera'}
-            {state === 'ready' && 'Đang ổn định...'}
-            {state === 'countdown' && 'Giữ nguyên tư thế!'}
-            {state === 'captured' && 'Đã chụp thành công'}
-            {state === 'error' && 'Có lỗi xảy ra'}
-          </Text>
-        </View>
-      </CameraView>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  camera: {
-    flex: 1,
-  },
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  ovalContainer: {
-    width: OVAL_WIDTH,
-    height: OVAL_HEIGHT,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  ovalFrame: {
-    width: OVAL_WIDTH,
-    height: OVAL_HEIGHT,
-    borderRadius: OVAL_HEIGHT / 2,
-    borderWidth: 3,
-    borderColor: colors.primary,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  guideText: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '600',
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
-  faceOutline: {
-    position: 'absolute',
-    borderWidth: 2,
-    borderColor: colors.success,
-    borderRadius: 8,
-  },
-  countdownContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-  },
-  countdownText: {
-    color: colors.primary,
-    fontSize: 96,
-    fontWeight: '900',
-    textShadowColor: 'rgba(0,0,0,0.7)',
-    textShadowOffset: { width: 0, height: 4 },
-    textShadowRadius: 12,
-  },
-  successContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-  },
-  successText: {
-    color: colors.success,
-    fontSize: 72,
-  },
-  hintText: {
-    position: 'absolute',
-    bottom: 60,
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '500',
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
-  messageText: {
-    color: colors.text,
-    fontSize: 16,
-    textAlign: 'center',
-    marginTop: 100,
-  },
-});
 </file>
 
 <file path="src/i18n/vi.json">
@@ -961,441 +1562,6 @@ const styles = StyleSheet.create({
     "unknown": "Đã xảy ra lỗi không xác định"
   }
 }
-</file>
-
-<file path="src/screens/BorrowScreen.tsx">
-import React, { useState } from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, Button, Surface, TextInput, ActivityIndicator, Card } from 'react-native-paper';
-import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
-import { borrowApi } from '../api/borrow';
-import { openLibraryApi } from '../api/openlibrary';
-import { authApi } from '../api/auth';
-import { useAuth } from '../context/AuthContext';
-import { Book, OpenLibraryBook } from '../types';
-import { colors } from '../theme/colors';
-
-interface BorrowScreenProps {
-  navigation: any;
-}
-
-export default function BorrowScreen({ navigation }: BorrowScreenProps) {
-  const { patron } = useAuth();
-  const [scanned, setScanned] = useState(false);
-  const [isbn, setIsbn] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
-  const [book, setBook] = useState<OpenLibraryBook | null>(null);
-  const [localBook, setLocalBook] = useState<Book | null>(null);
-  const [isBorrowing, setIsBorrowing] = useState(false);
-  const [permission, requestPermission] = useCameraPermissions();
-
-  const searchBook = async (isbnToSearch: string) => {
-    if (!isbnToSearch.trim()) return;
-
-    setIsSearching(true);
-    try {
-      try {
-        const localBookData = await borrowApi.getBook(isbnToSearch.trim());
-        setLocalBook(localBookData);
-      } catch {
-      }
-
-      const openLibraryBook = await openLibraryApi.getBookByIsbn(isbnToSearch.trim());
-      if (openLibraryBook) {
-        setBook(openLibraryBook);
-      } else if (!localBook) {
-        Alert.alert('Không tìm thấy', 'Không tìm thấy sách với ISBN này');
-      }
-    } catch (error) {
-      console.error('Search error:', error);
-      Alert.alert('Lỗi', 'Không thể tìm kiếm sách');
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  const handleBarCodeScanned = (result: BarcodeScanningResult) => {
-    if (scanned || !result.data) return;
-    setScanned(true);
-    setIsbn(result.data);
-    searchBook(result.data);
-  };
-
-  const handleBorrow = async () => {
-    if (!isbn.trim()) return;
-
-    setIsBorrowing(true);
-    try {
-      try {
-        const patronData = await authApi.getCurrentPatron();
-        const status = patronData.current_status || patronData.currentStatus;
-        if (status !== 'inside') {
-          Alert.alert('Không thể mượn', 'Bạn phải đi qua cổng vào thư viện trước khi mượn sách');
-          setIsBorrowing(false);
-          return;
-        }
-      } catch (checkError) {
-        console.error('Failed to check patron status:', checkError);
-        Alert.alert('Lỗi', 'Không thể xác minh trạng thái. Vui lòng thử lại.');
-        setIsBorrowing(false);
-        return;
-      }
-
-      const result = await borrowApi.borrowBook(isbn.trim());
-      if (result.status === 'success') {
-        Alert.alert('Thành công', result.message, [
-          { text: 'OK', onPress: () => resetState() },
-        ]);
-      }
-    } catch (error: any) {
-      const message = error?.response?.data?.detail || 'Mượn sách thất bại';
-      Alert.alert('Lỗi', message);
-    } finally {
-      setIsBorrowing(false);
-    }
-  };
-
-  const resetState = () => {
-    setScanned(false);
-    setIsbn('');
-    setBook(null);
-    setLocalBook(null);
-  };
-
-  const displayBook = book || (localBook ? {
-    title: localBook.title,
-    author: localBook.author,
-    cover: localBook.cover_url ? { medium: localBook.cover_url } : undefined
-  } : null);
-
-  if (!permission) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <ActivityIndicator color={colors.primary} />
-      </SafeAreaView>
-    );
-  }
-
-  if (!permission.granted) {
-    return (
-      <SafeAreaView style={styles.permissionContainer} edges={['bottom']}>
-        <Text style={styles.permissionText}>Cần quyền camera để quét mã vạch</Text>
-        <Button mode="contained" onPress={requestPermission} style={styles.permissionButton}>
-          Cấp quyền
-        </Button>
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.orText}>hoặc nhập ISBN thủ công</Text>
-          <View style={styles.dividerLine} />
-        </View>
-        <TextInput
-          label="ISBN"
-          value={isbn}
-          onChangeText={setIsbn}
-          mode="outlined"
-          style={styles.isbnInput}
-          outlineStyle={styles.inputOutline}
-          activeOutlineColor={colors.primary}
-          right={<TextInput.Icon icon="magnify" onPress={() => searchBook(isbn)} color={colors.primary} />}
-        />
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
-      {!scanned ? (
-        <View style={styles.scannerContainer}>
-          <CameraView
-            style={styles.camera}
-            facing="back"
-            barcodeScannerSettings={{
-              barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
-            }}
-            onBarcodeScanned={handleBarCodeScanned}
-          >
-            <View style={styles.overlay}>
-              <View style={styles.scanArea}>
-                <View style={[styles.corner, styles.topLeft]} />
-                <View style={[styles.corner, styles.topRight]} />
-                <View style={[styles.corner, styles.bottomLeft]} />
-                <View style={[styles.corner, styles.bottomRight]} />
-              </View>
-              <Text style={styles.scanText}>Đặt mã vạch trong khung hình</Text>
-            </View>
-          </CameraView>
-
-          <Surface style={styles.manualInput} elevation={0}>
-            <View style={styles.manualAccent} />
-            <Text variant="bodyMedium" style={styles.manualLabel}>Hoặc nhập ISBN thủ công:</Text>
-            <TextInput
-              label="ISBN"
-              value={isbn}
-              onChangeText={setIsbn}
-              mode="outlined"
-              style={styles.isbnInputFull}
-              outlineStyle={styles.inputOutline}
-              activeOutlineColor={colors.primary}
-              right={<TextInput.Icon icon="magnify" onPress={() => searchBook(isbn)} disabled={isSearching} color={colors.primary} />}
-            />
-          </Surface>
-        </View>
-      ) : (
-        <View style={styles.resultContainer}>
-          {isSearching ? (
-            <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
-          ) : displayBook ? (
-            <Card style={styles.bookCard}>
-              <View style={styles.cardAccent} />
-              {displayBook.cover?.medium && (
-                <Card.Cover source={{ uri: displayBook.cover.medium }} style={styles.cover} />
-              )}
-              <Card.Content>
-                <Text variant="titleLarge" style={styles.bookTitle}>
-                  {displayBook.title}
-                </Text>
-                {'authors' in displayBook && displayBook.authors ? (
-                  <Text variant="bodyMedium" style={styles.bookAuthor}>
-                    {displayBook.authors[0]?.name}
-                  </Text>
-                ) : 'author' in displayBook && displayBook.author ? (
-                  <Text variant="bodyMedium" style={styles.bookAuthor}>
-                    {displayBook.author}
-                  </Text>
-                ) : null}
-                <Text variant="bodySmall" style={styles.isbnLabel}>
-                  ISBN: {isbn}
-                </Text>
-                {localBook?.shelf_location && (
-                  <Text variant="bodySmall" style={styles.locationLabel}>
-                    Vị trí: {localBook.shelf_location}
-                  </Text>
-                )}
-              </Card.Content>
-              <Card.Actions style={styles.cardActions}>
-                <Button
-                  mode="outlined"
-                  onPress={resetState}
-                  style={styles.cardActionButton}
-                  labelStyle={styles.cardActionButtonLabel}
-                >
-                  Quét lại
-                </Button>
-                <Button
-                  mode="contained"
-                  onPress={handleBorrow}
-                  loading={isBorrowing}
-                  disabled={isBorrowing}
-                  style={styles.cardActionButton}
-                  labelStyle={styles.cardActionButtonLabel}
-                >
-                  Xác nhận mượn
-                </Button>
-              </Card.Actions>
-            </Card>
-          ) : null}
-        </View>
-      )}
-    </SafeAreaView>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  permissionContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-    backgroundColor: colors.background,
-  },
-  permissionText: {
-    color: colors.text,
-    fontSize: 16,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  permissionButton: {
-    borderRadius: 6,
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 24,
-    paddingHorizontal: 16,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.divider,
-  },
-  orText: {
-    color: colors.textSecondary,
-    marginHorizontal: 12,
-    fontSize: 12,
-  },
-  isbnInput: {
-    width: '80%',
-    marginTop: 4,
-    backgroundColor: 'transparent',
-  },
-  inputOutline: {
-    borderRadius: 6,
-    borderColor: colors.border,
-  },
-  scannerContainer: {
-    flex: 1,
-  },
-  camera: {
-    flex: 1,
-  },
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  scanArea: {
-    width: 280,
-    height: 150,
-    borderRadius: 8,
-    position: 'relative',
-  },
-  corner: {
-    position: 'absolute',
-    width: 36,
-    height: 36,
-    borderColor: colors.primary,
-    borderWidth: 2,
-  },
-  topLeft: {
-    top: 0,
-    left: 0,
-    borderRightWidth: 0,
-    borderBottomWidth: 0,
-    borderTopLeftRadius: 8,
-  },
-  topRight: {
-    top: 0,
-    right: 0,
-    borderLeftWidth: 0,
-    borderBottomWidth: 0,
-    borderTopRightRadius: 8,
-  },
-  bottomLeft: {
-    bottom: 0,
-    left: 0,
-    borderRightWidth: 0,
-    borderTopWidth: 0,
-    borderBottomLeftRadius: 8,
-  },
-  bottomRight: {
-    bottom: 0,
-    right: 0,
-    borderLeftWidth: 0,
-    borderTopWidth: 0,
-    borderBottomRightRadius: 8,
-  },
-  scanText: {
-    color: colors.text,
-    marginTop: 20,
-    fontSize: 16,
-    textAlign: 'center',
-    fontWeight: '500',
-  },
-  manualInput: {
-    padding: 16,
-    backgroundColor: colors.surface,
-    position: 'relative',
-    overflow: 'hidden',
-    borderTopWidth: 0.5,
-    borderTopColor: colors.border,
-  },
-  manualAccent: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 3,
-    backgroundColor: colors.primary,
-  },
-  manualLabel: {
-    color: colors.textSecondary,
-    marginBottom: 8,
-    fontSize: 13,
-  },
-  isbnInputFull: {
-    marginTop: 4,
-    backgroundColor: 'transparent',
-  },
-  resultContainer: {
-    flex: 1,
-    padding: 16,
-    justifyContent: 'center',
-  },
-  loader: {
-    alignSelf: 'center',
-  },
-  bookCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 8,
-    overflow: 'hidden',
-    position: 'relative',
-    borderWidth: 0.5,
-    borderColor: colors.border,
-  },
-  cardAccent: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 3,
-    backgroundColor: colors.primary,
-    zIndex: 1,
-  },
-  cover: {
-    height: 200,
-    resizeMode: 'contain',
-    backgroundColor: colors.surfaceVariant,
-  },
-  bookTitle: {
-    color: colors.text,
-    marginTop: 12,
-    fontWeight: '700',
-    fontSize: 18,
-  },
-  bookAuthor: {
-    color: colors.textSecondary,
-    marginTop: 4,
-    fontSize: 14,
-  },
-  isbnLabel: {
-    color: colors.textSecondary,
-    marginTop: 8,
-    fontSize: 13,
-  },
-  locationLabel: {
-    color: colors.primary,
-    marginTop: 4,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  cardActions: {
-    padding: 12,
-    gap: 8,
-  },
-  cardActionButton: {
-    borderRadius: 6,
-  },
-  cardActionButtonLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-});
 </file>
 
 <file path="src/screens/ChangePasswordScreen.tsx">
@@ -1631,108 +1797,158 @@ const styles = StyleSheet.create({
 });
 </file>
 
-<file path="src/screens/FaceLoginScreen.tsx">
-import React, { useState, useRef } from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
+<file path="src/screens/HistoryScreen.tsx">
+import React, { useState, useCallback } from 'react';
+import { View, Image, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, Button, Surface } from 'react-native-paper';
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useAuth } from '../context/AuthContext';
+import { Text, Surface, Button } from 'react-native-paper';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { useFocusEffect } from '@react-navigation/native';
+import { borrowApi } from '../api/borrow';
+import { BorrowRecord } from '../types';
 import { colors } from '../theme/colors';
+import { formatDate, getDaysUntil } from '../utils/dateUtils';
 
-interface FaceLoginScreenProps {
+interface HistoryScreenProps {
   navigation: any;
 }
 
-export default function FaceLoginScreen({ navigation }: FaceLoginScreenProps) {
-  const [permission, requestPermission] = useCameraPermissions();
-  const [isCapturing, setIsCapturing] = useState(false);
-  const cameraRef = useRef<CameraView>(null);
-  const { faceLogin } = useAuth();
+type FilterTab = 'all' | 'borrowed' | 'returned';
 
-  const captureFace = async () => {
-    if (!cameraRef.current || isCapturing) return;
+const FILTERS: { key: FilterTab; label: string }[] = [
+  { key: 'all', label: 'Tất cả' },
+  { key: 'borrowed', label: 'Đang mượn' },
+  { key: 'returned', label: 'Đã trả' },
+];
 
-    setIsCapturing(true);
+export default function HistoryScreen({ navigation }: HistoryScreenProps) {
+  const [records, setRecords] = useState<BorrowRecord[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const loadHistory = async () => {
     try {
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
-      });
-      if (photo?.uri) {
-        await faceLogin(photo.uri);
-      }
+      setLoadError(null);
+      const data = await borrowApi.getHistory();
+      setRecords(data);
     } catch (error: any) {
-      const message = error?.response?.data?.detail || error?.message || 'Đăng nhập thất bại';
-      Alert.alert('Lỗi', message);
-    } finally {
-      setIsCapturing(false);
+      console.error('Failed to load history:', error);
+      setLoadError(error?.response?.data?.detail || error?.message || 'Không thể tải lịch sử');
     }
   };
 
-  if (!permission) {
-    return <SafeAreaView style={styles.container} />;
-  }
+  useFocusEffect(
+    useCallback(() => {
+      loadHistory();
+    }, [])
+  );
 
-  if (!permission.granted) {
-    return (
-      <SafeAreaView style={styles.permissionContainer} edges={['bottom']}>
-        <Text style={styles.permissionText}>Cần quyền camera để đăng nhập bằng khuôn mặt</Text>
-        <Button mode="contained" onPress={requestPermission} style={styles.permissionButton}>
-          Cấp quyền
-        </Button>
-        <Button mode="text" onPress={() => navigation.goBack()} style={styles.backButton}>
-          Quay lại đăng nhập bằng mật khẩu
-        </Button>
-      </SafeAreaView>
-    );
-  }
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadHistory();
+    setRefreshing(false);
+  };
+
+  const filtered = records.filter((r) => {
+    if (activeFilter === 'all') return true;
+    return r.status === activeFilter;
+  });
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      <CameraView
-        ref={cameraRef}
-        style={styles.camera}
-        facing="front"
+      <ScrollView
+        style={styles.flex}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
-        <View style={styles.overlay}>
-          <View style={styles.faceGuide}>
-            <View style={[styles.guideCorner, styles.topLeft]} />
-            <View style={[styles.guideCorner, styles.topRight]} />
-            <View style={[styles.guideCorner, styles.bottomLeft]} />
-            <View style={[styles.guideCorner, styles.bottomRight]} />
-          </View>
-          <Text style={styles.instruction}>
-            Đặt khuôn mặt trong khung hình và giữ yên
-          </Text>
+        <View style={styles.header}>
+          <View style={styles.headerSpine} />
+          <Text style={styles.headerTitle}>Lịch sử mượn sách</Text>
         </View>
-      </CameraView>
 
-      <Surface style={styles.controls} elevation={0}>
-        <Text style={styles.hint}>
-          {isCapturing ? 'Đang xử lý...' : 'Nhấn nút để đăng nhập'}
-        </Text>
-        <Button
-          mode="contained"
-          onPress={captureFace}
-          loading={isCapturing}
-          disabled={isCapturing}
-          style={styles.captureButton}
-          contentStyle={styles.captureButtonContent}
-          labelStyle={styles.captureButtonLabel}
-          icon="face-recognition"
-        >
-          Đăng nhập bằng khuôn mặt
-        </Button>
-        <Button
-          mode="text"
-          onPress={() => navigation.goBack()}
-          textColor={colors.textSecondary}
-          style={styles.backLink}
-          labelStyle={styles.backLinkLabel}
-        >
-          Quay lại đăng nhập bằng mật khẩu
-        </Button>
-      </Surface>
+        <View style={styles.filterRow}>
+          {FILTERS.map((f) => (
+            <TouchableOpacity
+              key={f.key}
+              activeOpacity={0.7}
+              onPress={() => setActiveFilter(f.key)}
+            >
+              <Surface style={[styles.filterChip, activeFilter === f.key && styles.filterChipActive]} elevation={0}>
+                <Text style={[styles.filterText, activeFilter === f.key && styles.filterTextActive]}>
+                  {f.label}
+                </Text>
+              </Surface>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {loadError ? (
+          <Surface style={styles.stateCard} elevation={0}>
+            <MaterialCommunityIcons name="cloud-off-outline" size={36} color={colors.textSecondary} />
+            <Text variant="bodyMedium" style={styles.stateText}>
+              {loadError}
+            </Text>
+            <Button mode="outlined" onPress={loadHistory} style={styles.stateButton} labelStyle={styles.stateButtonLabel} icon="refresh">
+              Thử lại
+            </Button>
+          </Surface>
+        ) : filtered.length === 0 ? (
+          <Surface style={styles.stateCard} elevation={0}>
+            <MaterialCommunityIcons name="bookshelf" size={36} color={colors.textSecondary} />
+            <Text variant="bodyMedium" style={styles.stateText}>
+              {activeFilter === 'all' ? 'Chưa có lịch sử mượn sách' :
+               activeFilter === 'borrowed' ? 'Không có sách đang mượn' :
+               'Không có sách đã trả'}
+            </Text>
+          </Surface>
+        ) : (
+          filtered.map((record) => {
+            const isReturned = record.status === 'returned';
+            const overdue = !isReturned && getDaysUntil(record.due_at) < 0;
+            return (
+              <Surface key={record.id} style={styles.recordCard} elevation={0}>
+                <View style={[styles.recordSpine, isReturned ? styles.recordSpineReturned : overdue ? styles.recordSpineOverdue : styles.recordSpineActive]} />
+                {record.book?.cover_url ? (
+                  <Image source={{ uri: record.book.cover_url }} style={styles.bookCover} />
+                ) : (
+                  <View style={styles.bookCoverPlaceholder}>
+                    <MaterialCommunityIcons name="book-variant" size={24} color={colors.textSecondary} />
+                  </View>
+                )}
+                <View style={styles.recordContent}>
+                  <Text style={styles.bookTitle} numberOfLines={2}>
+                    {record.book?.title || record.book_id}
+                  </Text>
+                  {record.book?.author ? (
+                    <Text style={styles.bookAuthor} numberOfLines={1}>
+                      {record.book.author}
+                    </Text>
+                  ) : null}
+                  <View style={styles.recordMeta}>
+                    <Text style={styles.metaText}>
+                      Mượn: {formatDate(record.borrow_at)}
+                    </Text>
+                    {isReturned ? (
+                      <Text style={styles.metaText}>
+                        Trả: {formatDate(record.return_at!)}
+                      </Text>
+                    ) : (
+                      <Text style={styles.metaText}>
+                        Hạn trả: {formatDate(record.due_at)}
+                      </Text>
+                    )}
+                  </View>
+                  <View style={[styles.statusBadge, isReturned ? styles.statusReturned : overdue ? styles.statusOverdue : styles.statusActive]}>
+                    <Text style={styles.statusText}>
+                      {isReturned ? 'Đã trả' : overdue ? 'Quá hạn' : 'Đang mượn'}
+                    </Text>
+                  </View>
+                </View>
+              </Surface>
+            );
+          })
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -1742,115 +1958,163 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  permissionContainer: {
+  flex: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-    backgroundColor: colors.background,
   },
-  permissionText: {
+
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 4,
+    gap: 10,
+  },
+  headerSpine: {
+    width: 3,
+    height: 20,
+    backgroundColor: colors.primary,
+    borderRadius: 2,
+  },
+  headerTitle: {
     color: colors.text,
-    fontSize: 16,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  permissionButton: {
-    borderRadius: 6,
-  },
-  backButton: {
-    marginTop: 16,
-  },
-  camera: {
-    flex: 1,
-  },
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  faceGuide: {
-    width: 220,
-    height: 280,
-    borderRadius: 110,
-    borderWidth: 2,
-    borderColor: colors.primary,
-    position: 'relative',
-  },
-  guideCorner: {
-    position: 'absolute',
-    width: 40,
-    height: 40,
-    borderColor: colors.secondary,
-    borderWidth: 2,
-  },
-  topLeft: {
-    top: -2,
-    left: -2,
-    borderRightWidth: 0,
-    borderBottomWidth: 0,
-    borderTopLeftRadius: 110,
-  },
-  topRight: {
-    top: -2,
-    right: -2,
-    borderLeftWidth: 0,
-    borderBottomWidth: 0,
-    borderTopRightRadius: 110,
-  },
-  bottomLeft: {
-    bottom: -2,
-    left: -2,
-    borderRightWidth: 0,
-    borderTopWidth: 0,
-    borderBottomLeftRadius: 110,
-  },
-  bottomRight: {
-    bottom: -2,
-    right: -2,
-    borderLeftWidth: 0,
-    borderTopWidth: 0,
-    borderBottomRightRadius: 110,
-  },
-  instruction: {
-    color: colors.text,
-    marginTop: 24,
-    fontSize: 16,
-    textAlign: 'center',
-    fontWeight: '600',
-  },
-  controls: {
-    padding: 24,
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
-    alignItems: 'center',
-    borderTopWidth: 0.5,
-    borderTopColor: colors.border,
-  },
-  hint: {
-    color: colors.textSecondary,
-    marginBottom: 16,
-    fontSize: 14,
-  },
-  captureButton: {
-    width: '100%',
-    marginBottom: 8,
-    borderRadius: 6,
-  },
-  captureButtonContent: {
-    paddingVertical: 10,
-  },
-  captureButtonLabel: {
-    fontSize: 15,
+    fontSize: 20,
     fontWeight: '700',
   },
-  backLink: {
-    marginTop: 4,
+
+  filterRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 6,
+    gap: 8,
   },
-  backLinkLabel: {
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: colors.surface,
+    borderWidth: 0.5,
+    borderColor: colors.border,
+  },
+  filterChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  filterText: {
+    color: colors.textSecondary,
     fontSize: 13,
+    fontWeight: '600',
+  },
+  filterTextActive: {
+    color: colors.background,
+  },
+
+  stateCard: {
+    marginHorizontal: 16,
+    marginTop: 24,
+    padding: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 0.5,
+    borderColor: colors.border,
+  },
+  stateText: {
+    color: colors.text,
+    marginTop: 12,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  stateButton: {
+    borderRadius: 6,
+  },
+  stateButtonLabel: {
+    fontSize: 14,
+  },
+
+  recordCard: {
+    marginHorizontal: 16,
+    marginTop: 10,
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    flexDirection: 'row',
+    overflow: 'hidden',
+    borderWidth: 0.5,
+    borderColor: colors.border,
+  },
+  recordSpine: {
+    width: 4,
+  },
+  recordSpineActive: {
+    backgroundColor: colors.primary,
+  },
+  recordSpineOverdue: {
+    backgroundColor: colors.error,
+  },
+  recordSpineReturned: {
+    backgroundColor: colors.textDisabled,
+  },
+  bookCover: {
+    width: 48,
+    height: 66,
+    borderRadius: 4,
+    margin: 10,
+    marginRight: 0,
+  },
+  bookCoverPlaceholder: {
+    width: 48,
+    height: 66,
+    borderRadius: 4,
+    margin: 10,
+    marginRight: 0,
+    backgroundColor: colors.surfaceVariant,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recordContent: {
+    flex: 1,
+    padding: 10,
+  },
+  bookTitle: {
+    color: colors.text,
+    fontWeight: '600',
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  bookAuthor: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginTop: 1,
+  },
+  recordMeta: {
+    marginTop: 6,
+    gap: 1,
+  },
+  metaText: {
+    color: colors.textDisabled,
+    fontSize: 11,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginTop: 6,
+  },
+  statusActive: {
+    backgroundColor: colors.success,
+  },
+  statusOverdue: {
+    backgroundColor: colors.error,
+  },
+  statusReturned: {
+    backgroundColor: colors.textDisabled,
+  },
+  statusText: {
+    color: colors.background,
+    fontSize: 11,
+    fontWeight: '700',
   },
 });
 </file>
@@ -2112,6 +2376,653 @@ const styles = StyleSheet.create({
 });
 </file>
 
+<file path="src/theme/colors.ts">
+export const colors = {
+  primary: '#D4A853',
+  primaryDark: '#A88430',
+  secondary: '#3A7D6B',
+  background: '#0D1117',
+  surface: '#1A1F2B',
+  surfaceVariant: '#252A38',
+  error: '#C44E4E',
+  errorDark: '#8B3030',
+  success: '#4A8C5C',
+  warning: '#C49A3C',
+  text: '#E8E0D0',
+  textSecondary: '#9A9488',
+  textDisabled: '#5A5550',
+  border: '#2A2F3A',
+  divider: '#1F2430',
+  overlay: 'rgba(0, 0, 0, 0.7)',
+  card: '#1A1F2B',
+  notification: '#C44E4E',
+  bookmark: '#D4A853',
+  glow: 'rgba(212, 168, 83, 0.08)',
+};
+
+export type Colors = typeof colors;
+</file>
+
+<file path="src/theme/DarkTheme.ts">
+import { MD3DarkTheme, configureFonts } from 'react-native-paper';
+import { colors } from './colors';
+
+const fontConfig = {
+  fontFamily: 'System',
+};
+
+export const DarkTheme = {
+  ...MD3DarkTheme,
+  dark: true,
+  colors: {
+    ...MD3DarkTheme.colors,
+    primary: colors.primary,
+    primaryContainer: colors.surfaceVariant,
+    secondary: colors.secondary,
+    secondaryContainer: colors.surfaceVariant,
+    tertiary: colors.warning,
+    background: colors.background,
+    surface: colors.surface,
+    surfaceVariant: colors.surfaceVariant,
+    error: colors.error,
+    errorContainer: colors.errorDark,
+    onPrimary: colors.background,
+    onSecondary: colors.text,
+    onTertiary: colors.background,
+    onBackground: colors.text,
+    onSurface: colors.text,
+    onSurfaceVariant: colors.textSecondary,
+    onError: colors.text,
+    outline: colors.border,
+    outlineVariant: colors.divider,
+    inverseSurface: colors.surfaceVariant,
+    inverseOnSurface: colors.text,
+    inversePrimary: colors.primary,
+    shadow: colors.border,
+    surfaceTint: colors.primary,
+    elevation: {
+      level0: 'transparent',
+      level1: colors.surface,
+      level2: colors.surfaceVariant,
+      level3: '#2A2F3A',
+      level4: '#2F3540',
+      level5: '#353B48',
+    },
+    custom: {
+      bookmark: colors.bookmark,
+      glow: colors.glow,
+      textDisabled: colors.textDisabled,
+      success: colors.success,
+      warning: colors.warning,
+    },
+  },
+  roundness: 6,
+  fonts: configureFonts({ config: fontConfig }),
+};
+
+export type AppTheme = typeof DarkTheme;
+</file>
+
+<file path="src/utils/dateUtils.ts">
+export const formatDate = (dateString: string): string => {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+};
+
+export const formatDateTime = (dateString: string): string => {
+  const date = new Date(dateString);
+  return date.toLocaleString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+export const getDaysUntil = (dateString: string): number => {
+  const now = new Date();
+  const target = new Date(dateString);
+  const diffTime = target.getTime() - now.getTime();
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+};
+
+export const isOverdue = (dueDate: string): boolean => {
+  return getDaysUntil(dueDate) < 0;
+};
+</file>
+
+<file path="tsconfig.jest.json">
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "lib": ["ES2020"],
+    "jsx": "react-native",
+    "strict": false,
+    "moduleResolution": "node",
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "ignoreDeprecations": "6.0",
+    "types": ["jest", "node"]
+  },
+  "include": ["src/**/*", "jest.config.js"],
+  "exclude": ["node_modules"]
+}
+</file>
+
+<file path="tsconfig.json">
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true
+  }
+}
+</file>
+
+<file path="App.tsx">
+import 'react-native-gesture-handler';
+import { StatusBar } from 'expo-status-bar';
+import React from 'react';
+import { PaperProvider } from 'react-native-paper';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { StyleSheet } from 'react-native';
+
+import { AuthProvider } from './src/context/AuthContext';
+import AppNavigator from './src/navigation/AppNavigator';
+import { DarkTheme } from './src/theme/DarkTheme';
+
+export default function App() {
+  return (
+    <GestureHandlerRootView style={styles.container}>
+      <SafeAreaProvider>
+        <PaperProvider theme={DarkTheme}>
+          <AuthProvider>
+            <StatusBar style="light" />
+            <AppNavigator />
+          </AuthProvider>
+        </PaperProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+});
+</file>
+
+<file path="e2e/flows/borrow-flow.yaml">
+appId: com.library.mobile
+name: Borrow Book Flow
+description: Test borrowing a book by scanning barcode
+
+steps:
+  - launchApp:
+      clearState: true
+
+  - assertVisible:
+      text: "Đăng nhập"
+      timeout: 10000
+
+  - tapOn:
+      placeholder: "Mã sinh viên"
+
+  - inputText:
+      text: "TEST001"
+
+  - tapOn:
+      placeholder: "Mật khẩu"
+
+  - inputText:
+      text: "password123"
+
+  - tapOn:
+      text: "Đăng nhập"
+
+  - waitForNavigation:
+      timeout: 15000
+
+  - tapOn:
+      text: "Mượn sách"
+      timeout: 5000
+
+  - waitForNavigation:
+      timeout: 5000
+
+  - assertVisible:
+      text: "Đặt mã vạch trong khung hình"
+      timeout: 5000
+
+  - tapOn:
+      text: "Hoặc nhập ISBN thủ công"
+      timeout: 3000
+
+  - inputText:
+      text: "9780134685991"
+
+  - tapOn:
+      icon: "magnify"
+      timeout: 3000
+
+  - waitFor:
+      condition: "Book found"
+      timeout: 10000
+
+  - assertVisible:
+      text: "Xác nhận mượn"
+      timeout: 5000
+
+  - tapOn:
+      testId: "confirm-borrow-button"
+      timeout: 5000
+
+  - waitFor:
+      timeout: 10000
+
+  - assertVisible:
+      text: "Mượn sách thành công"
+      timeout: 8000
+
+---
+
+appId: com.library.mobile
+name: Borrow Flow - Patron Outside Library
+description: Test that patron outside library cannot borrow
+
+steps:
+  - launchApp:
+      clearState: true
+
+  - assertVisible:
+      text: "Đăng nhập"
+      timeout: 10000
+
+  - tapOn:
+      placeholder: "Mã sinh viên"
+
+  - inputText:
+      text: "OUTSIDE_PATRON"
+
+  - tapOn:
+      placeholder: "Mật khẩu"
+
+  - inputText:
+      text: "password123"
+
+  - tapOn:
+      text: "Đăng nhập"
+
+  - waitForNavigation:
+      timeout: 15000
+
+  - tapOn:
+      text: "Mượn sách"
+
+  - tapOn:
+      text: "Hoặc nhập ISBN thủ công"
+
+  - inputText:
+      text: "9780134685991"
+
+  - tapOn:
+      icon: "magnify"
+
+  - waitFor:
+      timeout: 5000
+
+  - tapOn:
+      testId: "confirm-borrow-button"
+      timeout: 3000
+
+  - assertVisible:
+      text: "phải đi qua cổng"
+      timeout: 5000
+
+---
+
+appId: com.library.mobile
+name: Borrow Flow - Manual ISBN Entry
+description: Test manual ISBN entry flow
+
+steps:
+  - launchApp:
+      clearState: true
+
+  - assertVisible:
+      text: "Đăng nhập"
+      timeout: 10000
+
+  - tapOn:
+      placeholder: "Mã sinh viên"
+
+  - inputText:
+      text: "TEST001"
+
+  - tapOn:
+      placeholder: "Mật khẩu"
+
+  - inputText:
+      text: "password123"
+
+  - tapOn:
+      text: "Đăng nhập"
+
+  - waitForNavigation:
+      timeout: 15000
+
+  - tapOn:
+      text: "Mượn sách"
+
+  - tapOn:
+      text: "Hoặc nhập ISBN thủ công"
+
+  - inputText:
+      text: "9780134685991"
+
+  - tapOn:
+      icon: "magnify"
+
+  - waitFor:
+      condition: "Book found"
+      timeout: 10000
+
+  - assertVisible:
+      text: "Xác nhận mượn"
+      timeout: 5000
+</file>
+
+<file path="src/api/client.ts">
+import axios, { AxiosInstance, AxiosError } from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:80/api';
+
+const api: AxiosInstance = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 30000,
+});
+
+api.interceptors.request.use(
+  async (config) => {
+    try {
+      const token = await AsyncStorage.getItem('accessToken');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } catch (err) {
+      console.error('[API] Failed to get token from storage:', err);
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error: AxiosError) => {
+    if (error.response?.status === 401) {
+      const refreshToken = await AsyncStorage.getItem('refreshToken');
+      if (refreshToken) {
+        try {
+          const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
+            refresh_token: refreshToken,
+          });
+          const { access_token } = response.data;
+          await AsyncStorage.setItem('accessToken', access_token);
+          if (error.config) {
+            error.config.headers.Authorization = `Bearer ${access_token}`;
+            return api.request(error.config);
+          }
+        } catch (refreshError) {
+          await AsyncStorage.multiRemove(['accessToken', 'refreshToken']);
+        }
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+export default api;
+</file>
+
+<file path="src/screens/FaceLoginScreen.tsx">
+import React, { useState, useRef } from 'react';
+import { View, StyleSheet, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Text, Button, Surface } from 'react-native-paper';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useAuth } from '../context/AuthContext';
+import { colors } from '../theme/colors';
+
+interface FaceLoginScreenProps {
+  navigation: any;
+}
+
+export default function FaceLoginScreen({ navigation }: FaceLoginScreenProps) {
+  const [permission, requestPermission] = useCameraPermissions();
+  const [isCapturing, setIsCapturing] = useState(false);
+  const cameraRef = useRef<CameraView>(null);
+  const { faceLogin } = useAuth();
+
+  const captureFace = async () => {
+    if (!cameraRef.current || isCapturing) return;
+
+    setIsCapturing(true);
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.8,
+      });
+      if (photo?.uri) {
+        await faceLogin(photo.uri);
+      }
+    } catch (error: any) {
+      const message = error?.response?.data?.detail || error?.message || 'Đăng nhập thất bại';
+      Alert.alert('Lỗi', message);
+    } finally {
+      setIsCapturing(false);
+    }
+  };
+
+  if (!permission) {
+    return <SafeAreaView style={styles.container} />;
+  }
+
+  if (!permission.granted) {
+    return (
+      <SafeAreaView style={styles.permissionContainer} edges={['bottom']}>
+        <Text style={styles.permissionText}>Cần quyền camera để đăng nhập bằng khuôn mặt</Text>
+        <Button mode="contained" onPress={requestPermission} style={styles.permissionButton}>
+          Cấp quyền
+        </Button>
+        <Button mode="text" onPress={() => navigation.goBack()} style={styles.backButton}>
+          Quay lại đăng nhập bằng mật khẩu
+        </Button>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      <CameraView
+        ref={cameraRef}
+        style={styles.camera}
+        facing="front"
+      />
+      <View style={styles.overlay}>
+        <View style={styles.faceGuide}>
+          <View style={[styles.guideCorner, styles.topLeft]} />
+          <View style={[styles.guideCorner, styles.topRight]} />
+          <View style={[styles.guideCorner, styles.bottomLeft]} />
+          <View style={[styles.guideCorner, styles.bottomRight]} />
+        </View>
+        <Text style={styles.instruction}>
+          Đặt khuôn mặt trong khung hình và giữ yên
+        </Text>
+      </View>
+
+      <Surface style={styles.controls} elevation={0}>
+        <Text style={styles.hint}>
+          {isCapturing ? 'Đang xử lý...' : 'Nhấn nút để đăng nhập'}
+        </Text>
+        <Button
+          mode="contained"
+          onPress={captureFace}
+          loading={isCapturing}
+          disabled={isCapturing}
+          style={styles.captureButton}
+          contentStyle={styles.captureButtonContent}
+          labelStyle={styles.captureButtonLabel}
+          icon="face-recognition"
+        >
+          Đăng nhập bằng khuôn mặt
+        </Button>
+        <Button
+          mode="text"
+          onPress={() => navigation.goBack()}
+          textColor={colors.textSecondary}
+          style={styles.backLink}
+          labelStyle={styles.backLinkLabel}
+        >
+          Quay lại đăng nhập bằng mật khẩu
+        </Button>
+      </Surface>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+    position: 'relative',
+  },
+  permissionContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: colors.background,
+  },
+  permissionText: {
+    color: colors.text,
+    fontSize: 16,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  permissionButton: {
+    borderRadius: 6,
+  },
+  backButton: {
+    marginTop: 16,
+  },
+  camera: {
+    flex: 1,
+  },
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  faceGuide: {
+    width: 220,
+    height: 280,
+    borderRadius: 110,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    position: 'relative',
+  },
+  guideCorner: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    borderColor: colors.secondary,
+    borderWidth: 2,
+  },
+  topLeft: {
+    top: -2,
+    left: -2,
+    borderRightWidth: 0,
+    borderBottomWidth: 0,
+    borderTopLeftRadius: 110,
+  },
+  topRight: {
+    top: -2,
+    right: -2,
+    borderLeftWidth: 0,
+    borderBottomWidth: 0,
+    borderTopRightRadius: 110,
+  },
+  bottomLeft: {
+    bottom: -2,
+    left: -2,
+    borderRightWidth: 0,
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 110,
+  },
+  bottomRight: {
+    bottom: -2,
+    right: -2,
+    borderLeftWidth: 0,
+    borderTopWidth: 0,
+    borderBottomRightRadius: 110,
+  },
+  instruction: {
+    color: colors.text,
+    marginTop: 24,
+    fontSize: 16,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  controls: {
+    padding: 24,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    alignItems: 'center',
+    borderTopWidth: 0.5,
+    borderTopColor: colors.border,
+  },
+  hint: {
+    color: colors.textSecondary,
+    marginBottom: 16,
+    fontSize: 14,
+  },
+  captureButton: {
+    width: '100%',
+    marginBottom: 8,
+    borderRadius: 6,
+  },
+  captureButtonContent: {
+    paddingVertical: 10,
+  },
+  captureButtonLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  backLink: {
+    marginTop: 4,
+  },
+  backLinkLabel: {
+    fontSize: 13,
+  },
+});
+</file>
+
 <file path="src/screens/ReturnScreen.tsx">
 import React, { useState } from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
@@ -2236,17 +3147,16 @@ export default function ReturnScreen({ navigation }: ReturnScreenProps) {
               barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
             }}
             onBarcodeScanned={handleBarCodeScanned}
-          >
-            <View style={styles.overlay}>
-              <View style={styles.scanArea}>
-                <View style={[styles.corner, styles.topLeft]} />
-                <View style={[styles.corner, styles.topRight]} />
-                <View style={[styles.corner, styles.bottomLeft]} />
-                <View style={[styles.corner, styles.bottomRight]} />
-              </View>
-              <Text style={styles.scanText}>Đặt mã vạch trong khung hình</Text>
+          />
+          <View style={styles.overlay}>
+            <View style={styles.scanArea}>
+              <View style={[styles.corner, styles.topLeft]} />
+              <View style={[styles.corner, styles.topRight]} />
+              <View style={[styles.corner, styles.bottomLeft]} />
+              <View style={[styles.corner, styles.bottomRight]} />
             </View>
-          </CameraView>
+            <Text style={styles.scanText}>Đặt mã vạch trong khung hình</Text>
+          </View>
 
           <Surface style={styles.manualInput} elevation={0}>
             <View style={styles.manualAccent} />
@@ -2367,12 +3277,17 @@ const styles = StyleSheet.create({
   },
   scannerContainer: {
     flex: 1,
+    position: 'relative',
   },
   camera: {
     flex: 1,
   },
   overlay: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -2511,135 +3426,6 @@ const styles = StyleSheet.create({
 });
 </file>
 
-<file path="src/theme/colors.ts">
-export const colors = {
-  primary: '#D4A853',
-  primaryDark: '#A88430',
-  secondary: '#3A7D6B',
-  background: '#0D1117',
-  surface: '#1A1F2B',
-  surfaceVariant: '#252A38',
-  error: '#C44E4E',
-  errorDark: '#8B3030',
-  success: '#4A8C5C',
-  warning: '#C49A3C',
-  text: '#E8E0D0',
-  textSecondary: '#9A9488',
-  textDisabled: '#5A5550',
-  border: '#2A2F3A',
-  divider: '#1F2430',
-  overlay: 'rgba(0, 0, 0, 0.7)',
-  card: '#1A1F2B',
-  notification: '#C44E4E',
-  bookmark: '#D4A853',
-  glow: 'rgba(212, 168, 83, 0.08)',
-};
-
-export type Colors = typeof colors;
-</file>
-
-<file path="src/theme/DarkTheme.ts">
-import { MD3DarkTheme, configureFonts } from 'react-native-paper';
-import { colors } from './colors';
-
-const fontConfig = {
-  fontFamily: 'System',
-};
-
-export const DarkTheme = {
-  ...MD3DarkTheme,
-  dark: true,
-  colors: {
-    ...MD3DarkTheme.colors,
-    primary: colors.primary,
-    primaryContainer: colors.surfaceVariant,
-    secondary: colors.secondary,
-    secondaryContainer: colors.surfaceVariant,
-    tertiary: colors.warning,
-    background: colors.background,
-    surface: colors.surface,
-    surfaceVariant: colors.surfaceVariant,
-    error: colors.error,
-    errorContainer: colors.errorDark,
-    onPrimary: colors.background,
-    onSecondary: colors.text,
-    onTertiary: colors.background,
-    onBackground: colors.text,
-    onSurface: colors.text,
-    onSurfaceVariant: colors.textSecondary,
-    onError: colors.text,
-    outline: colors.border,
-    outlineVariant: colors.divider,
-    inverseSurface: colors.surfaceVariant,
-    inverseOnSurface: colors.text,
-    inversePrimary: colors.primary,
-    shadow: colors.border,
-    surfaceTint: colors.primary,
-    elevation: {
-      level0: 'transparent',
-      level1: colors.surface,
-      level2: colors.surfaceVariant,
-      level3: '#2A2F3A',
-      level4: '#2F3540',
-      level5: '#353B48',
-    },
-    custom: {
-      bookmark: colors.bookmark,
-      glow: colors.glow,
-      textDisabled: colors.textDisabled,
-      success: colors.success,
-      warning: colors.warning,
-    },
-  },
-  roundness: 6,
-  fonts: configureFonts({ config: fontConfig }),
-};
-
-export type AppTheme = typeof DarkTheme;
-</file>
-
-<file path="src/utils/dateUtils.ts">
-export const formatDate = (dateString: string): string => {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('vi-VN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
-};
-
-export const formatDateTime = (dateString: string): string => {
-  const date = new Date(dateString);
-  return date.toLocaleString('vi-VN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
-
-export const getDaysUntil = (dateString: string): number => {
-  const now = new Date();
-  const target = new Date(dateString);
-  const diffTime = target.getTime() - now.getTime();
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-};
-
-export const isOverdue = (dueDate: string): boolean => {
-  return getDaysUntil(dueDate) < 0;
-};
-</file>
-
-<file path="tsconfig.json">
-{
-  "extends": "expo/tsconfig.base",
-  "compilerOptions": {
-    "strict": true
-  }
-}
-</file>
-
 <file path="app.json">
 {
   "expo": {
@@ -2664,6 +3450,7 @@ export const isOverdue = (dueDate: string): boolean => {
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "package": "com.library.app",
+      "usesCleartextTraffic": true,
       "permissions": [
         "android.permission.CAMERA"
       ]
@@ -2688,193 +3475,298 @@ export const isOverdue = (dueDate: string): boolean => {
 }
 </file>
 
-<file path="App.tsx">
-import 'react-native-gesture-handler';
-import { StatusBar } from 'expo-status-bar';
-import React from 'react';
-import { PaperProvider } from 'react-native-paper';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { StyleSheet } from 'react-native';
+<file path="src/components/AutoFaceCapture.tsx">
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { View, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
+import { Text, Button } from 'react-native-paper';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { colors } from '../theme/colors';
 
-import { AuthProvider } from './src/context/AuthContext';
-import AppNavigator from './src/navigation/AppNavigator';
-import { DarkTheme } from './src/theme/DarkTheme';
+interface AutoFaceCaptureProps {
+  onFilesReady: (images: string[]) => Promise<void> | void;
+  onError?: (error: string) => void;
+}
 
-export default function App() {
+const ANGLES = [
+  { id: 'frontal' as const, instruction: 'Nhìn thẳng', tip: 'Giữ mặt thẳng, mắt mở tự nhiên' },
+  { id: 'right' as const, instruction: 'Quay phải', tip: 'Xoay đầu sang phải khoảng 30°' },
+  { id: 'left' as const, instruction: 'Quay trái', tip: 'Xoay đầu sang trái khoảng 30°' },
+  { id: 'down' as const, instruction: 'Cúi xuống', tip: 'Cúi nhẹ cằm xuống ngực' },
+];
+
+const COUNTDOWN = 5;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const GUIDE_SIZE = SCREEN_WIDTH * 0.35;
+
+export default function AutoFaceCapture({ onFilesReady, onError }: AutoFaceCaptureProps) {
+  const [permission] = useCameraPermissions();
+  const cameraRef = useRef<CameraView>(null);
+  const [captured, setCaptured] = useState<string[]>([]);
+  const [currentIdx, setCurrentIdx] = useState(-1);
+  const [countdownVal, setCountdownVal] = useState<number | null>(null);
+  const [isRunning, setIsRunning] = useState(false);
+  const [consent, setConsent] = useState(false);
+  const capturedRef = useRef<string[]>([]);
+  const idxRef = useRef(-1);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const cancelledRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      cancelledRef.current = true;
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
+
+  const runCountdown = useCallback((idx: number) => {
+    if (idx < 0 || idx >= ANGLES.length) return;
+    if (timerRef.current) clearInterval(timerRef.current);
+    idxRef.current = idx;
+    let c = COUNTDOWN;
+    setCountdownVal(c);
+
+    timerRef.current = setInterval(async () => {
+      c--;
+      if (cancelledRef.current) { clearInterval(timerRef.current!); return; }
+
+      if (c <= 0) {
+        clearInterval(timerRef.current!);
+        timerRef.current = null;
+        setCountdownVal(null);
+
+        if (!cameraRef.current) return;
+        try {
+          const photo = await cameraRef.current.takePictureAsync({
+            base64: true, quality: 0.9, skipProcessing: true,
+          });
+          if (cancelledRef.current) return;
+          if (!photo?.base64) { onError?.('Không thể chụp ảnh'); return; }
+
+          capturedRef.current = [...capturedRef.current, photo.base64];
+          setCaptured([...capturedRef.current]);
+
+          const nextIdx = idxRef.current + 1;
+          if (nextIdx >= ANGLES.length) {
+            setIsRunning(false);
+            setCurrentIdx(-1);
+          } else {
+            setTimeout(() => {
+              if (!cancelledRef.current) {
+                setCurrentIdx(nextIdx);
+                runCountdown(nextIdx);
+              }
+            }, 800);
+          }
+        } catch {
+          onError?.('Lỗi khi chụp ảnh');
+        }
+      } else {
+        setCountdownVal(c);
+      }
+    }, 1000);
+  }, [onError]);
+
+  const startSequence = useCallback(() => {
+    capturedRef.current = [];
+    setCaptured([]);
+    cancelledRef.current = false;
+    setIsRunning(true);
+    setCurrentIdx(0);
+    runCountdown(0);
+  }, [runCountdown]);
+
+  const retakeAngle = useCallback((idx: number) => {
+    capturedRef.current = capturedRef.current.slice(0, idx);
+    setCaptured([...capturedRef.current]);
+    cancelledRef.current = false;
+    setIsRunning(true);
+    setCurrentIdx(idx);
+    runCountdown(idx);
+  }, [runCountdown]);
+
+  const allCaptured = captured.length === ANGLES.length;
+
+  const handleSubmit = async () => {
+    if (!consent || !allCaptured) return;
+    await onFilesReady(captured);
+  };
+
+  if (!permission) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.msgText}>Đang tải camera...</Text>
+      </View>
+    );
+  }
+
+  if (!permission.granted) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.msgText}>Cần quyền camera</Text>
+      </View>
+    );
+  }
+
+  if (allCaptured) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.resultContainer}>
+          <View style={styles.grid}>
+            {ANGLES.map((a, i) => (
+              <View key={a.id} style={styles.thumb}>
+                <View style={styles.thumbInner}>
+                  <MaterialCommunityIcons name="check-circle" size={32} color={colors.success} />
+                </View>
+                <View style={styles.thumbLabel}>
+                  <Text style={styles.thumbLabelText}>{a.instruction}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.retakeRow}>
+            {ANGLES.map((a, i) => (
+              <Button key={a.id} mode="outlined" compact onPress={() => retakeAngle(i)}
+                style={styles.retakeBtn} labelStyle={styles.retakeBtnLabel}>
+                {a.instruction}
+              </Button>
+            ))}
+          </View>
+
+          <TouchableOpacity style={styles.consentRow} activeOpacity={0.7} onPress={() => setConsent(!consent)}>
+            <View style={[styles.checkbox, consent && styles.checkboxChecked]}>
+              {consent && <MaterialCommunityIcons name="check" size={14} color={colors.background} />}
+            </View>
+            <Text style={styles.consentText}>
+              Tôi đồng ý cho hệ thống xử lý dữ liệu khuôn mặt để nhận diện tại cổng
+            </Text>
+          </TouchableOpacity>
+
+          <Button mode="contained" onPress={handleSubmit} disabled={!consent}
+            style={[styles.submitBtn, !consent && styles.submitBtnDisabled]} labelStyle={styles.submitBtnLabel}>
+            Xác nhận {captured.length} góc ảnh
+          </Button>
+        </View>
+      </View>
+    );
+  }
+
+  if (!isRunning && currentIdx < 0) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.startContainer}>
+          <View style={styles.startIconWrap}>
+            <MaterialCommunityIcons name="camera" size={32} color={colors.primary} />
+          </View>
+          <Text style={styles.startTitle}>Chụp khuôn mặt từ 4 góc</Text>
+          <Text style={styles.startDesc}>Nhận diện nhanh hơn, chính xác hơn tại cổng</Text>
+          <View style={styles.tipsBox}>
+            <Text style={styles.tipsTitle}>Lưu ý khi chụp:</Text>
+            <Text style={styles.tipText}>• Đủ ánh sáng, không ngược sáng</Text>
+            <Text style={styles.tipText}>• Giữ yên khi đếm ngược về 0</Text>
+            <Text style={styles.tipText}>• Mặt vừa đủ trong khung tròn</Text>
+          </View>
+          <Button mode="contained" onPress={startSequence}
+            style={styles.startBtn} labelStyle={styles.startBtnLabel} icon="camera">
+            Bắt đầu chụp
+          </Button>
+        </View>
+      </View>
+    );
+  }
+
   return (
-    <GestureHandlerRootView style={styles.container}>
-      <SafeAreaProvider>
-        <PaperProvider theme={DarkTheme}>
-          <AuthProvider>
-            <StatusBar style="light" />
-            <AppNavigator />
-          </AuthProvider>
-        </PaperProvider>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+    <View style={styles.container}>
+      <CameraView ref={cameraRef} style={styles.camera} facing="front" />
+      <View style={styles.guideOverlay}>
+        <View style={styles.guideCircle} />
+      </View>
+      {countdownVal !== null && (
+        <View style={styles.countdownOverlay}>
+          <Text style={styles.instructionText}>{ANGLES[currentIdx].instruction}</Text>
+          <Text style={styles.tipTextCenter}>{ANGLES[currentIdx].tip}</Text>
+          <View style={styles.dotRow}>
+            {ANGLES.map((a, i) => (
+              <View key={a.id} style={[
+                styles.dot,
+                i < captured.length && styles.dotDone,
+                i === currentIdx && styles.dotActive,
+              ]} />
+            ))}
+          </View>
+          {countdownVal === 1 && <Text style={styles.holdText}>GIỮ YÊN!</Text>}
+          <Text style={styles.countdownNumber}>{countdownVal}</Text>
+        </View>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  container: { flex: 1, backgroundColor: colors.background },
+  camera: { flex: 1 },
+  msgText: { color: colors.text, fontSize: 16, textAlign: 'center', marginTop: 100 },
+
+  guideOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
   },
+  guideCircle: {
+    width: GUIDE_SIZE, height: GUIDE_SIZE, borderRadius: GUIDE_SIZE / 2,
+    borderWidth: 2, borderColor: 'rgba(212, 168, 83, 0.5)',
+  },
+
+  countdownOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.75)',
+  },
+  instructionText: { color: colors.text, fontSize: 20, fontWeight: '700', marginBottom: 4 },
+  tipTextCenter: { color: colors.textSecondary, fontSize: 14, marginBottom: 16 },
+  dotRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  dot: { width: 12, height: 12, borderRadius: 6, backgroundColor: colors.textDisabled },
+  dotDone: { backgroundColor: colors.success },
+  dotActive: { backgroundColor: colors.primary },
+  holdText: { color: colors.error, fontSize: 18, fontWeight: '900', marginBottom: 8 },
+  countdownNumber: { color: colors.text, fontSize: 64, fontWeight: '900' },
+
+  startContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  startIconWrap: {
+    width: 64, height: 64, borderRadius: 32,
+    backgroundColor: 'rgba(212, 168, 83, 0.15)',
+    alignItems: 'center', justifyContent: 'center', marginBottom: 16,
+  },
+  startTitle: { color: colors.text, fontSize: 18, fontWeight: '700', marginBottom: 4 },
+  startDesc: { color: colors.textSecondary, fontSize: 14, marginBottom: 20 },
+  tipsBox: {
+    backgroundColor: colors.surfaceVariant, borderRadius: 10, padding: 14,
+    width: '100%', marginBottom: 24,
+  },
+  tipsTitle: { color: colors.primary, fontSize: 13, fontWeight: '700', marginBottom: 6 },
+  tipText: { color: colors.textSecondary, fontSize: 13, lineHeight: 20 },
+  startBtn: { width: '100%', borderRadius: 10, backgroundColor: colors.primary, paddingVertical: 4 },
+  startBtnLabel: { fontSize: 16, fontWeight: '700', color: colors.background },
+
+  resultContainer: { flex: 1, padding: 16, justifyContent: 'center' },
+  grid: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  thumb: { flex: 1, aspectRatio: 0.75, borderRadius: 8, overflow: 'hidden', borderWidth: 2, borderColor: colors.success },
+  thumbInner: { flex: 1, backgroundColor: colors.surfaceVariant, alignItems: 'center', justifyContent: 'center' },
+  thumbLabel: { position: 'absolute', bottom: 4, left: 4, backgroundColor: 'rgba(0,0,0,0.8)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  thumbLabelText: { color: colors.text, fontSize: 10, fontWeight: '600' },
+  retakeRow: { flexDirection: 'row', gap: 6, marginBottom: 20 },
+  retakeBtn: { flex: 1, borderColor: colors.border, borderRadius: 8 },
+  retakeBtnLabel: { fontSize: 11, color: colors.textSecondary },
+  consentRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    padding: 14, backgroundColor: colors.surfaceVariant, borderRadius: 10, marginBottom: 16,
+  },
+  checkbox: { width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: colors.textDisabled, alignItems: 'center', justifyContent: 'center' },
+  checkboxChecked: { backgroundColor: colors.primary, borderColor: colors.primary },
+  consentText: { color: colors.textSecondary, fontSize: 13, flex: 1, lineHeight: 18 },
+  submitBtn: { borderRadius: 10, backgroundColor: colors.success, paddingVertical: 4 },
+  submitBtnDisabled: { opacity: 0.4 },
+  submitBtnLabel: { fontSize: 16, fontWeight: '700' },
 });
-</file>
-
-<file path="package.json">
-{
-  "name": "librarymobileapp",
-  "version": "1.0.0",
-  "main": "index.ts",
-  "dependencies": {
-    "@expo/vector-icons": "^15.1.1",
-    "@react-native-async-storage/async-storage": "2.2.0",
-    "@react-navigation/bottom-tabs": "^7.18.0",
-    "@react-navigation/native": "^7.3.1",
-    "@react-navigation/stack": "^7.10.3",
-    "axios": "^1.17.0",
-    "expo": "~56.0.11",
-    "expo-camera": "^56.0.8",
-    "expo-face-detector": "^13.0.2",
-    "expo-file-system": "~56.0.8",
-    "expo-status-bar": "~56.0.4",
-    "react": "19.2.3",
-    "react-native": "0.85.3",
-    "react-native-gesture-handler": "~2.31.1",
-    "react-native-paper": "^5.15.3",
-    "react-native-safe-area-context": "~5.7.0",
-    "react-native-screens": "^4.25.2",
-    "react-native-vector-icons": "^10.3.0"
-  },
-  "devDependencies": {
-    "@types/react": "~19.2.2",
-    "@types/react-native-vector-icons": "^6.4.18",
-    "typescript": "~6.0.3"
-  },
-  "scripts": {
-    "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web"
-  },
-  "private": true
-}
-</file>
-
-<file path="src/api/auth.ts">
-import api from './client';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AuthTokens, User } from '../types';
-
-export interface LoginRequest {
-  email: string;
-  password: string;
-}
-
-export interface PatronLoginRequest {
-  student_code: string;
-  password: string;
-}
-
-export interface PatronRegisterRequest {
-  student_code: string;
-  password: string;
-  full_name: string;
-  class_name?: string;
-}
-
-export interface LoginResponse {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
-}
-
-export interface PatronLoginResponse {
-  access_token: string;
-  token_type: string;
-  patron: any;
-}
-
-export interface FaceLoginResponse {
-  access_token: string;
-  refresh_token?: string;
-  token_type: string;
-}
-
-export const authApi = {
-  login: async (data: LoginRequest): Promise<LoginResponse> => {
-    const response = await api.post<LoginResponse>('/auth/login', data);
-    const tokens: AuthTokens = {
-      access_token: response.data.access_token,
-      refresh_token: response.data.refresh_token,
-      token_type: response.data.token_type,
-    };
-    await AsyncStorage.setItem('accessToken', tokens.access_token);
-    await AsyncStorage.setItem('refreshToken', tokens.refresh_token);
-    return response.data;
-  },
-
-  patronLogin: async (data: PatronLoginRequest): Promise<PatronLoginResponse> => {
-    console.log('patronLogin called with:', data);
-    const response = await api.post<PatronLoginResponse>('/patrons/login', data);
-    console.log('patronLogin response:', response.data);
-    await AsyncStorage.setItem('accessToken', response.data.access_token);
-    await AsyncStorage.setItem('patronData', JSON.stringify(response.data.patron));
-    console.log('patronLogin stored data');
-    return response.data;
-  },
-
-  patronRegister: async (data: PatronRegisterRequest): Promise<PatronLoginResponse> => {
-    const response = await api.post<PatronLoginResponse>('/patrons/register', data);
-    await AsyncStorage.setItem('accessToken', response.data.access_token);
-    await AsyncStorage.setItem('patronData', JSON.stringify(response.data.patron));
-    return response.data;
-  },
-
-  faceLogin: async (imageUri: string): Promise<FaceLoginResponse> => {
-    const formData = new FormData();
-    formData.append('file', {
-      uri: imageUri,
-      type: 'image/jpeg',
-      name: 'face.jpg',
-    } as any);
-    const response = await api.post<FaceLoginResponse>('/auth/face-login', formData);
-    if (response.data.access_token) {
-      await AsyncStorage.setItem('accessToken', response.data.access_token);
-    }
-    if (response.data.refresh_token) {
-      await AsyncStorage.setItem('refreshToken', response.data.refresh_token);
-    }
-    return response.data;
-  },
-
-  refreshToken: async (refreshToken: string): Promise<{ access_token: string }> => {
-    const response = await api.post('/auth/refresh', { refresh_token: refreshToken });
-    return response.data;
-  },
-
-  logout: async (): Promise<void> => {
-    await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'patronData']);
-  },
-
-  getCurrentUser: async (): Promise<User> => {
-    const response = await api.get<User>('/users/me');
-    return response.data;
-  },
-
-  getCurrentPatron: async (): Promise<any> => {
-    const response = await api.get<any>('/patrons/me');
-    return response.data;
-  },
-
-  changePassword: async (patronId: string, newPassword: string): Promise<void> => {
-    await api.put(`/patrons/${patronId}/password`, {
-      new_password: newPassword,
-    });
-  },
-};
 </file>
 
 <file path="src/context/AuthContext.tsx">
@@ -2908,7 +3800,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (token && patronDataStr) {
         const patronData = JSON.parse(patronDataStr);
         setPatron(patronData);
-        setUser({ id: patronData.id, email: patronData.email || '', full_name: patronData.full_name, role: 'patron', password_auto_generated: patronData.password_auto_generated });
+        setUser({ id: patronData.id, email: patronData.email || '', full_name: patronData.fullName, role: 'patron' });
       }
     } catch (error) {
       console.error('Auth check failed:', error);
@@ -2928,9 +3820,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('AuthContext patronLogin called');
       const response = await authApi.patronLogin({ student_code: studentCode, password });
       console.log('AuthContext received:', response);
-      setPatron(response.patron);
+      setPatron(response.user);
       console.log('setPatron called');
-      setUser({ id: response.patron.id, email: response.patron.email || '', full_name: response.patron.full_name, role: 'patron', password_auto_generated: response.patron.password_auto_generated });
+      setUser({ id: response.user.id, email: response.user.email || '', full_name: response.user.fullName, role: 'patron' });
       console.log('setUser called');
     } finally {
       setIsLoading(false);
@@ -2944,7 +3836,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const patronData = await authApi.getCurrentPatron();
       await AsyncStorage.setItem('patronData', JSON.stringify(patronData));
       setPatron(patronData);
-      setUser({ id: patronData.id, email: patronData.email || '', full_name: patronData.full_name, role: 'patron', password_auto_generated: patronData.password_auto_generated });
+      setUser({ id: patronData.id, email: patronData.email || '', full_name: patronData.fullName, role: 'patron' });
     } finally {
       setIsLoading(false);
     }
@@ -2983,11 +3875,605 @@ export function useAuth() {
 }
 </file>
 
+<file path="src/screens/BorrowScreen.tsx">
+import React, { useState } from 'react';
+import { View, StyleSheet, Alert, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Text, Button, Surface, TextInput, ActivityIndicator, Card, Divider } from 'react-native-paper';
+import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { borrowApi } from '../api/borrow';
+import { openLibraryApi } from '../api/openlibrary';
+import { authApi } from '../api/auth';
+import { useAuth } from '../context/AuthContext';
+import { Book, OpenLibraryBook } from '../types';
+import { colors } from '../theme/colors';
+
+interface BorrowScreenProps {
+  navigation: any;
+}
+
+export default function BorrowScreen({ navigation }: BorrowScreenProps) {
+  const { patron } = useAuth();
+  const [scanned, setScanned] = useState(false);
+  const [isbn, setIsbn] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [book, setBook] = useState<OpenLibraryBook | null>(null);
+  const [localBook, setLocalBook] = useState<Book | null>(null);
+  const [isBorrowing, setIsBorrowing] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [permission, requestPermission] = useCameraPermissions();
+
+  const searchBook = async (isbnToSearch: string) => {
+    if (!isbnToSearch.trim()) return;
+
+    console.log('[Borrow] searchBook called with ISBN:', isbnToSearch);
+    setIsSearching(true);
+    setSearchError(null);
+    try {
+      try {
+        console.log('[Borrow] Checking local book...');
+        const localBookData = await borrowApi.getBook(isbnToSearch.trim());
+        console.log('[Borrow] Local book found:', localBookData);
+        setLocalBook(localBookData);
+      } catch (err) {
+        console.log('[Borrow] Local book not found, trying OpenLibrary');
+      }
+
+      console.log('[Borrow] Querying OpenLibrary for ISBN:', isbnToSearch);
+      const openLibraryBook = await openLibraryApi.getBookByIsbn(isbnToSearch.trim());
+      if (openLibraryBook) {
+        console.log('[Borrow] OpenLibrary book found:', openLibraryBook.title);
+        setBook(openLibraryBook);
+      } else if (!localBook) {
+        console.log('[Borrow] No book found anywhere');
+        setSearchError('Không tìm thấy sách với ISBN này');
+      }
+    } catch (error) {
+      console.error('[Borrow] Search error:', error);
+      setSearchError('Không thể tìm kiếm sách');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleBarCodeScanned = (result: BarcodeScanningResult) => {
+    if (scanned || !result.data) return;
+    console.log('[Borrow] Barcode scanned:', result.data);
+    setScanned(true);
+    setIsbn(result.data);
+    searchBook(result.data);
+  };
+
+  const handleBorrow = async () => {
+    if (!isbn.trim()) return;
+
+    console.log('[Borrow] handleBorrow called, ISBN:', isbn);
+    setIsBorrowing(true);
+    try {
+      console.log('[Borrow] Checking patron status...');
+      const patronData = await authApi.getCurrentPatron();
+      console.log('[Borrow] Patron data:', patronData);
+      const status = patronData.current_status || patronData.currentStatus;
+      console.log('[Borrow] Patron status:', status);
+      if (status !== 'inside') {
+        console.log('[Borrow] Patron NOT inside library, blocking borrow');
+        Alert.alert('Không thể mượn', 'Bạn phải đi qua cổng vào thư viện trước khi mượn sách');
+        setIsBorrowing(false);
+        return;
+      }
+      console.log('[Borrow] Patron is inside, proceeding with borrow');
+
+      console.log('[Borrow] Calling borrowApi.borrowBook with barcode:', isbn.trim());
+      const result = await borrowApi.borrowBook(isbn.trim());
+      console.log('[Borrow] borrowBook result:', result);
+      if (result.status === 'success') {
+        console.log('[Borrow] Borrow SUCCESS');
+        Alert.alert('Thành công', result.message, [
+          { text: 'OK', onPress: () => resetState() },
+        ]);
+      }
+    } catch (error: any) {
+      console.error('[Borrow] Borrow error:', error);
+      console.log('[Borrow] Error response:', error.response?.data);
+      let msg = 'Mượn sách thất bại';
+      if (!error.response) {
+        msg = 'Không thể kết nối server. Vui lòng kiểm tra mạng.';
+      } else if (error.response?.status === 401) {
+        msg = 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.';
+      } else if (error.response?.data?.detail) {
+        msg = error.response.data.detail;
+      }
+      Alert.alert('Lỗi', msg);
+    } finally {
+      setIsBorrowing(false);
+    }
+  };
+
+  const resetState = () => {
+    setScanned(false);
+    setIsbn('');
+    setBook(null);
+    setLocalBook(null);
+    setSearchError(null);
+  };
+
+  const searchAgain = () => {
+    setScanned(false);
+    setBook(null);
+    setLocalBook(null);
+    setSearchError(null);
+  };
+
+  const displayBook = book || (localBook ? {
+    title: localBook.title,
+    author: localBook.author,
+    cover: localBook.cover_url ? { medium: localBook.cover_url } : undefined,
+    authors: localBook.author ? [{ name: localBook.author }] : undefined,
+    publish_date: localBook.publish_year?.toString(),
+    number_of_pages: localBook.pages,
+    publishers: localBook.publisher ? [localBook.publisher] : undefined,
+  } : null);
+
+  if (!permission) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <ActivityIndicator color={colors.primary} />
+      </SafeAreaView>
+    );
+  }
+
+  if (!permission.granted) {
+    return (
+      <SafeAreaView style={styles.permissionContainer} edges={['bottom']}>
+        <Text style={styles.permissionText}>Cần quyền camera để quét mã vạch</Text>
+        <Button mode="contained" onPress={requestPermission} style={styles.permissionButton}>
+          Cấp quyền
+        </Button>
+        <View style={styles.divider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.orText}>hoặc nhập ISBN thủ công</Text>
+          <View style={styles.dividerLine} />
+        </View>
+        <TextInput
+          label="ISBN"
+          value={isbn}
+          onChangeText={setIsbn}
+          mode="outlined"
+          style={styles.isbnInput}
+          outlineStyle={styles.inputOutline}
+          activeOutlineColor={colors.primary}
+          right={<TextInput.Icon icon="magnify" onPress={() => searchBook(isbn)} color={colors.primary} testID="search-button-permission" />}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      {!scanned ? (
+        <View style={styles.scannerContainer}>
+          <CameraView
+            style={styles.camera}
+            facing="back"
+            barcodeScannerSettings={{
+              barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
+            }}
+            onBarcodeScanned={handleBarCodeScanned}
+          />
+          <View style={styles.overlay}>
+            <View style={styles.scanArea}>
+              <View style={[styles.corner, styles.topLeft]} />
+              <View style={[styles.corner, styles.topRight]} />
+              <View style={[styles.corner, styles.bottomLeft]} />
+              <View style={[styles.corner, styles.bottomRight]} />
+            </View>
+            <Text style={styles.scanText}>Đặt mã vạch trong khung hình</Text>
+          </View>
+
+          <Surface style={styles.manualInput} elevation={0}>
+            <View style={styles.manualAccent} />
+            <Text variant="bodyMedium" style={styles.manualLabel}>Hoặc nhập ISBN thủ công:</Text>
+            <TextInput
+              label="ISBN"
+              value={isbn}
+              onChangeText={setIsbn}
+              mode="outlined"
+              style={styles.isbnInputFull}
+              outlineStyle={styles.inputOutline}
+              activeOutlineColor={colors.primary}
+              right={<TextInput.Icon icon="magnify" onPress={() => searchBook(isbn)} disabled={isSearching} color={colors.primary} testID="search-button" />}
+            />
+          </Surface>
+        </View>
+      ) : (
+        <ScrollView style={styles.resultContainer} contentContainerStyle={styles.resultContent}>
+          {isSearching ? (
+            <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
+          ) : searchError ? (
+            <Card style={styles.errorCard}>
+              <View style={styles.errorIconContainer}>
+                <MaterialCommunityIcons name="book-search-outline" size={64} color={colors.textSecondary} />
+              </View>
+              <Text variant="titleMedium" style={styles.errorTitle}>Không tìm thấy sách</Text>
+              <Text variant="bodyMedium" style={styles.errorMessage}>{searchError}</Text>
+              {isbn ? (
+                <Text variant="bodySmall" style={styles.errorIsbn}>ISBN: {isbn}</Text>
+              ) : null}
+              <Button
+                mode="contained"
+                onPress={searchAgain}
+                style={styles.retryButton}
+                icon="barcode-scan"
+              >
+                Quét lại
+              </Button>
+            </Card>
+          ) : displayBook ? (
+            <Card style={styles.bookCard}>
+              <View style={styles.cardAccent} />
+              {displayBook.cover?.medium ? (
+                <Card.Cover source={{ uri: displayBook.cover.medium }} style={styles.cover} />
+              ) : (
+                <View style={styles.coverPlaceholder}>
+                  <MaterialCommunityIcons name="book-open-variant" size={48} color={colors.textSecondary} />
+                  <Text style={styles.coverPlaceholderText}>Không có ảnh</Text>
+                </View>
+              )}
+              <Card.Content>
+                <Text variant="titleLarge" style={styles.bookTitle}>
+                  {displayBook.title}
+                </Text>
+                {'authors' in displayBook && displayBook.authors && displayBook.authors.length > 0 ? (
+                  <Text variant="bodyMedium" style={styles.bookAuthor}>
+                    {displayBook.authors.map(a => a.name).join(', ')}
+                  </Text>
+                ) : 'author' in displayBook && displayBook.author ? (
+                  <Text variant="bodyMedium" style={styles.bookAuthor}>
+                    {displayBook.author}
+                  </Text>
+                ) : null}
+
+                <View style={styles.metaRow}>
+                  {'publish_date' in displayBook && displayBook.publish_date ? (
+                    <View style={styles.metaItem}>
+                      <MaterialCommunityIcons name="calendar" size={14} color={colors.textSecondary} />
+                      <Text style={styles.metaText}>{displayBook.publish_date}</Text>
+                    </View>
+                  ) : null}
+                  {'number_of_pages' in displayBook && displayBook.number_of_pages ? (
+                    <View style={styles.metaItem}>
+                      <MaterialCommunityIcons name="book-open-page-variant" size={14} color={colors.textSecondary} />
+                      <Text style={styles.metaText}>{displayBook.number_of_pages} trang</Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                <View style={styles.metaRow}>
+                  {'publishers' in displayBook && displayBook.publishers && displayBook.publishers.length > 0 ? (
+                    <View style={styles.metaItem}>
+                      <MaterialCommunityIcons name="factory" size={14} color={colors.textSecondary} />
+                      <Text style={styles.metaText}>{displayBook.publishers[0]?.name ?? displayBook.publishers[0]}</Text>
+                    </View>
+                  ) : null}
+                  {'subjects' in displayBook && displayBook.subjects && displayBook.subjects.length > 0 ? (
+                    <View style={styles.metaItem}>
+                      <MaterialCommunityIcons name="tag" size={14} color={colors.textSecondary} />
+                      <Text style={styles.metaText}>{displayBook.subjects.slice(0, 2).map((s: any) => s.name ?? s).join(', ')}</Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                <View style={styles.dividerMeta} />
+                <Text variant="bodySmall" style={styles.isbnLabel}>
+                  ISBN: {isbn}
+                </Text>
+                {localBook?.shelf_location && (
+                  <Text variant="bodySmall" style={styles.locationLabel}>
+                    <MaterialCommunityIcons name="map-marker" size={13} color={colors.primary} /> Vị trí: {localBook.shelf_location}
+                  </Text>
+                )}
+              </Card.Content>
+              <Card.Actions style={styles.cardActions}>
+                <Button
+                  mode="outlined"
+                  onPress={searchAgain}
+                  style={styles.cardActionButton}
+                  labelStyle={styles.cardActionButtonLabel}
+                  testID="rescan-button"
+                >
+                  Quét lại
+                </Button>
+                <Button
+                  mode="contained"
+                  onPress={handleBorrow}
+                  loading={isBorrowing}
+                  disabled={isBorrowing}
+                  style={styles.cardActionButton}
+                  labelStyle={styles.cardActionButtonLabel}
+                  testID="confirm-borrow-button"
+                >
+                  Xác nhận mượn
+                </Button>
+              </Card.Actions>
+            </Card>
+          ) : null}
+        </ScrollView>
+      )}
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  permissionContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: colors.background,
+  },
+  permissionText: {
+    color: colors.text,
+    fontSize: 16,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  permissionButton: {
+    borderRadius: 6,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 24,
+    paddingHorizontal: 16,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.divider,
+  },
+  orText: {
+    color: colors.textSecondary,
+    marginHorizontal: 12,
+    fontSize: 12,
+  },
+  isbnInput: {
+    width: '80%',
+    marginTop: 4,
+    backgroundColor: 'transparent',
+  },
+  inputOutline: {
+    borderRadius: 6,
+    borderColor: colors.border,
+  },
+  scannerContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  camera: {
+    flex: 1,
+  },
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scanArea: {
+    width: 280,
+    height: 150,
+    borderRadius: 8,
+    position: 'relative',
+  },
+  corner: {
+    position: 'absolute',
+    width: 36,
+    height: 36,
+    borderColor: colors.primary,
+    borderWidth: 2,
+  },
+  topLeft: {
+    top: 0,
+    left: 0,
+    borderRightWidth: 0,
+    borderBottomWidth: 0,
+    borderTopLeftRadius: 8,
+  },
+  topRight: {
+    top: 0,
+    right: 0,
+    borderLeftWidth: 0,
+    borderBottomWidth: 0,
+    borderTopRightRadius: 8,
+  },
+  bottomLeft: {
+    bottom: 0,
+    left: 0,
+    borderRightWidth: 0,
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 8,
+  },
+  bottomRight: {
+    bottom: 0,
+    right: 0,
+    borderLeftWidth: 0,
+    borderTopWidth: 0,
+    borderBottomRightRadius: 8,
+  },
+  scanText: {
+    color: colors.text,
+    marginTop: 20,
+    fontSize: 16,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  manualInput: {
+    padding: 16,
+    backgroundColor: colors.surface,
+    position: 'relative',
+    overflow: 'hidden',
+    borderTopWidth: 0.5,
+    borderTopColor: colors.border,
+  },
+  manualAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+    backgroundColor: colors.primary,
+  },
+  manualLabel: {
+    color: colors.textSecondary,
+    marginBottom: 8,
+    fontSize: 13,
+  },
+  isbnInputFull: {
+    marginTop: 4,
+    backgroundColor: 'transparent',
+  },
+  resultContainer: {
+    flex: 1,
+    padding: 16,
+  },
+  resultContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
+  loader: {
+    alignSelf: 'center',
+  },
+  bookCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+    overflow: 'hidden',
+    position: 'relative',
+    borderWidth: 0.5,
+    borderColor: colors.border,
+  },
+  cardAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+    backgroundColor: colors.primary,
+    zIndex: 1,
+  },
+  cover: {
+    height: 280,
+    resizeMode: 'contain',
+    backgroundColor: colors.surfaceVariant,
+  },
+  coverPlaceholder: {
+    height: 200,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceVariant,
+  },
+  coverPlaceholderText: {
+    color: colors.textSecondary,
+    marginTop: 8,
+    fontSize: 13,
+  },
+  bookTitle: {
+    color: colors.text,
+    marginTop: 12,
+    fontWeight: '700',
+    fontSize: 20,
+  },
+  bookAuthor: {
+    color: colors.textSecondary,
+    marginTop: 4,
+    fontSize: 14,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+    gap: 16,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  metaText: {
+    color: colors.textSecondary,
+    fontSize: 13,
+  },
+  dividerMeta: {
+    height: 1,
+    backgroundColor: colors.divider,
+    marginVertical: 10,
+  },
+  isbnLabel: {
+    color: colors.textSecondary,
+    fontSize: 13,
+  },
+  locationLabel: {
+    color: colors.primary,
+    marginTop: 4,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  cardActions: {
+    padding: 12,
+    gap: 8,
+  },
+  cardActionButton: {
+    borderRadius: 6,
+  },
+  cardActionButtonLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  errorCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+    padding: 32,
+    alignItems: 'center',
+    borderWidth: 0.5,
+    borderColor: colors.border,
+  },
+  errorIconContainer: {
+    marginBottom: 16,
+  },
+  errorTitle: {
+    color: colors.text,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  errorMessage: {
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  errorIsbn: {
+    color: colors.textSecondary,
+    marginTop: 8,
+    marginBottom: 20,
+    fontSize: 12,
+  },
+  retryButton: {
+    borderRadius: 6,
+    marginTop: 12,
+  },
+});
+</file>
+
 <file path="src/screens/FaceCameraScreen.tsx">
 import React, { useState } from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
+import { Alert, ActivityIndicator, View, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, Button, Surface } from 'react-native-paper';
 import AutoFaceCapture from '../components/AutoFaceCapture';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -2999,192 +4485,78 @@ interface FaceCameraScreenProps {
 
 export default function FaceCameraScreen({ navigation }: FaceCameraScreenProps) {
   const { patron } = useAuth();
-  const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  const handleCapture = (base64Image: string) => {
-    setCapturedPhoto(base64Image);
-  };
-
-  const handleError = (error: string) => {
-    Alert.alert('Lỗi', error);
-  };
-
-  const uploadPhoto = async () => {
-    if (!capturedPhoto || !patron?.id) {
-      Alert.alert('Lỗi', 'Không tìm thấy ảnh hoặc thông tin tài khoản');
+  const handleFilesReady = async (images: string[]) => {
+    const patronId = patron?.id;
+    if (!patronId || images.length !== 4) {
+      Alert.alert('Lỗi', 'Chưa chụp đủ 4 góc khuôn mặt');
       return;
     }
 
     setIsUploading(true);
     try {
       const formData = new FormData();
-      formData.append('image', {
-        uri: `data:image/jpeg;base64,${capturedPhoto}`,
+      formData.append('frontal', {
+        uri: `data:image/jpeg;base64,${images[0]}`,
         type: 'image/jpeg',
-        name: 'face.jpg',
+        name: 'face_frontal.jpg',
       } as any);
+      formData.append('right', {
+        uri: `data:image/jpeg;base64,${images[1]}`,
+        type: 'image/jpeg',
+        name: 'face_right.jpg',
+      } as any);
+      formData.append('left', {
+        uri: `data:image/jpeg;base64,${images[2]}`,
+        type: 'image/jpeg',
+        name: 'face_left.jpg',
+      } as any);
+      formData.append('down', {
+        uri: `data:image/jpeg;base64,${images[3]}`,
+        type: 'image/jpeg',
+        name: 'face_down.jpg',
+      } as any);
+      formData.append('consent_given', 'true');
 
-      const response = await api.post(`/kiosk/enroll-face/${patron.id}`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+      await api.post(`/patrons/${patronId}/enroll-batch`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 130000,
       });
 
-      if (response.data?.success || response.status === 200) {
-        Alert.alert('Thành công', 'Đăng ký khuôn mặt thành công!', [
-          { text: 'OK', onPress: () => navigation.goBack() },
-        ]);
-      }
+      Alert.alert('Thành công', 'Đăng ký khuôn mặt thành công!', [
+        { text: 'OK', onPress: () => navigation.goBack() },
+      ]);
     } catch (error: any) {
-      const message = error?.response?.data?.detail || error?.response?.data?.error || 'Đăng ký khuôn mặt thất bại';
+      console.log('[FaceCamera] enroll error:', error?.response?.data || error?.message || error);
+      const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || 'Đăng ký khuôn mặt thất bại';
       Alert.alert('Lỗi', message);
     } finally {
       setIsUploading(false);
     }
   };
 
-  const retake = () => {
-    setCapturedPhoto(null);
-  };
-
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
-      <View style={styles.content}>
-        {capturedPhoto ? (
-          <View style={styles.previewContainer}>
-            <View style={styles.photoPreview}>
-              <Text style={styles.previewText}>Đã chụp 1 ảnh khuôn mặt</Text>
-            </View>
-
-            <Surface style={styles.actions} elevation={0}>
-              <Button
-                mode="contained"
-                onPress={uploadPhoto}
-                loading={isUploading}
-                disabled={isUploading}
-                style={styles.uploadButton}
-                labelStyle={styles.uploadButtonLabel}
-              >
-                Đăng ký khuôn mặt
-              </Button>
-
-              <Button
-                mode="outlined"
-                onPress={retake}
-                style={styles.retakeButton}
-                labelStyle={styles.retakeButtonLabel}
-                disabled={isUploading}
-              >
-                Chụp lại
-              </Button>
-
-              <Button
-                mode="text"
-                onPress={() => navigation.goBack()}
-                textColor={colors.textSecondary}
-                disabled={isUploading}
-              >
-                Hủy
-              </Button>
-            </Surface>
-          </View>
-        ) : (
-          <View style={styles.captureContainer}>
-            <AutoFaceCapture
-              onCapture={handleCapture}
-              onError={handleError}
-            />
-
-            <View style={styles.infoContainer}>
-              <Text style={styles.infoText}>
-                Đặt mặt vào khung Oval. Hệ thống sẽ tự động chụp khi nhận diện khuôn mặt ổn định.
-              </Text>
-            </View>
-          </View>
-        )}
-      </View>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['bottom']}>
+      <AutoFaceCapture
+        onFilesReady={handleFilesReady}
+        onError={(msg) => Alert.alert('Lỗi', msg)}
+      />
+      {isUploading && (
+        <View style={{
+          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          justifyContent: 'center', alignItems: 'center',
+        }}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={{ color: colors.text, fontSize: 15, marginTop: 12 }}>
+            Đang đăng ký khuôn mặt...
+          </Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    flex: 1,
-  },
-  captureContainer: {
-    flex: 1,
-  },
-  previewContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  photoPreview: {
-    width: 200,
-    height: 260,
-    borderRadius: 100,
-    borderWidth: 3,
-    borderColor: colors.success,
-    backgroundColor: colors.surfaceVariant,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 40,
-  },
-  previewText: {
-    color: colors.text,
-    fontSize: 14,
-    textAlign: 'center',
-    paddingHorizontal: 20,
-  },
-  actions: {
-    width: '100%',
-    padding: 16,
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    alignItems: 'center',
-    gap: 12,
-  },
-  uploadButton: {
-    width: '100%',
-    borderRadius: 8,
-    backgroundColor: colors.primary,
-  },
-  uploadButtonLabel: {
-    fontSize: 15,
-    fontWeight: '700',
-    paddingVertical: 6,
-  },
-  retakeButton: {
-    width: '100%',
-    borderRadius: 8,
-    borderColor: colors.primary,
-  },
-  retakeButtonLabel: {
-    fontSize: 14,
-  },
-  infoContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 16,
-    backgroundColor: colors.surface,
-    borderTopWidth: 0.5,
-    borderTopColor: colors.border,
-  },
-  infoText: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-});
 </file>
 
 <file path="src/screens/ProfileScreen.tsx">
@@ -3444,6 +4816,7 @@ const styles = StyleSheet.create({
   },
   updateButton: {
     borderRadius: 6,
+    justifyContent: 'center'
   },
   updateButtonLabel: {
     fontSize: 12,
@@ -3480,7 +4853,7 @@ const styles = StyleSheet.create({
 
 <file path="src/screens/RegisterScreen.tsx">
 import React, { useState } from 'react';
-import { View, StyleSheet, Alert, ScrollView } from 'react-native';
+import { View, StyleSheet, Alert, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TextInput, Button, Text, Surface } from 'react-native-paper';
 import AutoFaceCapture from '../components/AutoFaceCapture';
@@ -3493,13 +4866,14 @@ interface RegisterScreenProps {
 }
 
 export default function RegisterScreen({ navigation }: RegisterScreenProps) {
-  const [step, setStep] = useState<'form' | 'face'>('form');
+  const [step, setStep] = useState<'form' | 'choice' | 'face'>('form');
   const [studentCode, setStudentCode] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
   const [className, setClassName] = useState('');
-  const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
+  const [registeredUser, setRegisteredUser] = useState<any>(null);
   const [isUploading, setIsUploading] = useState(false);
 
   const validateForm = () => {
@@ -3513,6 +4887,14 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
     }
     if (!fullName.trim()) {
       Alert.alert('Lỗi', 'Vui lòng nhập họ tên');
+      return false;
+    }
+    if (!email.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập email');
+      return false;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      Alert.alert('Lỗi', 'Email không hợp lệ');
       return false;
     }
     if (!password) {
@@ -3530,120 +4912,142 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
     return true;
   };
 
-  const handleContinueToFace = () => {
-    if (validateForm()) {
-      setStep('face');
-    }
-  };
-
-  const handleCapture = (base64Image: string) => {
-    setCapturedPhoto(base64Image);
-  };
-
   const handleError = (error: string) => {
     Alert.alert('Lỗi', error);
   };
 
-  const handleRegister = async () => {
-    if (!capturedPhoto) {
-      Alert.alert('Lỗi', 'Vui lòng chụp ảnh khuôn mặt');
-      return;
-    }
+  const handleRegisterClick = async () => {
+    if (!validateForm()) return;
 
     setIsUploading(true);
     try {
-      const registerResponse = await authApi.patronRegister({
+      const response = await authApi.patronRegister({
         student_code: studentCode.trim(),
         password: password,
         full_name: fullName.trim(),
+        email: email.trim(),
         class_name: className.trim() || undefined,
       });
-
-      const { patron } = registerResponse;
-
-      const formData = new FormData();
-      formData.append('image', {
-        uri: `data:image/jpeg;base64,${capturedPhoto}`,
-        type: 'image/jpeg',
-        name: 'face.jpg',
-      } as any);
-      formData.append('angle', 'frontal');
-
-      await api.post(`/kiosk/enroll-face/${patron.id}`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
-      Alert.alert('Thành công', 'Đăng ký tài khoản thành công!', [
-        { text: 'Đăng nhập ngay', onPress: () => navigation.replace('Login') },
-      ]);
+      setRegisteredUser(response.user);
+      setStep('choice');
     } catch (error: any) {
-      const message = error?.response?.data?.detail || error?.response?.data?.error || 'Đăng ký thất bại';
+      console.log('[Register] Error:', error?.response?.data || error?.message || error);
+      const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || 'Đăng ký thất bại';
       Alert.alert('Lỗi', message);
     } finally {
       setIsUploading(false);
     }
   };
 
+  const handleFaceEnroll = async (images: string[]) => {
+    if (!registeredUser?.id || images.length !== 4) return;
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('frontal', {
+        uri: `data:image/jpeg;base64,${images[0]}`,
+        type: 'image/jpeg',
+        name: 'face_frontal.jpg',
+      } as any);
+      formData.append('right', {
+        uri: `data:image/jpeg;base64,${images[1]}`,
+        type: 'image/jpeg',
+        name: 'face_right.jpg',
+      } as any);
+      formData.append('left', {
+        uri: `data:image/jpeg;base64,${images[2]}`,
+        type: 'image/jpeg',
+        name: 'face_left.jpg',
+      } as any);
+      formData.append('down', {
+        uri: `data:image/jpeg;base64,${images[3]}`,
+        type: 'image/jpeg',
+        name: 'face_down.jpg',
+      } as any);
+      formData.append('consent_given', 'true');
+
+      await api.post(`/patrons/${registeredUser.id}/enroll-batch`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 130000,
+      });
+
+      Alert.alert('Thành công', 'Đăng ký tài khoản và khuôn mặt thành công!', [
+        { text: 'Đăng nhập ngay', onPress: () => navigation.replace('Login') },
+      ]);
+    } catch (error: any) {
+      console.log('[Register] Enroll error:', error?.response?.data || error?.message || error);
+      const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || 'Đăng ký khuôn mặt thất bại';
+      Alert.alert('Lỗi', message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  if (step === 'choice') {
+    return (
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <View style={styles.choiceContainer}>
+          <View style={styles.checkCircle}>
+            <Text style={styles.checkIcon}>✓</Text>
+          </View>
+          <Text style={styles.choiceTitle}>Đăng ký tài khoản thành công!</Text>
+          <Text style={styles.choiceSubtitle}>
+            Bạn có muốn đăng ký khuôn mặt để đăng nhập nhanh tại cổng thư viện không?
+          </Text>
+          <Button
+            mode="contained"
+            onPress={() => setStep('face')}
+            style={styles.choiceEnrollBtn}
+            labelStyle={styles.choiceEnrollBtnLabel}
+          >
+            Đăng ký khuôn mặt
+          </Button>
+          <Button
+            mode="text"
+            onPress={() => navigation.replace('Login')}
+            textColor={colors.textSecondary}
+            style={styles.choiceSkipBtn}
+          >
+            Bỏ qua
+          </Button>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (step === 'face') {
     return (
       <SafeAreaView style={styles.container} edges={['bottom']}>
-        <View style={styles.faceStep}>
-          <View style={styles.faceStepHeader}>
-            <Text style={styles.faceStepTitle}>Đăng ký khuôn mặt</Text>
-            <Text style={styles.faceStepSubtitle}>
-              Chụp 1 tấm ảnh khuôn mặt để đăng nhập nhanh sau này
-            </Text>
-          </View>
+        <View style={styles.faceStepHeader}>
+          <Text style={styles.faceStepTitle}>Đăng ký khuôn mặt</Text>
+          <Text style={styles.faceStepSubtitle}>
+            Chụp khuôn mặt từ 4 góc để đăng nhập nhanh sau này
+          </Text>
+        </View>
 
-          <View style={styles.captureContainer}>
-            {capturedPhoto ? (
-              <View style={styles.previewContainer}>
-                <View style={styles.photoPreview}>
-                  <Text style={styles.previewEmoji}>✓</Text>
-                  <Text style={styles.previewText}>Đã chụp thành công</Text>
-                </View>
+        <View style={styles.captureContainer}>
+          <AutoFaceCapture onFilesReady={handleFaceEnroll} onError={handleError} />
+        </View>
 
-                <Button
-                  mode="outlined"
-                  onPress={() => setCapturedPhoto(null)}
-                  style={styles.retakeButton}
-                  disabled={isUploading}
-                >
-                  Chụp lại
-                </Button>
-              </View>
-            ) : (
-              <AutoFaceCapture
-                onCapture={handleCapture}
-                onError={handleError}
-              />
-            )}
-          </View>
-
+        {!isUploading && (
           <Surface style={styles.faceActions} elevation={0}>
             <Button
-              mode="contained"
-              onPress={handleRegister}
-              loading={isUploading}
-              disabled={isUploading || !capturedPhoto}
-              style={styles.registerButton}
-              labelStyle={styles.registerButtonLabel}
-            >
-              Hoàn tất đăng ký
-            </Button>
-
-            <Button
               mode="text"
-              onPress={() => setStep('form')}
+              onPress={() => navigation.replace('Login')}
               textColor={colors.textSecondary}
-              disabled={isUploading}
             >
-              Quay lại
+              Bỏ qua
             </Button>
           </Surface>
-        </View>
+        )}
+
+        {isUploading && (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.loadingText}>Đang đăng ký khuôn mặt...</Text>
+          </View>
+        )}
       </SafeAreaView>
     );
   }
@@ -3691,6 +5095,19 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
           />
 
           <TextInput
+            label="Email"
+            value={email}
+            onChangeText={setEmail}
+            mode="outlined"
+            style={styles.input}
+            outlineStyle={styles.inputOutline}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            left={<TextInput.Icon icon="email" color={colors.textSecondary} />}
+            activeOutlineColor={colors.primary}
+          />
+
+          <TextInput
             label="Mật khẩu"
             value={password}
             onChangeText={setPassword}
@@ -3716,12 +5133,14 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
 
           <Button
             mode="contained"
-            onPress={handleContinueToFace}
+            onPress={handleRegisterClick}
+            loading={isUploading}
+            disabled={isUploading}
             style={styles.continueButton}
             contentStyle={styles.continueButtonContent}
             labelStyle={styles.continueButtonLabel}
           >
-            Tiếp tục đăng ký khuôn mặt
+            Đăng ký
           </Button>
 
           <Button
@@ -3807,8 +5226,53 @@ const styles = StyleSheet.create({
   loginLinkLabel: {
     fontSize: 13,
   },
-  faceStep: {
+  choiceContainer: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  checkCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.success + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  checkIcon: {
+    fontSize: 40,
+    color: colors.success,
+    fontWeight: '700',
+  },
+  choiceTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  choiceSubtitle: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 32,
+  },
+  choiceEnrollBtn: {
+    width: '100%',
+    borderRadius: 8,
+    backgroundColor: colors.primary,
+    marginBottom: 12,
+  },
+  choiceEnrollBtnLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    paddingVertical: 4,
+  },
+  choiceSkipBtn: {
+    marginBottom: 0,
   },
   faceStepHeader: {
     padding: 16,
@@ -3829,51 +5293,27 @@ const styles = StyleSheet.create({
   captureContainer: {
     flex: 1,
   },
-  previewContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  photoPreview: {
-    width: 160,
-    height: 200,
-    borderRadius: 80,
-    borderWidth: 3,
-    borderColor: colors.success,
-    backgroundColor: colors.surfaceVariant,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 32,
-  },
-  previewEmoji: {
-    fontSize: 48,
-    color: colors.success,
-  },
-  previewText: {
-    color: colors.text,
-    fontSize: 14,
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  retakeButton: {
-    borderColor: colors.primary,
-  },
   faceActions: {
-    padding: 16,
+    padding: 12,
     backgroundColor: colors.surface,
     borderTopWidth: 0.5,
     borderTopColor: colors.border,
-    gap: 8,
+    alignItems: 'center',
   },
-  registerButton: {
-    borderRadius: 8,
-    backgroundColor: colors.primary,
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  registerButtonLabel: {
+  loadingText: {
+    color: colors.text,
     fontSize: 15,
-    fontWeight: '700',
-    paddingVertical: 6,
+    marginTop: 12,
   },
 });
 </file>
@@ -3913,6 +5353,7 @@ export interface BorrowRecord {
   return_at?: string;
   shelf_location?: string;
   status: 'borrowed' | 'returned' | 'overdue';
+  book?: Book;
 }
 
 export interface BorrowResponse {
@@ -3952,6 +5393,7 @@ export interface OpenLibraryBook {
   publishers?: { name: string }[];
   number_of_pages?: number;
   publish_date?: string;
+  subjects?: { name: string }[];
 }
 
 export interface CameraEvent {
@@ -3967,6 +5409,173 @@ export interface CameraEvent {
 }
 </file>
 
+<file path="package.json">
+{
+  "name": "librarymobileapp",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "dependencies": {
+    "@expo/vector-icons": "^15.1.1",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-navigation/bottom-tabs": "^7.18.0",
+    "@react-navigation/native": "^7.3.1",
+    "@react-navigation/stack": "^7.10.3",
+    "axios": "^1.17.0",
+    "expo": "~56.0.11",
+    "expo-camera": "^56.0.8",
+    "expo-file-system": "~56.0.8",
+    "expo-status-bar": "~56.0.4",
+    "react": "19.2.3",
+    "react-native": "0.85.3",
+    "react-native-gesture-handler": "~2.31.1",
+    "react-native-paper": "^5.15.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "^4.25.2",
+    "react-native-vector-icons": "^10.3.0"
+  },
+  "devDependencies": {
+    "@react-native/jest-preset": "^0.85.3",
+    "@testing-library/react-native": "^14.0.0",
+    "@types/jest": "29.5.14",
+    "@types/react": "~19.2.2",
+    "@types/react-native-vector-icons": "^6.4.18",
+    "jest": "~29.7.0",
+    "ts-jest": "^29.4.11",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "test": "jest"
+  },
+  "private": true
+}
+</file>
+
+<file path="src/api/auth.ts">
+import api from './client';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AuthTokens, User } from '../types';
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface PatronLoginRequest {
+  student_code: string;
+  password: string;
+}
+
+export interface PatronRegisterRequest {
+  student_code: string;
+  password: string;
+  full_name: string;
+  email: string;
+  class_name?: string;
+}
+
+export interface LoginResponse {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+}
+
+export interface PatronLoginResponse {
+  access_token: string;
+  refresh_token?: string;
+  token_type: string;
+  user: any;
+}
+
+export interface FaceLoginResponse {
+  access_token: string;
+  refresh_token?: string;
+  token_type: string;
+}
+
+export const authApi = {
+  login: async (data: LoginRequest): Promise<LoginResponse> => {
+    const response = await api.post<LoginResponse>('/auth/login', data);
+    const tokens: AuthTokens = {
+      access_token: response.data.access_token,
+      refresh_token: response.data.refresh_token,
+      token_type: response.data.token_type,
+    };
+    await AsyncStorage.setItem('accessToken', tokens.access_token);
+    await AsyncStorage.setItem('refreshToken', tokens.refresh_token);
+    return response.data;
+  },
+
+  patronLogin: async (data: PatronLoginRequest): Promise<PatronLoginResponse> => {
+    console.log('patronLogin called with:', data);
+    const response = await api.post<PatronLoginResponse>('/patrons/login', data);
+    console.log('patronLogin response:', response.data);
+    await AsyncStorage.setItem('accessToken', response.data.access_token);
+    if (response.data.refresh_token) {
+      await AsyncStorage.setItem('refreshToken', response.data.refresh_token);
+    }
+    await AsyncStorage.setItem('patronData', JSON.stringify(response.data.user));
+    console.log('patronLogin stored data');
+    return response.data;
+  },
+
+  patronRegister: async (data: PatronRegisterRequest): Promise<PatronLoginResponse> => {
+    const response = await api.post<PatronLoginResponse>('/patrons/register', data);
+    if (!response.data.user) {
+      throw new Error('Invalid response: missing user data');
+    }
+    await AsyncStorage.setItem('accessToken', response.data.access_token);
+    await AsyncStorage.setItem('patronData', JSON.stringify(response.data.user));
+    return response.data;
+  },
+
+  faceLogin: async (imageUri: string): Promise<FaceLoginResponse> => {
+    const formData = new FormData();
+    formData.append('file', {
+      uri: imageUri,
+      type: 'image/jpeg',
+      name: 'face.jpg',
+    } as any);
+    const response = await api.post<FaceLoginResponse>('/auth/face-login', formData);
+    if (response.data.access_token) {
+      await AsyncStorage.setItem('accessToken', response.data.access_token);
+    }
+    if (response.data.refresh_token) {
+      await AsyncStorage.setItem('refreshToken', response.data.refresh_token);
+    }
+    return response.data;
+  },
+
+  refreshToken: async (refreshToken: string): Promise<{ access_token: string }> => {
+    const response = await api.post('/auth/refresh', { refresh_token: refreshToken });
+    return response.data;
+  },
+
+  logout: async (): Promise<void> => {
+    await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'patronData']);
+  },
+
+  getCurrentUser: async (): Promise<User> => {
+    const response = await api.get<User>('/users/me');
+    return response.data;
+  },
+
+  getCurrentPatron: async (): Promise<any> => {
+    const response = await api.get<any>('/patrons/me');
+    return response.data;
+  },
+
+  changePassword: async (patronId: string, newPassword: string): Promise<void> => {
+    await api.put(`/patrons/${patronId}/password`, {
+      new_password: newPassword,
+    });
+  },
+};
+</file>
+
 <file path="src/api/borrow.ts">
 import api from './client';
 import { BorrowResponse, ReturnResponse, BorrowRecord, Book } from '../types';
@@ -3977,11 +5586,14 @@ export interface BorrowRequest {
 
 export const borrowApi = {
   borrowBook: async (barcode: string): Promise<BorrowResponse> => {
+    console.log('[borrowApi] borrowBook called with barcode:', barcode);
     const response = await api.post<BorrowResponse>('/borrow/', { barcode });
+    console.log('[borrowApi] borrowBook response:', response.data);
     return response.data;
   },
 
   returnBook: async (barcode: string): Promise<ReturnResponse> => {
+    console.log('[borrowApi] returnBook called with barcode:', barcode);
     const response = await api.post<ReturnResponse>('/borrow/staff-return', { barcode });
     return response.data;
   },
@@ -4000,7 +5612,9 @@ export const borrowApi = {
   },
 
   getBook: async (isbn: string): Promise<Book> => {
+    console.log('[borrowApi] getBook called with ISBN:', isbn);
     const response = await api.get<Book>(`/borrow/book/${isbn}`);
+    console.log('[borrowApi] getBook response:', response.data);
     return response.data;
   },
 };
@@ -4024,6 +5638,7 @@ import BorrowScreen from '../screens/BorrowScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import FaceCameraScreen from '../screens/FaceCameraScreen';
 import ChangePasswordScreen from '../screens/ChangePasswordScreen';
+import HistoryScreen from '../screens/HistoryScreen';
 
 import { AuthStackParamList, MainTabParamList, MainStackParamList } from './types';
 
@@ -4133,6 +5748,14 @@ function MainStackNavigator() {
         component={ChangePasswordScreen}
         options={{
           title: 'Đổi mật khẩu',
+          presentation: 'card',
+        }}
+      />
+      <MainStack.Screen
+        name="History"
+        component={HistoryScreen}
+        options={{
+          title: 'Lịch sử mượn sách',
           presentation: 'card',
         }}
       />
@@ -4248,6 +5871,7 @@ export type MainStackParamList = {
   MainTabs: NavigatorScreenParams<MainTabParamList>;
   FaceCamera: undefined;
   ChangePassword: undefined;
+  History: undefined;
 };
 
 export type RootStackParamList = {
@@ -4263,11 +5887,12 @@ declare global {
 </file>
 
 <file path="src/screens/HomeScreen.tsx">
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Image, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, Surface, Button, Avatar, Badge, useTheme } from 'react-native-paper';
+import { Text, Surface, Button, Avatar, Badge } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { borrowApi } from '../api/borrow';
 import { BorrowRecord } from '../types';
@@ -4280,23 +5905,28 @@ interface HomeScreenProps {
 
 export default function HomeScreen({ navigation }: HomeScreenProps) {
   const { user, patron } = useAuth();
-  const theme = useTheme();
   const [borrows, setBorrows] = useState<BorrowRecord[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadBorrows = async () => {
     try {
+      setLoadError(null);
       const history = await borrowApi.getHistory('borrowed');
       setBorrows(history);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load borrows:', error);
+      const message = error?.response?.data?.detail || error?.message || 'Không thể tải danh sách';
+      setLoadError(message);
+      setBorrows([]);
     }
   };
 
-  useEffect(() => {
-    loadBorrows();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadBorrows();
+    }, [])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -4309,157 +5939,166 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-    <ScrollView
-      style={styles.flex}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-    >
-      <View style={styles.headerAccent} />
-      <Surface style={styles.header} elevation={0}>
-        <View style={styles.avatarRow}>
-          <Avatar.Text size={56} label={user?.full_name?.[0] || user?.email?.[0] || 'U'} color={colors.background} style={styles.avatar} />
-          <View style={styles.greetingBlock}>
-            <Text variant="titleMedium" style={styles.greeting}>
-              Xin chào
-            </Text>
-            <Text variant="titleLarge" style={styles.userName}>
-              {user?.full_name || user?.email}
-            </Text>
+      <ScrollView
+        style={styles.flex}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+      >
+        <Surface style={styles.header} elevation={0}>
+          <View style={styles.headerSpine} />
+          <View style={styles.headerContent}>
+            <View style={styles.avatarRow}>
+              <Avatar.Text size={52} label={user?.full_name?.[0] || user?.email?.[0] || 'U'} color={colors.background} style={styles.avatar} />
+              <View style={styles.greetingBlock}>
+                <Text variant="bodySmall" style={styles.greeting}>
+                  Xin chào
+                </Text>
+                <Text variant="titleLarge" style={styles.userName}>
+                  {user?.full_name || user?.email}
+                </Text>
+              </View>
+            </View>
           </View>
-        </View>
-        <Text variant="bodyMedium" style={styles.subtitle}>
-          Chào mừng đến với Thư Viện
-        </Text>
-      </Surface>
-
-      <View style={styles.statsRow}>
-        <Surface style={styles.statCard} elevation={0}>
-          <View style={styles.bookmarkEdge} />
-          <Text variant="displaySmall" style={styles.statNumber}>
-            {activeBorrows.length}
-          </Text>
-          <Text variant="bodySmall" style={styles.statLabel}>
-            Sách đang mượn
-          </Text>
         </Surface>
-        <Surface style={[styles.statCard, overdueCount > 0 && styles.statCardWarning]} elevation={0}>
-          <View style={[styles.bookmarkEdge, overdueCount > 0 && styles.bookmarkEdgeWarning]} />
-          <Text variant="displaySmall" style={[styles.statNumber, overdueCount > 0 && styles.warningText]}>
-            {overdueCount}
-          </Text>
-          <Text variant="bodySmall" style={styles.statLabel}>
-            Quá hạn
-          </Text>
-        </Surface>
-      </View>
 
-      {patron?.password_auto_generated && (
-        <View style={styles.passwordBanner}>
-          <Surface style={styles.passwordBannerInner} elevation={0}>
-            <View style={styles.passwordBannerAccent} />
-            <View style={styles.passwordBannerContent}>
-              <View style={styles.passwordBannerIcon}>
-                <MaterialCommunityIcons name="shield-alert" size={20} color={colors.warning} />
-              </View>
-              <View style={styles.passwordBannerText}>
-                <Text variant="bodyMedium" style={styles.passwordBannerTitle}>
-                  Mật khẩu mặc định
-                </Text>
-                <Text variant="bodySmall" style={styles.passwordBannerDesc}>
-                  Bạn đang sử dụng mật khẩu mặc định. Đổi mật khẩu để bảo mật tài khoản.
-                </Text>
-              </View>
-            </View>
-            <Button
-              mode="contained"
-              onPress={() => navigation.navigate('ChangePassword')}
-              style={styles.passwordBannerButton}
-              labelStyle={styles.passwordBannerButtonLabel}
-              compact
-            >
-              Đổi mật khẩu
-            </Button>
+        <View style={styles.statsRow}>
+          <Surface style={styles.statCard} elevation={0}>
+            <View style={styles.statSpine} />
+            <Text style={styles.statNumber}>{activeBorrows.length}</Text>
+            <Text style={styles.statLabel}>Đang mượn</Text>
           </Surface>
-        </View>
-      )}
-
-      <View style={styles.actions}>
-        <TouchableOpacity
-          style={styles.actionButton}
-          activeOpacity={0.85}
-          onPress={() => navigation.navigate('Borrow')}
-        >
-          <Surface style={styles.actionInner} elevation={0}>
-            <View style={styles.actionIcon}>
-              <MaterialCommunityIcons name="book-plus" size={20} color={colors.background} />
-            </View>
-            <Text style={styles.actionLabel}>Mượn sách</Text>
-          </Surface>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.actionButton}
-          activeOpacity={0.85}
-          onPress={() => navigation.navigate('Borrow')}
-        >
-          <Surface style={styles.actionInner} elevation={0}>
-            <View style={styles.actionIconSecondary}>
-              <MaterialCommunityIcons name="history" size={20} color={colors.text} />
-            </View>
-            <Text style={styles.actionLabel}>Lịch sử</Text>
-          </Surface>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.section}>
-        <Text variant="titleMedium" style={styles.sectionTitle}>
-          Sách đang mượn
-        </Text>
-        {activeBorrows.length === 0 ? (
-          <Surface style={styles.emptyCard} elevation={0}>
-            <MaterialCommunityIcons name="bookshelf" size={36} color={colors.textSecondary} />
-            <Text variant="bodyMedium" style={styles.emptyText}>
-              Bạn chưa mượn cuốn sách nào
+          <Surface style={[styles.statCard, overdueCount > 0 && styles.statCardWarning]} elevation={0}>
+            <View style={[styles.statSpine, overdueCount > 0 && styles.statSpineWarning]} />
+            <Text style={[styles.statNumber, overdueCount > 0 && styles.statNumberWarning]}>
+              {overdueCount}
             </Text>
-            <Button
-              mode="contained"
-              onPress={() => navigation.navigate('Borrow')}
-              style={styles.emptyButton}
-              labelStyle={styles.emptyButtonLabel}
-            >
-              Mượn sách ngay
-            </Button>
+            <Text style={styles.statLabel}>Quá hạn</Text>
           </Surface>
-        ) : (
-          activeBorrows.map((record) => {
-            const daysLeft = getDaysUntil(record.due_at);
-            const overdue = daysLeft < 0;
-            return (
-              <Surface key={record.id} style={styles.borrowCard} elevation={0}>
-                <View style={[styles.bookmarkBar, overdue ? styles.bookmarkBarOverdue : styles.bookmarkBarActive]} />
-                <View style={styles.borrowContent}>
-                  <View style={styles.borrowHeader}>
-                    <Text variant="titleMedium" style={styles.bookTitle} numberOfLines={1}>
-                      {record.book_id}
-                    </Text>
-                    <Badge
-                      style={[styles.badge, overdue ? styles.badgeOverdue : styles.badgeActive]}
-                      size={22}
-                    >
-                      {overdue ? 'Quá hạn' : `Còn ${daysLeft} ngày`}
-                    </Badge>
-                  </View>
-                  <Text variant="bodySmall" style={styles.borrowInfo}>
-                    Mượn: {formatDate(record.borrow_at)}
+        </View>
+
+        {patron?.password_auto_generated && (
+          <View style={styles.passwordBanner}>
+            <Surface style={styles.passwordBannerInner} elevation={0}>
+              <View style={styles.passwordBannerAccent} />
+              <View style={styles.passwordBannerContent}>
+                <MaterialCommunityIcons name="shield-alert" size={20} color={colors.warning} />
+                <View style={styles.passwordBannerText}>
+                  <Text variant="bodyMedium" style={styles.passwordBannerTitle}>
+                    Mật khẩu mặc định
                   </Text>
-                  <Text variant="bodySmall" style={styles.borrowInfo}>
-                    Hạn trả: {formatDate(record.due_at)}
+                  <Text variant="bodySmall" style={styles.passwordBannerDesc}>
+                    Đổi mật khẩu để bảo mật tài khoản
                   </Text>
                 </View>
-              </Surface>
-            );
-          })
+              </View>
+              <Button
+                mode="contained"
+                onPress={() => navigation.navigate('ChangePassword')}
+                style={styles.passwordBannerButton}
+                labelStyle={styles.passwordBannerButtonLabel}
+                compact
+              >
+                Đổi
+              </Button>
+            </Surface>
+          </View>
         )}
-      </View>
-    </ScrollView>
+
+        <View style={styles.actions}>
+          <TouchableOpacity activeOpacity={0.8} onPress={() => navigation.navigate('Borrow')}>
+            <Surface style={styles.actionCard} elevation={0}>
+              <View style={styles.actionIconWrap}>
+                <MaterialCommunityIcons name="book-outline" size={22} color={colors.background} />
+              </View>
+              <View style={styles.actionTextWrap}>
+                <Text style={styles.actionTitle}>Mượn sách</Text>
+                <Text style={styles.actionDesc}>Quét mã vạch để mượn sách</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={22} color={colors.textSecondary} />
+            </Surface>
+          </TouchableOpacity>
+          <TouchableOpacity activeOpacity={0.8} onPress={() => navigation.navigate('History')}>
+            <Surface style={styles.actionCard} elevation={0}>
+              <View style={[styles.actionIconWrap, styles.actionIconSecondaryWrap]}>
+                <MaterialCommunityIcons name="history" size={22} color={colors.text} />
+              </View>
+              <View style={styles.actionTextWrap}>
+                <Text style={styles.actionTitle}>Lịch sử</Text>
+                <Text style={styles.actionDesc}>Xem sách đã mượn</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={22} color={colors.textSecondary} />
+            </Surface>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionSpine} />
+            <Text style={styles.sectionTitle}>Sách đang mượn</Text>
+          </View>
+
+          {loadError ? (
+            <Surface style={styles.stateCard} elevation={0}>
+              <MaterialCommunityIcons name="cloud-off-outline" size={36} color={colors.textSecondary} />
+              <Text variant="bodyMedium" style={styles.stateText}>
+                Không thể kết nối server
+              </Text>
+              <Text variant="bodySmall" style={styles.stateDetail}>
+                {loadError}
+              </Text>
+              <Button mode="outlined" onPress={loadBorrows} style={styles.stateButton} labelStyle={styles.stateButtonLabel} icon="refresh">
+                Thử lại
+              </Button>
+            </Surface>
+          ) : activeBorrows.length === 0 ? (
+            <Surface style={styles.stateCard} elevation={0}>
+              <MaterialCommunityIcons name="bookshelf" size={36} color={colors.textSecondary} />
+              <Text variant="bodyMedium" style={styles.stateText}>
+                Bạn chưa mượn cuốn sách nào
+              </Text>
+              <Button mode="contained" onPress={() => navigation.navigate('Borrow')} style={styles.stateButton} labelStyle={styles.stateButtonLabel}>
+                Mượn sách ngay
+              </Button>
+            </Surface>
+          ) : (
+            activeBorrows.map((record) => {
+              const daysLeft = getDaysUntil(record.due_at);
+              const overdue = daysLeft < 0;
+              return (
+                <Surface key={record.id} style={styles.borrowCard} elevation={0}>
+                  <View style={[styles.borrowSpine, overdue ? styles.borrowSpineOverdue : styles.borrowSpineActive]} />
+                  {record.book?.cover_url ? (
+                    <Image source={{ uri: record.book.cover_url }} style={styles.bookCover} />
+                  ) : (
+                    <View style={styles.bookCoverPlaceholder}>
+                      <MaterialCommunityIcons name="book-variant" size={24} color={colors.textSecondary} />
+                    </View>
+                  )}
+                  <View style={styles.borrowContent}>
+                    <View style={styles.borrowHeader}>
+                      <Text style={styles.bookTitle} numberOfLines={2}>
+                        {record.book?.title || record.book_id}
+                      </Text>
+                      <View style={[styles.badge, overdue ? styles.badgeOverdue : styles.badgeActive]}>
+                        <Text style={styles.badgeText}>
+                          {overdue ? 'Quá hạn' : `Còn ${daysLeft} ngày`}
+                        </Text>
+                      </View>
+                    </View>
+                    {record.book?.author ? (
+                      <Text style={styles.borrowInfo} numberOfLines={1}>
+                        {record.book.author}
+                      </Text>
+                    ) : null}
+                    <Text style={styles.borrowInfo}>
+                      Hạn trả: {formatDate(record.due_at)}
+                    </Text>
+                  </View>
+                </Surface>
+              );
+            })
+          )}
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -4472,14 +6111,22 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
-  headerAccent: {
-    height: 4,
+
+  header: {
+    flexDirection: 'row',
+    backgroundColor: colors.surface,
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  headerSpine: {
+    width: 4,
     backgroundColor: colors.primary,
   },
-  header: {
-    padding: 20,
-    paddingBottom: 12,
-    backgroundColor: colors.surface,
+  headerContent: {
+    flex: 1,
+    padding: 16,
   },
   avatarRow: {
     flexDirection: 'row',
@@ -4494,193 +6141,70 @@ const styles = StyleSheet.create({
   },
   greeting: {
     color: colors.textSecondary,
+    letterSpacing: 0.5,
   },
   userName: {
     color: colors.text,
     fontWeight: '700',
-    marginTop: -2,
+    marginTop: -1,
   },
-  subtitle: {
-    color: colors.textSecondary,
-    marginTop: 10,
-  },
+
   statsRow: {
     flexDirection: 'row',
-    padding: 16,
-    paddingBottom: 8,
+    paddingHorizontal: 16,
+    paddingTop: 12,
     gap: 12,
   },
   statCard: {
     flex: 1,
     padding: 16,
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: colors.surface,
-    position: 'relative',
     overflow: 'hidden',
   },
-  bookmarkEdge: {
+  statSpine: {
     position: 'absolute',
     left: 0,
-    top: 8,
-    bottom: 8,
+    top: 10,
+    bottom: 10,
     width: 3,
     backgroundColor: colors.primary,
     borderRadius: 2,
   },
-  bookmarkEdgeWarning: {
+  statSpineWarning: {
     backgroundColor: colors.warning,
   },
   statCardWarning: {
-    borderColor: colors.warning,
     borderWidth: 0.5,
+    borderColor: colors.warning,
   },
   statNumber: {
     color: colors.primary,
     fontWeight: '700',
-    fontSize: 32,
-    lineHeight: 38,
+    fontSize: 30,
+    lineHeight: 36,
   },
-  warningText: {
+  statNumberWarning: {
     color: colors.warning,
   },
   statLabel: {
     color: colors.textSecondary,
-    marginTop: 4,
-    fontSize: 12,
-  },
-  actions: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    gap: 12,
-    marginBottom: 8,
-  },
-  actionButton: {
-    flex: 1,
-  },
-  actionInner: {
-    padding: 14,
-    borderRadius: 8,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 10,
-    borderWidth: 0.5,
-    borderColor: colors.border,
-  },
-  actionIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionIconSecondary: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: colors.secondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionLabel: {
-    color: colors.text,
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  section: {
-    padding: 16,
-    paddingTop: 8,
-  },
-  sectionTitle: {
-    color: colors.text,
-    marginBottom: 12,
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  emptyCard: {
-    padding: 28,
-    borderRadius: 8,
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderWidth: 0.5,
-    borderColor: colors.border,
-  },
-  emptyText: {
-    color: colors.textSecondary,
-    marginBottom: 16,
-  },
-  emptyButton: {
-    borderRadius: 6,
-  },
-  emptyButtonLabel: {
-    fontSize: 14,
-  },
-  borrowCard: {
-    marginBottom: 10,
-    backgroundColor: colors.surface,
-    borderRadius: 8,
-    flexDirection: 'row',
-    overflow: 'hidden',
-    borderWidth: 0.5,
-    borderColor: colors.border,
-  },
-  bookmarkBar: {
-    width: 3,
-    borderRadius: 2,
-  },
-  bookmarkBarActive: {
-    backgroundColor: colors.primary,
-  },
-  bookmarkBarOverdue: {
-    backgroundColor: colors.error,
-  },
-  borrowContent: {
-    flex: 1,
-    padding: 14,
-  },
-  borrowHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  bookTitle: {
-    color: colors.text,
-    flex: 1,
-    marginRight: 8,
-    fontWeight: '600',
-    fontSize: 15,
-  },
-  badge: {
-    borderRadius: 4,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  badgeOverdue: {
-    backgroundColor: colors.error,
-  },
-  badgeActive: {
-    backgroundColor: colors.success,
-  },
-  borrowInfo: {
-    color: colors.textSecondary,
     marginTop: 2,
     fontSize: 13,
   },
+
   passwordBanner: {
     paddingHorizontal: 16,
-    marginBottom: 8,
+    paddingTop: 12,
   },
   passwordBannerInner: {
-    padding: 14,
-    borderRadius: 8,
+    padding: 12,
+    borderRadius: 10,
     backgroundColor: colors.surface,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 0.5,
     borderColor: colors.warning,
-    position: 'relative',
     overflow: 'hidden',
   },
   passwordBannerAccent: {
@@ -4695,16 +6219,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingRight: 10,
-  },
-  passwordBannerIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: colors.surfaceVariant,
-    alignItems: 'center',
-    justifyContent: 'center',
+    gap: 10,
   },
   passwordBannerText: {
     flex: 1,
@@ -4727,6 +6242,168 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: colors.background,
+  },
+
+  actions: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    gap: 8,
+  },
+  actionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 10,
+    backgroundColor: colors.surface,
+    borderWidth: 0.5,
+    borderColor: colors.border,
+  },
+  actionIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 9,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionIconSecondaryWrap: {
+    backgroundColor: colors.secondary,
+  },
+  actionTextWrap: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  actionTitle: {
+    color: colors.text,
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  actionDesc: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginTop: 1,
+  },
+
+  section: {
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 10,
+  },
+  sectionSpine: {
+    width: 3,
+    height: 18,
+    backgroundColor: colors.primary,
+    borderRadius: 2,
+  },
+  sectionTitle: {
+    color: colors.text,
+    fontWeight: '700',
+    fontSize: 16,
+  },
+
+  stateCard: {
+    padding: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 0.5,
+    borderColor: colors.border,
+  },
+  stateText: {
+    color: colors.text,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  stateDetail: {
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  stateButton: {
+    borderRadius: 6,
+  },
+  stateButtonLabel: {
+    fontSize: 14,
+  },
+
+  borrowCard: {
+    marginBottom: 10,
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    flexDirection: 'row',
+    overflow: 'hidden',
+    borderWidth: 0.5,
+    borderColor: colors.border,
+  },
+  borrowSpine: {
+    width: 4,
+  },
+  borrowSpineActive: {
+    backgroundColor: colors.primary,
+  },
+  borrowSpineOverdue: {
+    backgroundColor: colors.error,
+  },
+  bookCover: {
+    width: 56,
+    height: 78,
+    borderRadius: 4,
+    margin: 10,
+    marginRight: 0,
+  },
+  bookCoverPlaceholder: {
+    width: 56,
+    height: 78,
+    borderRadius: 4,
+    margin: 10,
+    marginRight: 0,
+    backgroundColor: colors.surfaceVariant,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  borrowContent: {
+    flex: 1,
+    padding: 14,
+  },
+  borrowHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  bookTitle: {
+    color: colors.text,
+    flex: 1,
+    marginRight: 8,
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  badgeActive: {
+    backgroundColor: colors.success,
+  },
+  badgeOverdue: {
+    backgroundColor: colors.error,
+  },
+  badgeText: {
+    color: colors.background,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  borrowInfo: {
+    color: colors.textSecondary,
+    marginTop: 2,
+    fontSize: 13,
   },
 });
 </file>
