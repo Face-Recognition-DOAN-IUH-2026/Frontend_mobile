@@ -15,6 +15,7 @@ import BorrowScreen from '../screens/BorrowScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import FaceCameraScreen from '../screens/FaceCameraScreen';
 import ChangePasswordScreen from '../screens/ChangePasswordScreen';
+import HistoryScreen from '../screens/HistoryScreen';
 
 import { AuthStackParamList, MainTabParamList, MainStackParamList } from './types';
 
@@ -124,6 +125,14 @@ function MainStackNavigator() {
         component={ChangePasswordScreen}
         options={{
           title: 'Đổi mật khẩu',
+          presentation: 'card',
+        }}
+      />
+      <MainStack.Screen
+        name="History"
+        component={HistoryScreen}
+        options={{
+          title: 'Lịch sử mượn sách',
           presentation: 'card',
         }}
       />

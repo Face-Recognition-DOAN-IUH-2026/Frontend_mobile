@@ -1,156 +1,123 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
-import { Text } from 'react-native-paper';
-import { CameraView, useCameraPermissions, FaceDetectionResult } from 'expo-camera';
+import { View, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
+import { Text, Button } from 'react-native-paper';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { colors } from '../theme/colors';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const OVAL_WIDTH = SCREEN_WIDTH * 0.7;
-const OVAL_HEIGHT = OVAL_WIDTH * 1.3;
-const COUNTDOWN_SECONDS = 3;
-const FACE_STABLE_THRESHOLD = 1500;
-
 interface AutoFaceCaptureProps {
-  onCapture: (base64Image: string) => void;
+  onFilesReady: (images: string[]) => Promise<void> | void;
   onError?: (error: string) => void;
-  disabled?: boolean;
 }
 
-type CaptureState = 'waiting' | 'ready' | 'countdown' | 'captured' | 'error';
+const ANGLES = [
+  { id: 'frontal' as const, instruction: 'Nhìn thẳng', tip: 'Giữ mặt thẳng, mắt mở tự nhiên' },
+  { id: 'right' as const, instruction: 'Quay phải', tip: 'Xoay đầu sang phải khoảng 30°' },
+  { id: 'left' as const, instruction: 'Quay trái', tip: 'Xoay đầu sang trái khoảng 30°' },
+  { id: 'down' as const, instruction: 'Cúi xuống', tip: 'Cúi nhẹ cằm xuống ngực' },
+];
 
-export default function AutoFaceCapture({
-  onCapture,
-  onError,
-  disabled = false,
-}: AutoFaceCaptureProps) {
-  const [permission, requestPermission] = useCameraPermissions();
-  const [state, setState] = useState<CaptureState>('waiting');
-  const [countdown, setCountdown] = useState<number | null>(null);
-  const [faceBounds, setFaceBounds] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+const COUNTDOWN = 5;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const GUIDE_SIZE = SCREEN_WIDTH * 0.35;
+
+export default function AutoFaceCapture({ onFilesReady, onError }: AutoFaceCaptureProps) {
+  const [permission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const faceStableTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastFaceTimeRef = useRef<number>(0);
-
-  const clearTimers = useCallback(() => {
-    if (countdownRef.current) {
-      clearInterval(countdownRef.current);
-      countdownRef.current = null;
-    }
-    if (faceStableTimerRef.current) {
-      clearTimeout(faceStableTimerRef.current);
-      faceStableTimerRef.current = null;
-    }
-  }, []);
+  const [captured, setCaptured] = useState<string[]>([]);
+  const [currentIdx, setCurrentIdx] = useState(-1);
+  const [countdownVal, setCountdownVal] = useState<number | null>(null);
+  const [isRunning, setIsRunning] = useState(false);
+  const [consent, setConsent] = useState(false);
+  const capturedRef = useRef<string[]>([]);
+  const idxRef = useRef(-1);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const cancelledRef = useRef(false);
 
   useEffect(() => {
-    return () => clearTimers();
-  }, [clearTimers]);
+    return () => {
+      cancelledRef.current = true;
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
 
-  const handleFacesDetected = useCallback(({ faces }: FaceDetectionResult) => {
-    if (disabled || state === 'captured' || state === 'countdown') return;
+  const runCountdown = useCallback((idx: number) => {
+    if (idx < 0 || idx >= ANGLES.length) return;
+    if (timerRef.current) clearInterval(timerRef.current);
+    idxRef.current = idx;
+    let c = COUNTDOWN;
+    setCountdownVal(c);
 
-    if (faces.length === 1) {
-      const face = faces[0];
-      const bounds = face.bounds;
+    timerRef.current = setInterval(async () => {
+      c--;
+      if (cancelledRef.current) { clearInterval(timerRef.current!); return; }
 
-      const centerX = bounds.origin.x + bounds.size.width / 2;
-      const centerY = bounds.origin.y + bounds.size.height / 2;
+      if (c <= 0) {
+        clearInterval(timerRef.current!);
+        timerRef.current = null;
+        setCountdownVal(null);
 
-      const ovalCenterX = SCREEN_WIDTH / 2;
-      const ovalCenterY = 200;
+        if (!cameraRef.current) return;
+        try {
+          const photo = await cameraRef.current.takePictureAsync({
+            base64: true, quality: 0.9, skipProcessing: true,
+          });
+          if (cancelledRef.current) return;
+          if (!photo?.base64) { onError?.('Không thể chụp ảnh'); return; }
 
-      const distanceX = Math.abs(centerX - ovalCenterX) / (OVAL_WIDTH / 2);
-      const distanceY = Math.abs(centerY - ovalCenterY) / (OVAL_HEIGHT / 2);
-      const isInsideOval = distanceX < 0.8 && distanceY < 0.8;
+          capturedRef.current = [...capturedRef.current, photo.base64];
+          setCaptured([...capturedRef.current]);
 
-      if (isInsideOval && bounds.size.width > 80) {
-        setFaceBounds({
-          x: bounds.origin.x,
-          y: bounds.origin.y,
-          width: bounds.size.width,
-          height: bounds.size.height,
-        });
-
-        const now = Date.now();
-        if (now - lastFaceTimeRef.current > FACE_STABLE_THRESHOLD) {
-          startCountdown();
+          const nextIdx = idxRef.current + 1;
+          if (nextIdx >= ANGLES.length) {
+            setIsRunning(false);
+            setCurrentIdx(-1);
+          } else {
+            setTimeout(() => {
+              if (!cancelledRef.current) {
+                setCurrentIdx(nextIdx);
+                runCountdown(nextIdx);
+              }
+            }, 800);
+          }
+        } catch {
+          onError?.('Lỗi khi chụp ảnh');
         }
-        lastFaceTimeRef.current = now;
       } else {
-        setFaceBounds(null);
-        if (state !== 'waiting') {
-          clearTimers();
-          setState('waiting');
-          setCountdown(null);
-        }
-      }
-    } else {
-      setFaceBounds(null);
-      if (state !== 'waiting') {
-        clearTimers();
-        setState('waiting');
-        setCountdown(null);
-      }
-    }
-  }, [disabled, state, clearTimers]);
-
-  const startCountdown = () => {
-    if (state === 'countdown' || state === 'captured') return;
-
-    clearTimers();
-    setState('countdown');
-    setCountdown(COUNTDOWN_SECONDS);
-
-    let count = COUNTDOWN_SECONDS;
-    countdownRef.current = setInterval(() => {
-      count--;
-      if (count <= 0) {
-        clearTimers();
-        setCountdown(0);
-        capturePhoto();
-      } else {
-        setCountdown(count);
+        setCountdownVal(c);
       }
     }, 1000);
-  };
+  }, [onError]);
 
-  const capturePhoto = async () => {
-    if (!cameraRef.current) return;
+  const startSequence = useCallback(() => {
+    capturedRef.current = [];
+    setCaptured([]);
+    cancelledRef.current = false;
+    setIsRunning(true);
+    setCurrentIdx(0);
+    runCountdown(0);
+  }, [runCountdown]);
 
-    try {
-      const photo = await cameraRef.current.takePictureAsync({
-        base64: true,
-        quality: 0.9,
-        skipProcessing: true,
-      });
+  const retakeAngle = useCallback((idx: number) => {
+    capturedRef.current = capturedRef.current.slice(0, idx);
+    setCaptured([...capturedRef.current]);
+    cancelledRef.current = false;
+    setIsRunning(true);
+    setCurrentIdx(idx);
+    runCountdown(idx);
+  }, [runCountdown]);
 
-      if (photo?.base64) {
-        setState('captured');
-        onCapture(photo.base64);
-      } else {
-        setState('error');
-        onError?.('Không thể chụp ảnh');
-      }
-    } catch (error: any) {
-      console.error('Capture error:', error);
-      setState('error');
-      onError?.(error?.message || 'Lỗi khi chụp ảnh');
-    }
-  };
+  const allCaptured = captured.length === ANGLES.length;
 
-  const resetCapture = () => {
-    clearTimers();
-    setState('waiting');
-    setCountdown(null);
-    setFaceBounds(null);
-    lastFaceTimeRef.current = 0;
+  const handleSubmit = async () => {
+    if (!consent || !allCaptured) return;
+    await onFilesReady(captured);
   };
 
   if (!permission) {
     return (
       <View style={styles.container}>
-        <Text style={styles.messageText}>Đang tải camera...</Text>
+        <Text style={styles.msgText}>Đang tải camera...</Text>
       </View>
     );
   }
@@ -158,160 +125,167 @@ export default function AutoFaceCapture({
   if (!permission.granted) {
     return (
       <View style={styles.container}>
-        <Text style={styles.messageText}>Cần quyền camera</Text>
+        <Text style={styles.msgText}>Cần quyền camera</Text>
+      </View>
+    );
+  }
+
+  if (allCaptured) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.resultContainer}>
+          <View style={styles.grid}>
+            {ANGLES.map((a, i) => (
+              <View key={a.id} style={styles.thumb}>
+                <View style={styles.thumbInner}>
+                  <MaterialCommunityIcons name="check-circle" size={32} color={colors.success} />
+                </View>
+                <View style={styles.thumbLabel}>
+                  <Text style={styles.thumbLabelText}>{a.instruction}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.retakeRow}>
+            {ANGLES.map((a, i) => (
+              <Button key={a.id} mode="outlined" compact onPress={() => retakeAngle(i)}
+                style={styles.retakeBtn} labelStyle={styles.retakeBtnLabel}>
+                {a.instruction}
+              </Button>
+            ))}
+          </View>
+
+          <TouchableOpacity style={styles.consentRow} activeOpacity={0.7} onPress={() => setConsent(!consent)}>
+            <View style={[styles.checkbox, consent && styles.checkboxChecked]}>
+              {consent && <MaterialCommunityIcons name="check" size={14} color={colors.background} />}
+            </View>
+            <Text style={styles.consentText}>
+              Tôi đồng ý cho hệ thống xử lý dữ liệu khuôn mặt để nhận diện tại cổng
+            </Text>
+          </TouchableOpacity>
+
+          <Button mode="contained" onPress={handleSubmit} disabled={!consent}
+            style={[styles.submitBtn, !consent && styles.submitBtnDisabled]} labelStyle={styles.submitBtnLabel}>
+            Xác nhận {captured.length} góc ảnh
+          </Button>
+        </View>
+      </View>
+    );
+  }
+
+  if (!isRunning && currentIdx < 0) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.startContainer}>
+          <View style={styles.startIconWrap}>
+            <MaterialCommunityIcons name="camera" size={32} color={colors.primary} />
+          </View>
+          <Text style={styles.startTitle}>Chụp khuôn mặt từ 4 góc</Text>
+          <Text style={styles.startDesc}>Nhận diện nhanh hơn, chính xác hơn tại cổng</Text>
+          <View style={styles.tipsBox}>
+            <Text style={styles.tipsTitle}>Lưu ý khi chụp:</Text>
+            <Text style={styles.tipText}>• Đủ ánh sáng, không ngược sáng</Text>
+            <Text style={styles.tipText}>• Giữ yên khi đếm ngược về 0</Text>
+            <Text style={styles.tipText}>• Mặt vừa đủ trong khung tròn</Text>
+          </View>
+          <Button mode="contained" onPress={startSequence}
+            style={styles.startBtn} labelStyle={styles.startBtnLabel} icon="camera">
+            Bắt đầu chụp
+          </Button>
+        </View>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <CameraView
-        ref={cameraRef}
-        style={styles.camera}
-        facing="front"
-        onFacesDetected={handleFacesDetected}
-      >
-        <View style={styles.overlay}>
-          <View style={styles.ovalContainer}>
-            <View style={styles.ovalFrame}>
-              {state === 'waiting' && (
-                <Text style={styles.guideText}>Đặt mặt vào khung</Text>
-              )}
-              {state === 'ready' && (
-                <Text style={styles.guideText}>Giữ nguyên...</Text>
-              )}
-            </View>
-
-            {faceBounds && state !== 'captured' && (
-              <View
-                style={[
-                  styles.faceOutline,
-                  {
-                    left: faceBounds.x,
-                    top: faceBounds.y,
-                    width: faceBounds.width,
-                    height: faceBounds.height,
-                  },
-                ]}
-              />
-            )}
+      <CameraView ref={cameraRef} style={styles.camera} facing="front" />
+      <View style={styles.guideOverlay}>
+        <View style={styles.guideCircle} />
+      </View>
+      {countdownVal !== null && (
+        <View style={styles.countdownOverlay}>
+          <Text style={styles.instructionText}>{ANGLES[currentIdx].instruction}</Text>
+          <Text style={styles.tipTextCenter}>{ANGLES[currentIdx].tip}</Text>
+          <View style={styles.dotRow}>
+            {ANGLES.map((a, i) => (
+              <View key={a.id} style={[
+                styles.dot,
+                i < captured.length && styles.dotDone,
+                i === currentIdx && styles.dotActive,
+              ]} />
+            ))}
           </View>
-
-          {state === 'countdown' && countdown !== null && (
-            <View style={styles.countdownContainer}>
-              <Text style={styles.countdownText}>{countdown}</Text>
-            </View>
-          )}
-
-          {state === 'captured' && (
-            <View style={styles.successContainer}>
-              <Text style={styles.successText}>✓</Text>
-            </View>
-          )}
-
-          <Text style={styles.hintText}>
-            {state === 'waiting' && 'Nhìn thẳng vào camera'}
-            {state === 'ready' && 'Đang ổn định...'}
-            {state === 'countdown' && 'Giữ nguyên tư thế!'}
-            {state === 'captured' && 'Đã chụp thành công'}
-            {state === 'error' && 'Có lỗi xảy ra'}
-          </Text>
+          {countdownVal === 1 && <Text style={styles.holdText}>GIỮ YÊN!</Text>}
+          <Text style={styles.countdownNumber}>{countdownVal}</Text>
         </View>
-      </CameraView>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
+  container: { flex: 1, backgroundColor: colors.background },
+  camera: { flex: 1 },
+  msgText: { color: colors.text, fontSize: 16, textAlign: 'center', marginTop: 100 },
+
+  guideOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
   },
-  camera: {
-    flex: 1,
+  guideCircle: {
+    width: GUIDE_SIZE, height: GUIDE_SIZE, borderRadius: GUIDE_SIZE / 2,
+    borderWidth: 2, borderColor: 'rgba(212, 168, 83, 0.5)',
   },
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
+
+  countdownOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.75)',
   },
-  ovalContainer: {
-    width: OVAL_WIDTH,
-    height: OVAL_HEIGHT,
-    justifyContent: 'center',
-    alignItems: 'center',
+  instructionText: { color: colors.text, fontSize: 20, fontWeight: '700', marginBottom: 4 },
+  tipTextCenter: { color: colors.textSecondary, fontSize: 14, marginBottom: 16 },
+  dotRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  dot: { width: 12, height: 12, borderRadius: 6, backgroundColor: colors.textDisabled },
+  dotDone: { backgroundColor: colors.success },
+  dotActive: { backgroundColor: colors.primary },
+  holdText: { color: colors.error, fontSize: 18, fontWeight: '900', marginBottom: 8 },
+  countdownNumber: { color: colors.text, fontSize: 64, fontWeight: '900' },
+
+  startContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  startIconWrap: {
+    width: 64, height: 64, borderRadius: 32,
+    backgroundColor: 'rgba(212, 168, 83, 0.15)',
+    alignItems: 'center', justifyContent: 'center', marginBottom: 16,
   },
-  ovalFrame: {
-    width: OVAL_WIDTH,
-    height: OVAL_HEIGHT,
-    borderRadius: OVAL_HEIGHT / 2,
-    borderWidth: 3,
-    borderColor: colors.primary,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
+  startTitle: { color: colors.text, fontSize: 18, fontWeight: '700', marginBottom: 4 },
+  startDesc: { color: colors.textSecondary, fontSize: 14, marginBottom: 20 },
+  tipsBox: {
+    backgroundColor: colors.surfaceVariant, borderRadius: 10, padding: 14,
+    width: '100%', marginBottom: 24,
   },
-  guideText: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '600',
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+  tipsTitle: { color: colors.primary, fontSize: 13, fontWeight: '700', marginBottom: 6 },
+  tipText: { color: colors.textSecondary, fontSize: 13, lineHeight: 20 },
+  startBtn: { width: '100%', borderRadius: 10, backgroundColor: colors.primary, paddingVertical: 4 },
+  startBtnLabel: { fontSize: 16, fontWeight: '700', color: colors.background },
+
+  resultContainer: { flex: 1, padding: 16, justifyContent: 'center' },
+  grid: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  thumb: { flex: 1, aspectRatio: 0.75, borderRadius: 8, overflow: 'hidden', borderWidth: 2, borderColor: colors.success },
+  thumbInner: { flex: 1, backgroundColor: colors.surfaceVariant, alignItems: 'center', justifyContent: 'center' },
+  thumbLabel: { position: 'absolute', bottom: 4, left: 4, backgroundColor: 'rgba(0,0,0,0.8)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  thumbLabelText: { color: colors.text, fontSize: 10, fontWeight: '600' },
+  retakeRow: { flexDirection: 'row', gap: 6, marginBottom: 20 },
+  retakeBtn: { flex: 1, borderColor: colors.border, borderRadius: 8 },
+  retakeBtnLabel: { fontSize: 11, color: colors.textSecondary },
+  consentRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    padding: 14, backgroundColor: colors.surfaceVariant, borderRadius: 10, marginBottom: 16,
   },
-  faceOutline: {
-    position: 'absolute',
-    borderWidth: 2,
-    borderColor: colors.success,
-    borderRadius: 8,
-  },
-  countdownContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-  },
-  countdownText: {
-    color: colors.primary,
-    fontSize: 96,
-    fontWeight: '900',
-    textShadowColor: 'rgba(0,0,0,0.7)',
-    textShadowOffset: { width: 0, height: 4 },
-    textShadowRadius: 12,
-  },
-  successContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-  },
-  successText: {
-    color: colors.success,
-    fontSize: 72,
-  },
-  hintText: {
-    position: 'absolute',
-    bottom: 60,
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '500',
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
-  messageText: {
-    color: colors.text,
-    fontSize: 16,
-    textAlign: 'center',
-    marginTop: 100,
-  },
+  checkbox: { width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: colors.textDisabled, alignItems: 'center', justifyContent: 'center' },
+  checkboxChecked: { backgroundColor: colors.primary, borderColor: colors.primary },
+  consentText: { color: colors.textSecondary, fontSize: 13, flex: 1, lineHeight: 18 },
+  submitBtn: { borderRadius: 10, backgroundColor: colors.success, paddingVertical: 4 },
+  submitBtnDisabled: { opacity: 0.4 },
+  submitBtnLabel: { fontSize: 16, fontWeight: '700' },
 });

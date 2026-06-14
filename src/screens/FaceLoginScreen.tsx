@@ -59,19 +59,18 @@ export default function FaceLoginScreen({ navigation }: FaceLoginScreenProps) {
         ref={cameraRef}
         style={styles.camera}
         facing="front"
-      >
-        <View style={styles.overlay}>
-          <View style={styles.faceGuide}>
-            <View style={[styles.guideCorner, styles.topLeft]} />
-            <View style={[styles.guideCorner, styles.topRight]} />
-            <View style={[styles.guideCorner, styles.bottomLeft]} />
-            <View style={[styles.guideCorner, styles.bottomRight]} />
-          </View>
-          <Text style={styles.instruction}>
-            Đặt khuôn mặt trong khung hình và giữ yên
-          </Text>
+      />
+      <View style={styles.overlay}>
+        <View style={styles.faceGuide}>
+          <View style={[styles.guideCorner, styles.topLeft]} />
+          <View style={[styles.guideCorner, styles.topRight]} />
+          <View style={[styles.guideCorner, styles.bottomLeft]} />
+          <View style={[styles.guideCorner, styles.bottomRight]} />
         </View>
-      </CameraView>
+        <Text style={styles.instruction}>
+          Đặt khuôn mặt trong khung hình và giữ yên
+        </Text>
+      </View>
 
       <Surface style={styles.controls} elevation={0}>
         <Text style={styles.hint}>
@@ -107,6 +106,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+    position: 'relative',
   },
   permissionContainer: {
     flex: 1,
@@ -131,7 +131,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   overlay: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'center',
     alignItems: 'center',

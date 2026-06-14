@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
+import { View, StyleSheet, Alert, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, Button, Surface, TextInput, ActivityIndicator, Card } from 'react-native-paper';
+import { Text, Button, Surface, TextInput, ActivityIndicator, Card, Divider } from 'react-native-paper';
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { borrowApi } from '../api/borrow';
 import { openLibraryApi } from '../api/openlibrary';
 import { authApi } from '../api/auth';
@@ -22,28 +23,37 @@ export default function BorrowScreen({ navigation }: BorrowScreenProps) {
   const [book, setBook] = useState<OpenLibraryBook | null>(null);
   const [localBook, setLocalBook] = useState<Book | null>(null);
   const [isBorrowing, setIsBorrowing] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [permission, requestPermission] = useCameraPermissions();
 
   const searchBook = async (isbnToSearch: string) => {
     if (!isbnToSearch.trim()) return;
 
+    console.log('[Borrow] searchBook called with ISBN:', isbnToSearch);
     setIsSearching(true);
+    setSearchError(null);
     try {
       try {
+        console.log('[Borrow] Checking local book...');
         const localBookData = await borrowApi.getBook(isbnToSearch.trim());
+        console.log('[Borrow] Local book found:', localBookData);
         setLocalBook(localBookData);
-      } catch {
+      } catch (err) {
+        console.log('[Borrow] Local book not found, trying OpenLibrary');
       }
 
+      console.log('[Borrow] Querying OpenLibrary for ISBN:', isbnToSearch);
       const openLibraryBook = await openLibraryApi.getBookByIsbn(isbnToSearch.trim());
       if (openLibraryBook) {
+        console.log('[Borrow] OpenLibrary book found:', openLibraryBook.title);
         setBook(openLibraryBook);
       } else if (!localBook) {
-        Alert.alert('Không tìm thấy', 'Không tìm thấy sách với ISBN này');
+        console.log('[Borrow] No book found anywhere');
+        setSearchError('Không tìm thấy sách với ISBN này');
       }
     } catch (error) {
-      console.error('Search error:', error);
-      Alert.alert('Lỗi', 'Không thể tìm kiếm sách');
+      console.error('[Borrow] Search error:', error);
+      setSearchError('Không thể tìm kiếm sách');
     } finally {
       setIsSearching(false);
     }
@@ -51,6 +61,7 @@ export default function BorrowScreen({ navigation }: BorrowScreenProps) {
 
   const handleBarCodeScanned = (result: BarcodeScanningResult) => {
     if (scanned || !result.data) return;
+    console.log('[Borrow] Barcode scanned:', result.data);
     setScanned(true);
     setIsbn(result.data);
     searchBook(result.data);
@@ -59,32 +70,43 @@ export default function BorrowScreen({ navigation }: BorrowScreenProps) {
   const handleBorrow = async () => {
     if (!isbn.trim()) return;
 
+    console.log('[Borrow] handleBorrow called, ISBN:', isbn);
     setIsBorrowing(true);
     try {
-      try {
-        const patronData = await authApi.getCurrentPatron();
-        const status = patronData.current_status || patronData.currentStatus;
-        if (status !== 'inside') {
-          Alert.alert('Không thể mượn', 'Bạn phải đi qua cổng vào thư viện trước khi mượn sách');
-          setIsBorrowing(false);
-          return;
-        }
-      } catch (checkError) {
-        console.error('Failed to check patron status:', checkError);
-        Alert.alert('Lỗi', 'Không thể xác minh trạng thái. Vui lòng thử lại.');
+      console.log('[Borrow] Checking patron status...');
+      const patronData = await authApi.getCurrentPatron();
+      console.log('[Borrow] Patron data:', patronData);
+      const status = patronData.current_status || patronData.currentStatus;
+      console.log('[Borrow] Patron status:', status);
+      if (status !== 'inside') {
+        console.log('[Borrow] Patron NOT inside library, blocking borrow');
+        Alert.alert('Không thể mượn', 'Bạn phải đi qua cổng vào thư viện trước khi mượn sách');
         setIsBorrowing(false);
         return;
       }
+      console.log('[Borrow] Patron is inside, proceeding with borrow');
 
+      console.log('[Borrow] Calling borrowApi.borrowBook with barcode:', isbn.trim());
       const result = await borrowApi.borrowBook(isbn.trim());
+      console.log('[Borrow] borrowBook result:', result);
       if (result.status === 'success') {
+        console.log('[Borrow] Borrow SUCCESS');
         Alert.alert('Thành công', result.message, [
           { text: 'OK', onPress: () => resetState() },
         ]);
       }
     } catch (error: any) {
-      const message = error?.response?.data?.detail || 'Mượn sách thất bại';
-      Alert.alert('Lỗi', message);
+      console.error('[Borrow] Borrow error:', error);
+      console.log('[Borrow] Error response:', error.response?.data);
+      let msg = 'Mượn sách thất bại';
+      if (!error.response) {
+        msg = 'Không thể kết nối server. Vui lòng kiểm tra mạng.';
+      } else if (error.response?.status === 401) {
+        msg = 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.';
+      } else if (error.response?.data?.detail) {
+        msg = error.response.data.detail;
+      }
+      Alert.alert('Lỗi', msg);
     } finally {
       setIsBorrowing(false);
     }
@@ -95,12 +117,24 @@ export default function BorrowScreen({ navigation }: BorrowScreenProps) {
     setIsbn('');
     setBook(null);
     setLocalBook(null);
+    setSearchError(null);
+  };
+
+  const searchAgain = () => {
+    setScanned(false);
+    setBook(null);
+    setLocalBook(null);
+    setSearchError(null);
   };
 
   const displayBook = book || (localBook ? {
     title: localBook.title,
     author: localBook.author,
-    cover: localBook.cover_url ? { medium: localBook.cover_url } : undefined
+    cover: localBook.cover_url ? { medium: localBook.cover_url } : undefined,
+    authors: localBook.author ? [{ name: localBook.author }] : undefined,
+    publish_date: localBook.publish_year?.toString(),
+    number_of_pages: localBook.pages,
+    publishers: localBook.publisher ? [localBook.publisher] : undefined,
   } : null);
 
   if (!permission) {
@@ -131,7 +165,7 @@ export default function BorrowScreen({ navigation }: BorrowScreenProps) {
           style={styles.isbnInput}
           outlineStyle={styles.inputOutline}
           activeOutlineColor={colors.primary}
-          right={<TextInput.Icon icon="magnify" onPress={() => searchBook(isbn)} color={colors.primary} />}
+          right={<TextInput.Icon icon="magnify" onPress={() => searchBook(isbn)} color={colors.primary} testID="search-button-permission" />}
         />
       </SafeAreaView>
     );
@@ -148,17 +182,16 @@ export default function BorrowScreen({ navigation }: BorrowScreenProps) {
               barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
             }}
             onBarcodeScanned={handleBarCodeScanned}
-          >
-            <View style={styles.overlay}>
-              <View style={styles.scanArea}>
-                <View style={[styles.corner, styles.topLeft]} />
-                <View style={[styles.corner, styles.topRight]} />
-                <View style={[styles.corner, styles.bottomLeft]} />
-                <View style={[styles.corner, styles.bottomRight]} />
-              </View>
-              <Text style={styles.scanText}>Đặt mã vạch trong khung hình</Text>
+          />
+          <View style={styles.overlay}>
+            <View style={styles.scanArea}>
+              <View style={[styles.corner, styles.topLeft]} />
+              <View style={[styles.corner, styles.topRight]} />
+              <View style={[styles.corner, styles.bottomLeft]} />
+              <View style={[styles.corner, styles.bottomRight]} />
             </View>
-          </CameraView>
+            <Text style={styles.scanText}>Đặt mã vạch trong khung hình</Text>
+          </View>
 
           <Surface style={styles.manualInput} elevation={0}>
             <View style={styles.manualAccent} />
@@ -171,48 +204,105 @@ export default function BorrowScreen({ navigation }: BorrowScreenProps) {
               style={styles.isbnInputFull}
               outlineStyle={styles.inputOutline}
               activeOutlineColor={colors.primary}
-              right={<TextInput.Icon icon="magnify" onPress={() => searchBook(isbn)} disabled={isSearching} color={colors.primary} />}
+              right={<TextInput.Icon icon="magnify" onPress={() => searchBook(isbn)} disabled={isSearching} color={colors.primary} testID="search-button" />}
             />
           </Surface>
         </View>
       ) : (
-        <View style={styles.resultContainer}>
+        <ScrollView style={styles.resultContainer} contentContainerStyle={styles.resultContent}>
           {isSearching ? (
             <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
+          ) : searchError ? (
+            <Card style={styles.errorCard}>
+              <View style={styles.errorIconContainer}>
+                <MaterialCommunityIcons name="book-search-outline" size={64} color={colors.textSecondary} />
+              </View>
+              <Text variant="titleMedium" style={styles.errorTitle}>Không tìm thấy sách</Text>
+              <Text variant="bodyMedium" style={styles.errorMessage}>{searchError}</Text>
+              {isbn ? (
+                <Text variant="bodySmall" style={styles.errorIsbn}>ISBN: {isbn}</Text>
+              ) : null}
+              <Button
+                mode="contained"
+                onPress={searchAgain}
+                style={styles.retryButton}
+                icon="barcode-scan"
+              >
+                Quét lại
+              </Button>
+            </Card>
           ) : displayBook ? (
             <Card style={styles.bookCard}>
               <View style={styles.cardAccent} />
-              {displayBook.cover?.medium && (
+              {displayBook.cover?.medium ? (
                 <Card.Cover source={{ uri: displayBook.cover.medium }} style={styles.cover} />
+              ) : (
+                <View style={styles.coverPlaceholder}>
+                  <MaterialCommunityIcons name="book-open-variant" size={48} color={colors.textSecondary} />
+                  <Text style={styles.coverPlaceholderText}>Không có ảnh</Text>
+                </View>
               )}
               <Card.Content>
                 <Text variant="titleLarge" style={styles.bookTitle}>
                   {displayBook.title}
                 </Text>
-                {'authors' in displayBook && displayBook.authors ? (
+                {'authors' in displayBook && displayBook.authors && displayBook.authors.length > 0 ? (
                   <Text variant="bodyMedium" style={styles.bookAuthor}>
-                    {displayBook.authors[0]?.name}
+                    {displayBook.authors.map(a => a.name).join(', ')}
                   </Text>
                 ) : 'author' in displayBook && displayBook.author ? (
                   <Text variant="bodyMedium" style={styles.bookAuthor}>
                     {displayBook.author}
                   </Text>
                 ) : null}
+
+                <View style={styles.metaRow}>
+                  {'publish_date' in displayBook && displayBook.publish_date ? (
+                    <View style={styles.metaItem}>
+                      <MaterialCommunityIcons name="calendar" size={14} color={colors.textSecondary} />
+                      <Text style={styles.metaText}>{displayBook.publish_date}</Text>
+                    </View>
+                  ) : null}
+                  {'number_of_pages' in displayBook && displayBook.number_of_pages ? (
+                    <View style={styles.metaItem}>
+                      <MaterialCommunityIcons name="book-open-page-variant" size={14} color={colors.textSecondary} />
+                      <Text style={styles.metaText}>{displayBook.number_of_pages} trang</Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                <View style={styles.metaRow}>
+                  {'publishers' in displayBook && displayBook.publishers && displayBook.publishers.length > 0 ? (
+                    <View style={styles.metaItem}>
+                      <MaterialCommunityIcons name="factory" size={14} color={colors.textSecondary} />
+                      <Text style={styles.metaText}>{displayBook.publishers[0]?.name ?? displayBook.publishers[0]}</Text>
+                    </View>
+                  ) : null}
+                  {'subjects' in displayBook && displayBook.subjects && displayBook.subjects.length > 0 ? (
+                    <View style={styles.metaItem}>
+                      <MaterialCommunityIcons name="tag" size={14} color={colors.textSecondary} />
+                      <Text style={styles.metaText}>{displayBook.subjects.slice(0, 2).map((s: any) => s.name ?? s).join(', ')}</Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                <View style={styles.dividerMeta} />
                 <Text variant="bodySmall" style={styles.isbnLabel}>
                   ISBN: {isbn}
                 </Text>
                 {localBook?.shelf_location && (
                   <Text variant="bodySmall" style={styles.locationLabel}>
-                    Vị trí: {localBook.shelf_location}
+                    <MaterialCommunityIcons name="map-marker" size={13} color={colors.primary} /> Vị trí: {localBook.shelf_location}
                   </Text>
                 )}
               </Card.Content>
               <Card.Actions style={styles.cardActions}>
                 <Button
                   mode="outlined"
-                  onPress={resetState}
+                  onPress={searchAgain}
                   style={styles.cardActionButton}
                   labelStyle={styles.cardActionButtonLabel}
+                  testID="rescan-button"
                 >
                   Quét lại
                 </Button>
@@ -223,13 +313,14 @@ export default function BorrowScreen({ navigation }: BorrowScreenProps) {
                   disabled={isBorrowing}
                   style={styles.cardActionButton}
                   labelStyle={styles.cardActionButtonLabel}
+                  testID="confirm-borrow-button"
                 >
                   Xác nhận mượn
                 </Button>
               </Card.Actions>
             </Card>
           ) : null}
-        </View>
+        </ScrollView>
       )}
     </SafeAreaView>
   );
@@ -283,12 +374,17 @@ const styles = StyleSheet.create({
   },
   scannerContainer: {
     flex: 1,
+    position: 'relative',
   },
   camera: {
     flex: 1,
   },
   overlay: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -369,6 +465,9 @@ const styles = StyleSheet.create({
   resultContainer: {
     flex: 1,
     padding: 16,
+  },
+  resultContent: {
+    flexGrow: 1,
     justifyContent: 'center',
   },
   loader: {
@@ -392,24 +491,54 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   cover: {
-    height: 200,
+    height: 280,
     resizeMode: 'contain',
     backgroundColor: colors.surfaceVariant,
+  },
+  coverPlaceholder: {
+    height: 200,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceVariant,
+  },
+  coverPlaceholderText: {
+    color: colors.textSecondary,
+    marginTop: 8,
+    fontSize: 13,
   },
   bookTitle: {
     color: colors.text,
     marginTop: 12,
     fontWeight: '700',
-    fontSize: 18,
+    fontSize: 20,
   },
   bookAuthor: {
     color: colors.textSecondary,
     marginTop: 4,
     fontSize: 14,
   },
+  metaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+    gap: 16,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  metaText: {
+    color: colors.textSecondary,
+    fontSize: 13,
+  },
+  dividerMeta: {
+    height: 1,
+    backgroundColor: colors.divider,
+    marginVertical: 10,
+  },
   isbnLabel: {
     color: colors.textSecondary,
-    marginTop: 8,
     fontSize: 13,
   },
   locationLabel: {
@@ -428,5 +557,36 @@ const styles = StyleSheet.create({
   cardActionButtonLabel: {
     fontSize: 13,
     fontWeight: '600',
+  },
+  errorCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+    padding: 32,
+    alignItems: 'center',
+    borderWidth: 0.5,
+    borderColor: colors.border,
+  },
+  errorIconContainer: {
+    marginBottom: 16,
+  },
+  errorTitle: {
+    color: colors.text,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  errorMessage: {
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  errorIsbn: {
+    color: colors.textSecondary,
+    marginTop: 8,
+    marginBottom: 20,
+    fontSize: 12,
+  },
+  retryButton: {
+    borderRadius: 6,
+    marginTop: 12,
   },
 });

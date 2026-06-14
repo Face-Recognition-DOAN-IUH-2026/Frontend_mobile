@@ -16,6 +16,7 @@ export type MainStackParamList = {
   MainTabs: NavigatorScreenParams<MainTabParamList>;
   FaceCamera: undefined;
   ChangePassword: undefined;
+  History: undefined;
 };
 
 export type RootStackParamList = {

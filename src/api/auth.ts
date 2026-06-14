@@ -16,6 +16,7 @@ export interface PatronRegisterRequest {
   student_code: string;
   password: string;
   full_name: string;
+  email: string;
   class_name?: string;
 }
 
@@ -66,8 +67,11 @@ export const authApi = {
 
   patronRegister: async (data: PatronRegisterRequest): Promise<PatronLoginResponse> => {
     const response = await api.post<PatronLoginResponse>('/patrons/register', data);
+    if (!response.data.user) {
+      throw new Error('Invalid response: missing user data');
+    }
     await AsyncStorage.setItem('accessToken', response.data.access_token);
-    await AsyncStorage.setItem('patronData', JSON.stringify(response.data.patron));
+    await AsyncStorage.setItem('patronData', JSON.stringify(response.data.user));
     return response.data;
   },
 

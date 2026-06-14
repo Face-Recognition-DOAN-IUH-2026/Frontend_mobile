@@ -254,6 +254,7 @@ const styles = StyleSheet.create({
   },
   updateButton: {
     borderRadius: 6,
+    justifyContent: 'center'
   },
   updateButtonLabel: {
     fontSize: 12,

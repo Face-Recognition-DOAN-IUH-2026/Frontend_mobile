@@ -2,9 +2,6 @@ appId: com.library.mobile
 name: Borrow Book Flow
 description: Test borrowing a book by scanning barcode
 
-startApp:
-    clearState: true
-
 steps:
   - launchApp:
       clearState: true
@@ -14,7 +11,7 @@ steps:
       timeout: 10000
 
   - tapOn:
-      placeholder: "Mã số sinh viên"
+      placeholder: "Mã sinh viên"
 
   - inputText:
       text: "TEST001"
@@ -32,29 +29,25 @@ steps:
       timeout: 15000
 
   - tapOn:
-      id: "borrow-tab"
+      text: "Mượn sách"
       timeout: 5000
 
   - waitForNavigation:
       timeout: 5000
 
-  - tapOn:
-      text: "Quét mã vạch"
-      timeout: 5000
-
-  - waitFor:
-      condition: "Camera active"
+  - assertVisible:
+      text: "Đặt mã vạch trong khung hình"
       timeout: 5000
 
   - tapOn:
-      id: "simulate-scan"
+      text: "Hoặc nhập ISBN thủ công"
       timeout: 3000
 
   - inputText:
-      text: "978-0-13-468599-1"
+      text: "9780134685991"
 
   - tapOn:
-      text: "Tìm kiếm"
+      icon: "magnify"
       timeout: 3000
 
   - waitFor:
@@ -62,11 +55,11 @@ steps:
       timeout: 10000
 
   - assertVisible:
-      text: "Introduction to Algorithms"
+      text: "Xác nhận mượn"
       timeout: 5000
 
   - tapOn:
-      text: "Mượn sách"
+      testId: "confirm-borrow-button"
       timeout: 5000
 
   - waitFor:
@@ -78,8 +71,9 @@ steps:
 
 ---
 
-name: Borrow Flow - Patron Outside Library
 appId: com.library.mobile
+name: Borrow Flow - Patron Outside Library
+description: Test that patron outside library cannot borrow
 
 steps:
   - launchApp:
@@ -90,7 +84,7 @@ steps:
       timeout: 10000
 
   - tapOn:
-      placeholder: "Mã số sinh viên"
+      placeholder: "Mã sinh viên"
 
   - inputText:
       text: "OUTSIDE_PATRON"
@@ -108,25 +102,22 @@ steps:
       timeout: 15000
 
   - tapOn:
-      id: "borrow-tab"
+      text: "Mượn sách"
 
   - tapOn:
-      text: "Quét mã vạch"
-
-  - tapOn:
-      id: "simulate-scan"
+      text: "Hoặc nhập ISBN thủ công"
 
   - inputText:
-      text: "ANY-BARCODE"
+      text: "9780134685991"
 
   - tapOn:
-      text: "Tìm kiếm"
+      icon: "magnify"
 
   - waitFor:
       timeout: 5000
 
   - tapOn:
-      text: "Mượn sách"
+      testId: "confirm-borrow-button"
       timeout: 3000
 
   - assertVisible:
@@ -135,8 +126,9 @@ steps:
 
 ---
 
-name: Borrow Flow - Manual ISBN Entry
 appId: com.library.mobile
+name: Borrow Flow - Manual ISBN Entry
+description: Test manual ISBN entry flow
 
 steps:
   - launchApp:
@@ -147,7 +139,7 @@ steps:
       timeout: 10000
 
   - tapOn:
-      placeholder: "Mã số sinh viên"
+      placeholder: "Mã sinh viên"
 
   - inputText:
       text: "TEST001"
@@ -165,16 +157,21 @@ steps:
       timeout: 15000
 
   - tapOn:
-      id: "borrow-tab"
+      text: "Mượn sách"
 
   - tapOn:
-      text: "Nhập ISBN"
+      text: "Hoặc nhập ISBN thủ công"
 
   - inputText:
-      text: "978-0-13-468599-1"
+      text: "9780134685991"
 
   - tapOn:
-      text: "Tìm kiếm"
+      icon: "magnify"
 
   - waitFor:
+      condition: "Book found"
       timeout: 10000
+
+  - assertVisible:
+      text: "Xác nhận mượn"
+      timeout: 5000

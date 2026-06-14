@@ -32,6 +32,7 @@ export interface BorrowRecord {
   return_at?: string;
   shelf_location?: string;
   status: 'borrowed' | 'returned' | 'overdue';
+  book?: Book;
 }
 
 export interface BorrowResponse {
@@ -71,6 +72,7 @@ export interface OpenLibraryBook {
   publishers?: { name: string }[];
   number_of_pages?: number;
   publish_date?: string;
+  subjects?: { name: string }[];
 }
 
 export interface CameraEvent {

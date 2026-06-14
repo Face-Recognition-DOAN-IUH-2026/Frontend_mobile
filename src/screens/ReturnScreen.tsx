@@ -121,17 +121,16 @@ export default function ReturnScreen({ navigation }: ReturnScreenProps) {
               barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
             }}
             onBarcodeScanned={handleBarCodeScanned}
-          >
-            <View style={styles.overlay}>
-              <View style={styles.scanArea}>
-                <View style={[styles.corner, styles.topLeft]} />
-                <View style={[styles.corner, styles.topRight]} />
-                <View style={[styles.corner, styles.bottomLeft]} />
-                <View style={[styles.corner, styles.bottomRight]} />
-              </View>
-              <Text style={styles.scanText}>Đặt mã vạch trong khung hình</Text>
+          />
+          <View style={styles.overlay}>
+            <View style={styles.scanArea}>
+              <View style={[styles.corner, styles.topLeft]} />
+              <View style={[styles.corner, styles.topRight]} />
+              <View style={[styles.corner, styles.bottomLeft]} />
+              <View style={[styles.corner, styles.bottomRight]} />
             </View>
-          </CameraView>
+            <Text style={styles.scanText}>Đặt mã vạch trong khung hình</Text>
+          </View>
 
           <Surface style={styles.manualInput} elevation={0}>
             <View style={styles.manualAccent} />
@@ -252,12 +251,17 @@ const styles = StyleSheet.create({
   },
   scannerContainer: {
     flex: 1,
+    position: 'relative',
   },
   camera: {
     flex: 1,
   },
   overlay: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
