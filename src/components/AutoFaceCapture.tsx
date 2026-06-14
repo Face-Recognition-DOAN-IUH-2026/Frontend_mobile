@@ -20,6 +20,14 @@ const ANGLES = [
 const COUNTDOWN = 5;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GUIDE_SIZE = SCREEN_WIDTH * 0.35;
+const MIN_FACE_AREA_RATIO = 0.08;
+
+let FaceDetectorModule: typeof import('expo-face-detector') | null = null;
+try {
+  FaceDetectorModule = require('expo-face-detector');
+} catch {
+  console.warn('expo-face-detector not available, skipping face validation');
+}
 
 export default function AutoFaceCapture({ onFilesReady, onError }: AutoFaceCaptureProps) {
   const [permission] = useCameraPermissions();
@@ -33,6 +41,40 @@ export default function AutoFaceCapture({ onFilesReady, onError }: AutoFaceCaptu
   const idxRef = useRef(-1);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const cancelledRef = useRef(false);
+
+const validateCapturedFace = useCallback(async (uri: string) => {
+    if (!FaceDetectorModule) {
+      return null;
+    }
+    try {
+      const FD = FaceDetectorModule;
+      const detection = await FD.detectFacesAsync(
+        { uri },
+        {
+          mode: FD.FaceDetectorMode.accurate,
+          detectLandmarks: FD.FaceDetectorLandmarks.all,
+          runClassifications: FD.FaceDetectorClassifications.all,
+        }
+      );
+      if (detection.faces.length !== 1) {
+        return detection.faces.length > 1
+          ? 'Chỉ để 1 khuôn mặt trong khung'
+          : 'Không phát hiện khuôn mặt';
+      }
+      const face = detection.faces[0];
+      const areaRatio = (face.bounds.size.width * face.bounds.size.height) / (detection.image.width * detection.image.height);
+      if (areaRatio < MIN_FACE_AREA_RATIO) {
+        return 'Khuôn mặt quá nhỏ, vui lòng đưa camera lại gần hơn';
+      }
+      if (typeof face.leftEyeOpenProbability === 'number' && typeof face.rightEyeOpenProbability === 'number') {
+        const eyesOpen = face.leftEyeOpenProbability > 0.45 && face.rightEyeOpenProbability > 0.45;
+        if (!eyesOpen) return 'Vui lòng mở mắt rõ khi chụp';
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -64,6 +106,14 @@ export default function AutoFaceCapture({ onFilesReady, onError }: AutoFaceCaptu
           });
           if (cancelledRef.current) return;
           if (!photo?.base64) { onError?.('Không thể chụp ảnh'); return; }
+          if (!photo.uri) { onError?.('Không thể kiểm tra khuôn mặt'); return; }
+          const faceError = await validateCapturedFace(photo.uri);
+          if (faceError) {
+            onError?.(faceError);
+            setCountdownVal(null);
+            runCountdown(idxRef.current);
+            return;
+          }
 
           capturedRef.current = [...capturedRef.current, photo.base64];
           setCaptured([...capturedRef.current]);
@@ -87,7 +137,7 @@ export default function AutoFaceCapture({ onFilesReady, onError }: AutoFaceCaptu
         setCountdownVal(c);
       }
     }, 1000);
-  }, [onError]);
+  }, [onError, validateCapturedFace]);
 
   const startSequence = useCallback(() => {
     capturedRef.current = [];
@@ -188,6 +238,7 @@ export default function AutoFaceCapture({ onFilesReady, onError }: AutoFaceCaptu
             <Text style={styles.tipText}>• Đủ ánh sáng, không ngược sáng</Text>
             <Text style={styles.tipText}>• Giữ yên khi đếm ngược về 0</Text>
             <Text style={styles.tipText}>• Mặt vừa đủ trong khung tròn</Text>
+            <Text style={styles.tipText}>• Hệ thống kiểm tra đúng 1 khuôn mặt trước khi lưu</Text>
           </View>
           <Button mode="contained" onPress={startSequence}
             style={styles.startBtn} labelStyle={styles.startBtnLabel} icon="camera">
