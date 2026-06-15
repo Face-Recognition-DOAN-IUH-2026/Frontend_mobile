@@ -58,15 +58,12 @@ export const authApi = {
   },
 
   patronLogin: async (data: PatronLoginRequest): Promise<PatronLoginResponse> => {
-    console.log('patronLogin called with:', data);
     const response = await api.post<PatronLoginResponse>('/patrons/login', data);
-    console.log('patronLogin response:', response.data);
     await AsyncStorage.setItem('accessToken', response.data.access_token);
     if (response.data.refresh_token) {
       await AsyncStorage.setItem('refreshToken', response.data.refresh_token);
     }
     await AsyncStorage.setItem('patronData', JSON.stringify(response.data.user));
-    console.log('patronLogin stored data');
     return response.data;
   },
 

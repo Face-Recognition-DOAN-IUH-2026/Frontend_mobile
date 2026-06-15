@@ -10,6 +10,7 @@ import { authApi } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
 import { Book, OpenLibraryBook } from '../types';
 import { colors } from '../theme/colors';
+import { devError, devLog } from '../utils/logger';
 
 interface BorrowScreenProps {
   navigation: any;
@@ -29,30 +30,30 @@ export default function BorrowScreen({ navigation }: BorrowScreenProps) {
   const searchBook = async (isbnToSearch: string) => {
     if (!isbnToSearch.trim()) return;
 
-    console.log('[Borrow] searchBook called with ISBN:', isbnToSearch);
+    devLog('[Borrow] searchBook called with ISBN:', isbnToSearch);
     setIsSearching(true);
     setSearchError(null);
     try {
       try {
-        console.log('[Borrow] Checking local book...');
+        devLog('[Borrow] Checking local book...');
         const localBookData = await borrowApi.getBook(isbnToSearch.trim());
-        console.log('[Borrow] Local book found:', localBookData);
+        devLog('[Borrow] Local book found:', localBookData);
         setLocalBook(localBookData);
       } catch (err) {
-        console.log('[Borrow] Local book not found, trying OpenLibrary');
+        devLog('[Borrow] Local book not found, trying OpenLibrary');
       }
 
-      console.log('[Borrow] Querying OpenLibrary for ISBN:', isbnToSearch);
+      devLog('[Borrow] Querying OpenLibrary for ISBN:', isbnToSearch);
       const openLibraryBook = await openLibraryApi.getBookByIsbn(isbnToSearch.trim());
       if (openLibraryBook) {
-        console.log('[Borrow] OpenLibrary book found:', openLibraryBook.title);
+        devLog('[Borrow] OpenLibrary book found:', openLibraryBook.title);
         setBook(openLibraryBook);
       } else if (!localBook) {
-        console.log('[Borrow] No book found anywhere');
+        devLog('[Borrow] No book found anywhere');
         setSearchError('Không tìm thấy sách với ISBN này');
       }
     } catch (error) {
-      console.error('[Borrow] Search error:', error);
+      devError('[Borrow] Search error:', error);
       setSearchError('Không thể tìm kiếm sách');
     } finally {
       setIsSearching(false);
@@ -61,7 +62,7 @@ export default function BorrowScreen({ navigation }: BorrowScreenProps) {
 
   const handleBarCodeScanned = (result: BarcodeScanningResult) => {
     if (scanned || !result.data) return;
-    console.log('[Borrow] Barcode scanned:', result.data);
+    devLog('[Borrow] Barcode scanned:', result.data);
     setScanned(true);
     setIsbn(result.data);
     searchBook(result.data);
@@ -70,34 +71,34 @@ export default function BorrowScreen({ navigation }: BorrowScreenProps) {
   const handleBorrow = async () => {
     if (!isbn.trim()) return;
 
-    console.log('[Borrow] handleBorrow called, ISBN:', isbn);
+    devLog('[Borrow] handleBorrow called, ISBN:', isbn);
     setIsBorrowing(true);
     try {
-      console.log('[Borrow] Checking patron status...');
+      devLog('[Borrow] Checking patron status...');
       const patronData = await authApi.getCurrentPatron();
-      console.log('[Borrow] Patron data:', patronData);
+      devLog('[Borrow] Patron data:', patronData);
       const status = patronData.current_status || patronData.currentStatus;
-      console.log('[Borrow] Patron status:', status);
+      devLog('[Borrow] Patron status:', status);
       if (status !== 'inside') {
-        console.log('[Borrow] Patron NOT inside library, blocking borrow');
+        devLog('[Borrow] Patron NOT inside library, blocking borrow');
         Alert.alert('Không thể mượn', 'Bạn phải đi qua cổng vào thư viện trước khi mượn sách');
         setIsBorrowing(false);
         return;
       }
-      console.log('[Borrow] Patron is inside, proceeding with borrow');
+      devLog('[Borrow] Patron is inside, proceeding with borrow');
 
-      console.log('[Borrow] Calling borrowApi.borrowBook with barcode:', isbn.trim());
+      devLog('[Borrow] Calling borrowApi.borrowBook with barcode:', isbn.trim());
       const result = await borrowApi.borrowBook(isbn.trim());
-      console.log('[Borrow] borrowBook result:', result);
+      devLog('[Borrow] borrowBook result:', result);
       if (result.status === 'success') {
-        console.log('[Borrow] Borrow SUCCESS');
+        devLog('[Borrow] Borrow SUCCESS');
         Alert.alert('Thành công', result.message, [
           { text: 'OK', onPress: () => resetState() },
         ]);
       }
     } catch (error: any) {
-      console.error('[Borrow] Borrow error:', error);
-      console.log('[Borrow] Error response:', error.response?.data);
+      devError('[Borrow] Borrow error:', error);
+      devLog('[Borrow] Error response:', error.response?.data);
       let msg = 'Mượn sách thất bại';
       if (!error.response) {
         msg = 'Không thể kết nối server. Vui lòng kiểm tra mạng.';

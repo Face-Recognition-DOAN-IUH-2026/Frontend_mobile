@@ -7,14 +7,11 @@ export interface BorrowRequest {
 
 export const borrowApi = {
   borrowBook: async (barcode: string): Promise<BorrowResponse> => {
-    console.log('[borrowApi] borrowBook called with barcode:', barcode);
     const response = await api.post<BorrowResponse>('/borrow/', { barcode });
-    console.log('[borrowApi] borrowBook response:', response.data);
     return response.data;
   },
 
   returnBook: async (barcode: string): Promise<ReturnResponse> => {
-    console.log('[borrowApi] returnBook called with barcode:', barcode);
     const response = await api.post<ReturnResponse>('/borrow/staff-return', { barcode });
     return response.data;
   },
@@ -53,9 +50,7 @@ export const borrowApi = {
   },
 
   getBook: async (isbn: string): Promise<Book> => {
-    console.log('[borrowApi] getBook called with ISBN:', isbn);
     const response = await api.get<Book>(`/borrow/book/${isbn}`);
-    console.log('[borrowApi] getBook response:', response.data);
     return response.data;
   },
 };

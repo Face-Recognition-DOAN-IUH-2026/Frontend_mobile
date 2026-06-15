@@ -23,6 +23,13 @@ import { formatDate, getDaysUntil, isOverdue } from '../utils/dateUtils';
 type StepState = 'lookup' | 'scan' | 'ready';
 type MaterialIconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
+const normalizeBookCode = (value?: string | null) =>
+  (value || '')
+    .trim()
+    .replace(/\s+/g, '')
+    .replace(/-/g, '')
+    .replace(/\.0+$/, '');
+
 export default function ReturnScreen() {
   const theme = useTheme() as AppTheme;
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -38,11 +45,11 @@ export default function ReturnScreen() {
   const [permission, requestPermission] = useCameraPermissions();
 
   const activeRecords = staffLookup?.records ?? [];
-  const normalizedIsbn = isbn.trim();
+  const normalizedIsbn = normalizeBookCode(isbn);
 
   const matchedRecord = useMemo(() => {
     if (!normalizedIsbn) return null;
-    return activeRecords.find((record) => record.book?.isbn === normalizedIsbn) ?? null;
+    return activeRecords.find((record) => normalizeBookCode(record.book?.isbn) === normalizedIsbn) ?? null;
   }, [activeRecords, normalizedIsbn]);
 
   const step: StepState = !staffLookup ? 'lookup' : normalizedIsbn && matchedRecord ? 'ready' : 'scan';
@@ -83,8 +90,11 @@ export default function ReturnScreen() {
 
   const handleBarCodeScanned = (result: BarcodeScanningResult) => {
     if (scanned || !result.data) return;
+    const code = normalizeBookCode(result.data);
+    if (!code) return;
     setScanned(true);
-    setIsbn(result.data.trim());
+    setIsbn(code);
+    setTimeout(() => setScanned(false), 1200);
   };
 
   const handleReturn = async () => {
@@ -221,7 +231,7 @@ export default function ReturnScreen() {
             label="ISBN / mã góc sách"
             value={isbn}
             onChangeText={(value) => {
-              setIsbn(value.trim());
+              setIsbn(value);
               setScanned(false);
             }}
             mode="outlined"

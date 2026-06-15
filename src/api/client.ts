@@ -1,5 +1,6 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { devError } from '../utils/logger';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:80/api';
 
@@ -16,7 +17,7 @@ api.interceptors.request.use(
         config.headers.Authorization = `Bearer ${token}`;
       }
     } catch (err) {
-      console.error('[API] Failed to get token from storage:', err);
+      devError('[API] Failed to get token from storage:', err);
     }
     return config;
   },

@@ -8,6 +8,7 @@ import { borrowApi } from '../api/borrow';
 import { BorrowRecord } from '../types';
 import { colors } from '../theme/colors';
 import { formatDate, getDaysUntil } from '../utils/dateUtils';
+import { devError } from '../utils/logger';
 
 interface HistoryScreenProps {
   navigation: any;
@@ -33,7 +34,7 @@ export default function HistoryScreen({ navigation }: HistoryScreenProps) {
       const data = await borrowApi.getHistory();
       setRecords(data);
     } catch (error: any) {
-      console.error('Failed to load history:', error);
+      devError('Failed to load history:', error);
       setLoadError(error?.response?.data?.detail || error?.message || 'Không thể tải lịch sử');
     }
   };

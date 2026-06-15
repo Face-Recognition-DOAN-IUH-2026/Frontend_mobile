@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { TextInput, Button, Text, Surface } from 'react-native-paper';
 import { colors } from '../theme/colors';
 import { authApi } from '../api/auth';
+import { devError } from '../utils/logger';
 
 interface ChangePasswordScreenProps {
   navigation: any;
@@ -46,7 +47,7 @@ export default function ChangePasswordScreen({ navigation }: ChangePasswordScree
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
     } catch (error: any) {
-      console.log('Change password error:', error);
+      devError('Change password error:', error);
       let message = 'Không thể đổi mật khẩu';
       if (error.response?.data?.error) {
         message = error.response.data.error;
