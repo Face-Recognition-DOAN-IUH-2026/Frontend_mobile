@@ -17,6 +17,7 @@ import ProfileScreen from '../screens/ProfileScreen';
 import FaceCameraScreen from '../screens/FaceCameraScreen';
 import ChangePasswordScreen from '../screens/ChangePasswordScreen';
 import HistoryScreen from '../screens/HistoryScreen';
+import ScheduleScreen from '../screens/ScheduleScreen';
 
 import { AuthStackParamList, MainTabParamList, MainStackParamList } from './types';
 
@@ -89,6 +90,18 @@ function MainTabNavigator() {
           ),
         }}
       />
+      {isStaffScanner && (
+        <MainTab.Screen
+          name="Schedule"
+          component={ScheduleScreen}
+          options={{
+            title: 'Lich truc',
+            tabBarIcon: ({ color, size }) => (
+              <MaterialCommunityIcons name="calendar-clock" size={size} color={color} />
+            ),
+          }}
+        />
+      )}
       <MainTab.Screen
         name="Profile"
         component={ProfileScreen}
