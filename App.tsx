@@ -7,19 +7,29 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet } from 'react-native';
 
 import { AuthProvider } from './src/context/AuthContext';
+import { MobileThemeProvider, useMobileTheme } from './src/context/ThemeContext';
 import AppNavigator from './src/navigation/AppNavigator';
-import { DarkTheme } from './src/theme/DarkTheme';
+
+function AppContent() {
+  const { theme, isDark } = useMobileTheme();
+
+  return (
+    <PaperProvider theme={theme}>
+      <AuthProvider>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <AppNavigator />
+      </AuthProvider>
+    </PaperProvider>
+  );
+}
 
 export default function App() {
   return (
     <GestureHandlerRootView style={styles.container}>
       <SafeAreaProvider>
-        <PaperProvider theme={DarkTheme}>
-          <AuthProvider>
-            <StatusBar style="light" />
-            <AppNavigator />
-          </AuthProvider>
-        </PaperProvider>
+        <MobileThemeProvider>
+          <AppContent />
+        </MobileThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
