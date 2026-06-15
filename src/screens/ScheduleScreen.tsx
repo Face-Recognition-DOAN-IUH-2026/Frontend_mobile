@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Alert, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ActivityIndicator, Button, Card, Chip, Surface, Text, TextInput } from 'react-native-paper';
+import { ActivityIndicator, Card, Surface, Text } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useFocusEffect } from '@react-navigation/native';
 import { scheduleApi } from '../api/schedule';
@@ -35,11 +35,7 @@ export default function ScheduleScreen() {
   const [assignments, setAssignments] = useState<StaffScheduleAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [dateFrom, setDateFrom] = useState(toDateInput(new Date()));
-  const [dateTo, setDateTo] = useState(toDateInput(new Date()));
-  const [reason, setReason] = useState('');
 
   const weekRange = useMemo(() => {
     const start = startOfWeek();
@@ -74,38 +70,6 @@ export default function ScheduleScreen() {
     setRefreshing(false);
   };
 
-  const runAction = async (id: string, action: 'confirm' | 'check-in' | 'check-out') => {
-    setSaving(true);
-    setError(null);
-    try {
-      if (action === 'confirm') await scheduleApi.confirmAssignment(id);
-      if (action === 'check-in') await scheduleApi.checkIn(id);
-      if (action === 'check-out') await scheduleApi.checkOut(id);
-      await loadSchedules();
-    } catch (err: any) {
-      Alert.alert('Khong the cap nhat', getErrorMessage(err, 'Thao tac that bai'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const submitAvailability = async () => {
-    if (!dateFrom || !dateTo) {
-      Alert.alert('Thieu ngay', 'Vui long nhap khoang ngay nghi');
-      return;
-    }
-    setSaving(true);
-    try {
-      await scheduleApi.requestAvailability(dateFrom, dateTo, reason);
-      setReason('');
-      Alert.alert('Da gui yeu cau', 'Quan tri vien se duyet lich nghi cua ban');
-    } catch (err: any) {
-      Alert.alert('Khong the gui', getErrorMessage(err, 'Gui yeu cau that bai'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const renderAssignment = (item: StaffScheduleAssignment) => (
     <Card key={item.id} style={styles.assignmentCard}>
       <Card.Content>
@@ -121,40 +85,6 @@ export default function ScheduleScreen() {
               {item.zone?.zoneName || item.zoneId} · Tang {item.zone?.floor ?? '-'}
             </Text>
           </View>
-          <Chip compact style={styles.statusChip} textStyle={styles.statusChipText}>
-            {item.status}
-          </Chip>
-        </View>
-        <View style={styles.actionRow}>
-          <Button
-            mode="outlined"
-            compact
-            disabled={saving}
-            onPress={() => runAction(item.id, 'confirm')}
-            textColor={colors.text}
-            style={styles.outlineButton}
-          >
-            Xac nhan
-          </Button>
-          <Button
-            mode="contained"
-            compact
-            disabled={saving}
-            onPress={() => runAction(item.id, 'check-in')}
-            buttonColor={colors.success}
-          >
-            Check-in
-          </Button>
-          <Button
-            mode="contained"
-            compact
-            disabled={saving}
-            onPress={() => runAction(item.id, 'check-out')}
-            buttonColor={colors.warning}
-            textColor={colors.background}
-          >
-            Check-out
-          </Button>
         </View>
       </Card.Content>
     </Card>
@@ -212,47 +142,6 @@ export default function ScheduleScreen() {
                 </Surface>
               )}
             </View>
-
-            <Surface style={styles.availabilityCard} elevation={0}>
-              <View style={styles.sectionHeader}>
-                <MaterialCommunityIcons name="calendar-remove-outline" size={19} color={colors.primary} />
-                <Text style={styles.sectionTitle}>Dang ky ngay nghi</Text>
-              </View>
-              <TextInput
-                label="Tu ngay (YYYY-MM-DD)"
-                value={dateFrom}
-                onChangeText={setDateFrom}
-                mode="outlined"
-                style={styles.input}
-                textColor={colors.text}
-                outlineColor={colors.border}
-                activeOutlineColor={colors.primary}
-              />
-              <TextInput
-                label="Den ngay (YYYY-MM-DD)"
-                value={dateTo}
-                onChangeText={setDateTo}
-                mode="outlined"
-                style={styles.input}
-                textColor={colors.text}
-                outlineColor={colors.border}
-                activeOutlineColor={colors.primary}
-              />
-              <TextInput
-                label="Ly do"
-                value={reason}
-                onChangeText={setReason}
-                mode="outlined"
-                multiline
-                style={styles.input}
-                textColor={colors.text}
-                outlineColor={colors.border}
-                activeOutlineColor={colors.primary}
-              />
-              <Button mode="contained" onPress={submitAvailability} loading={saving} disabled={saving} buttonColor={colors.primary} textColor={colors.background}>
-                Gui yeu cau
-              </Button>
-            </Surface>
           </>
         )}
       </ScrollView>
@@ -350,22 +239,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 4,
   },
-  statusChip: {
-    backgroundColor: colors.surfaceVariant,
-  },
-  statusChipText: {
-    color: colors.primary,
-    fontSize: 11,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 14,
-  },
-  outlineButton: {
-    borderColor: colors.border,
-  },
   emptyCard: {
     padding: 18,
     borderRadius: 12,
@@ -376,18 +249,5 @@ const styles = StyleSheet.create({
   emptyText: {
     color: colors.textSecondary,
     textAlign: 'center',
-  },
-  availabilityCard: {
-    marginHorizontal: 16,
-    marginBottom: 28,
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  input: {
-    marginBottom: 10,
-    backgroundColor: colors.surface,
   },
 });
