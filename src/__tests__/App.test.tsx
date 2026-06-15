@@ -180,7 +180,7 @@ describe('Mobile App Tests', () => {
       const patronInside = { current_status: 'inside' };
       const patronOutside = { current_status: 'outside' };
 
-      const isInside = (patron) => patron.current_status === 'inside';
+      const isInside = (patron: { current_status: string }) => patron.current_status === 'inside';
 
       expect(isInside(patronInside)).toBe(true);
       expect(isInside(patronOutside)).toBe(false);
@@ -199,7 +199,7 @@ describe('Mobile App Tests', () => {
       const overdueDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
       const futureDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
-      const isOverdue = (dueDate) => new Date(dueDate) < now;
+      const isOverdue = (dueDate: Date | string) => new Date(dueDate) < now;
 
       expect(isOverdue(overdueDate)).toBe(true);
       expect(isOverdue(futureDate)).toBe(false);

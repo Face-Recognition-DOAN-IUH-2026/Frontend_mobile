@@ -275,7 +275,11 @@ export default function BorrowScreen({ navigation }: BorrowScreenProps) {
                   {'publishers' in displayBook && displayBook.publishers && displayBook.publishers.length > 0 ? (
                     <View style={styles.metaItem}>
                       <MaterialCommunityIcons name="factory" size={14} color={colors.textSecondary} />
-                      <Text style={styles.metaText}>{displayBook.publishers[0]?.name ?? displayBook.publishers[0]}</Text>
+                      <Text style={styles.metaText}>
+                        {typeof displayBook.publishers[0] === 'string'
+                          ? displayBook.publishers[0]
+                          : displayBook.publishers[0]?.name}
+                      </Text>
                     </View>
                   ) : null}
                   {'subjects' in displayBook && displayBook.subjects && displayBook.subjects.length > 0 ? (
