@@ -109,3 +109,67 @@ export interface CameraEvent {
   bbox?: number[];
   landmarks?: number[][];
 }
+
+export interface ScheduleStaff {
+  id: string;
+  fullName?: string | null;
+  email: string;
+  role: string;
+  status: string;
+}
+
+export interface LibraryZone {
+  id: string;
+  floor: number;
+  zoneName: string;
+  description?: string | null;
+  isActive: boolean;
+}
+
+export interface StaffShift {
+  id: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  minStaff: number;
+  isActive: boolean;
+}
+
+export interface StaffAttendance {
+  id: string;
+  scheduleId: string;
+  staffId: string;
+  checkInAt?: string | null;
+  checkOutAt?: string | null;
+  status: string;
+  method: string;
+}
+
+export interface StaffScheduleAssignment {
+  id: string;
+  staffId: string;
+  shiftId: string;
+  zoneId: string;
+  workDate: string;
+  status: string;
+  note?: string | null;
+  staff?: ScheduleStaff | null;
+  shift?: StaffShift | null;
+  zone?: LibraryZone | null;
+  attendance?: StaffAttendance | null;
+}
+
+export interface ScheduleAssignmentList {
+  items: StaffScheduleAssignment[];
+  total: number;
+}
+
+export interface StaffAvailabilityRequest {
+  id: string;
+  staffId: string;
+  dateFrom: string;
+  dateTo: string;
+  type: string;
+  reason?: string | null;
+  status: string;
+}
