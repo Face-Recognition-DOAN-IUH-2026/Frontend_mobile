@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User } from '../types';
 import { authApi } from '../api/auth';
+import { devError } from '../utils/logger';
 
 interface AuthContextType {
   user: User | null;
@@ -42,7 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
       }
     } catch (error) {
-      console.error('Auth check failed:', error);
+      devError('Auth check failed:', error);
       await authApi.logout();
     } finally {
       setIsLoading(false);
@@ -56,13 +57,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const patronLogin = async (studentCode: string, password: string) => {
     setIsLoading(true);
     try {
-      console.log('AuthContext patronLogin called');
       const response = await authApi.patronLogin({ student_code: studentCode, password });
-      console.log('AuthContext received:', response);
       setPatron(response.user);
-      console.log('setPatron called');
       setUser({ id: response.user.id, email: response.user.email || '', full_name: response.user.fullName, role: 'patron' });
-      console.log('setUser called');
     } finally {
       setIsLoading(false);
     }

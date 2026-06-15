@@ -99,8 +99,10 @@ export interface OpenLibraryBook {
 }
 
 export interface CameraEvent {
+  event_id: string;
+  event_type: 'camera_event';
   camera_id: string;
-  status: 'granted' | 'unknown' | 'spoof' | 'expired' | 'wrong_direction' | 'already_granted';
+  status: 'granted' | 'no_match' | 'spoof' | 'expired' | 'wrong_direction' | 'already_granted' | 'error';
   patron_id?: string;
   full_name?: string;
   student_code?: string;
@@ -108,6 +110,8 @@ export interface CameraEvent {
   access_type?: 'entry' | 'exit';
   bbox?: number[];
   landmarks?: number[][];
+  occurred_at: string;
+  source: string;
 }
 
 export interface ScheduleStaff {

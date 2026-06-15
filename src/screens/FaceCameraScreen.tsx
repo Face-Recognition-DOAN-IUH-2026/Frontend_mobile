@@ -5,6 +5,7 @@ import AutoFaceCapture from '../components/AutoFaceCapture';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { colors } from '../theme/colors';
+import { devError } from '../utils/logger';
 
 interface FaceCameraScreenProps {
   navigation: any;
@@ -55,7 +56,7 @@ export default function FaceCameraScreen({ navigation }: FaceCameraScreenProps) 
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
     } catch (error: any) {
-      console.log('[FaceCamera] enroll error:', error?.response?.data || error?.message || error);
+      devError('[FaceCamera] enroll error:', error?.response?.data || error?.message || error);
       const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || 'Đăng ký khuôn mặt thất bại';
       Alert.alert('Lỗi', message);
     } finally {

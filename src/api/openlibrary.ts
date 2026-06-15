@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { OpenLibraryBook } from '../types';
+import { devError } from '../utils/logger';
 
 const OPEN_LIBRARY_API = 'https://openlibrary.org';
 
@@ -24,7 +25,7 @@ export const openLibraryApi = {
       }
       return null;
     } catch (error) {
-      console.error('OpenLibrary API error:', error);
+      devError('OpenLibrary API error:', error);
       return null;
     }
   },
