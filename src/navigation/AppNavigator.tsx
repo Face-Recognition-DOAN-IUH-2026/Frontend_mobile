@@ -1,25 +1,25 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
-import { NavigationContainer, DarkTheme } from '@react-navigation/native';
-import { createStackNavigator } from '@react-navigation/stack';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { Animated, StyleSheet, Text, View } from 'react-native';
+import { NavigationContainer, DarkTheme as NavigationDarkTheme, DefaultTheme as NavigationDefaultTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createStackNavigator } from '@react-navigation/stack';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { useTheme } from 'react-native-paper';
 import { useAuth } from '../context/AuthContext';
-import { colors } from '../theme/colors';
 
-import LoginScreen from '../screens/LoginScreen';
-import FaceLoginScreen from '../screens/FaceLoginScreen';
-import RegisterScreen from '../screens/RegisterScreen';
-import HomeScreen from '../screens/HomeScreen';
 import BorrowScreen from '../screens/BorrowScreen';
-import ReturnScreen from '../screens/ReturnScreen';
-import ProfileScreen from '../screens/ProfileScreen';
-import FaceCameraScreen from '../screens/FaceCameraScreen';
 import ChangePasswordScreen from '../screens/ChangePasswordScreen';
+import FaceCameraScreen from '../screens/FaceCameraScreen';
+import FaceLoginScreen from '../screens/FaceLoginScreen';
 import HistoryScreen from '../screens/HistoryScreen';
+import HomeScreen from '../screens/HomeScreen';
+import LoginScreen from '../screens/LoginScreen';
+import ProfileScreen from '../screens/ProfileScreen';
+import RegisterScreen from '../screens/RegisterScreen';
+import ReturnScreen from '../screens/ReturnScreen';
 import ScheduleScreen from '../screens/ScheduleScreen';
 
-import { AuthStackParamList, MainTabParamList, MainStackParamList } from './types';
+import { AuthStackParamList, MainStackParamList, MainTabParamList } from './types';
 
 const AuthStack = createStackNavigator<AuthStackParamList>();
 const MainTab = createBottomTabNavigator<MainTabParamList>();
@@ -27,11 +27,13 @@ const MainStack = createStackNavigator<MainStackParamList>();
 const RootStack = createStackNavigator();
 
 function AuthNavigator() {
+  const theme = useTheme();
+
   return (
     <AuthStack.Navigator
       screenOptions={{
         headerShown: false,
-        cardStyle: { backgroundColor: colors.background },
+        cardStyle: { backgroundColor: theme.colors.background },
       }}
     >
       <AuthStack.Screen name="Login" component={LoginScreen} />
@@ -42,8 +44,8 @@ function AuthNavigator() {
         options={{
           headerShown: true,
           headerTitle: 'Đăng nhập khuôn mặt',
-          headerStyle: { backgroundColor: colors.surface },
-          headerTintColor: colors.text,
+          headerStyle: { backgroundColor: theme.colors.surface },
+          headerTintColor: theme.colors.onSurface,
         }}
       />
     </AuthStack.Navigator>
@@ -51,6 +53,7 @@ function AuthNavigator() {
 }
 
 function MainTabNavigator() {
+  const theme = useTheme();
   const { user } = useAuth();
   const isStaffScanner = user?.role === 'admin' || user?.role === 'staff';
 
@@ -58,16 +61,16 @@ function MainTabNavigator() {
     <MainTab.Navigator
       screenOptions={{
         tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.border,
+          backgroundColor: theme.colors.surface,
+          borderTopColor: theme.colors.outlineVariant,
           paddingTop: 6,
         },
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textSecondary,
+        tabBarActiveTintColor: theme.colors.primary,
+        tabBarInactiveTintColor: theme.colors.onSurfaceVariant,
         headerStyle: {
-          backgroundColor: colors.surface,
+          backgroundColor: theme.colors.surface,
         },
-        headerTintColor: colors.text,
+        headerTintColor: theme.colors.onSurface,
       }}
     >
       <MainTab.Screen
@@ -95,7 +98,7 @@ function MainTabNavigator() {
           name="Schedule"
           component={ScheduleScreen}
           options={{
-            title: 'Lich truc',
+            title: 'Lịch trực',
             tabBarIcon: ({ color, size }) => (
               <MaterialCommunityIcons name="calendar-clock" size={size} color={color} />
             ),
@@ -117,11 +120,14 @@ function MainTabNavigator() {
 }
 
 function MainStackNavigator() {
+  const theme = useTheme();
+
   return (
     <MainStack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: colors.surface },
-        headerTintColor: colors.text,
+        headerStyle: { backgroundColor: theme.colors.surface },
+        headerTintColor: theme.colors.onSurface,
+        cardStyle: { backgroundColor: theme.colors.background },
       }}
     >
       <MainStack.Screen
@@ -157,20 +163,26 @@ function MainStackNavigator() {
   );
 }
 
-const navigationTheme = {
-  ...DarkTheme,
-  colors: {
-    ...DarkTheme.colors,
-    background: colors.background,
-    card: colors.surface,
-    text: colors.text,
-    primary: colors.primary,
-    border: colors.border,
-  },
-};
-
 export default function AppNavigator() {
+  const theme = useTheme();
   const { isAuthenticated, isLoading } = useAuth();
+
+  const navigationTheme = useMemo(() => {
+    const base = theme.dark ? NavigationDarkTheme : NavigationDefaultTheme;
+    return {
+      ...base,
+      dark: theme.dark,
+      colors: {
+        ...base.colors,
+        background: theme.colors.background,
+        card: theme.colors.surface,
+        text: theme.colors.onSurface,
+        primary: theme.colors.primary,
+        border: theme.colors.outlineVariant,
+        notification: theme.colors.error,
+      },
+    };
+  }, [theme]);
 
   if (isLoading) {
     return <LoadingScreen />;
@@ -190,6 +202,7 @@ export default function AppNavigator() {
 }
 
 function LoadingScreen() {
+  const theme = useTheme();
   const opacity = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
@@ -197,18 +210,18 @@ function LoadingScreen() {
       Animated.sequence([
         Animated.timing(opacity, { toValue: 1, duration: 800, useNativeDriver: true }),
         Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
-      ])
+      ]),
     );
     pulse.start();
     return () => pulse.stop();
   }, [opacity]);
 
   return (
-    <View style={loadingStyles.container}>
-      <View style={loadingStyles.logoCircle}>
-        <Text style={loadingStyles.logoText}>TV</Text>
+    <View style={[loadingStyles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[loadingStyles.logoCircle, { backgroundColor: theme.colors.primary }]}>
+        <Text style={[loadingStyles.logoText, { color: theme.colors.onPrimary }]}>TV</Text>
       </View>
-      <Animated.Text style={[loadingStyles.brand, { opacity }]}>
+      <Animated.Text style={[loadingStyles.brand, { opacity, color: theme.colors.primary }]}>
         Thư Viện
       </Animated.Text>
     </View>
@@ -218,7 +231,6 @@ function LoadingScreen() {
 const loadingStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -226,19 +238,16 @@ const loadingStyles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 20,
   },
   logoText: {
-    color: colors.background,
     fontSize: 32,
     fontWeight: '800',
     letterSpacing: 3,
   },
   brand: {
-    color: colors.primary,
     fontSize: 20,
     fontWeight: '600',
     letterSpacing: 4,

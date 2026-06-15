@@ -1,17 +1,19 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, Alert, ScrollView, ActivityIndicator } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { TextInput, Button, Text, Surface } from 'react-native-paper';
-import AutoFaceCapture from '../components/AutoFaceCapture';
+import { ActivityIndicator, Button, Card, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
 import api from '../api/client';
 import { authApi } from '../api/auth';
-import { colors } from '../theme/colors';
+import AutoFaceCapture from '../components/AutoFaceCapture';
+import { AppTheme } from '../theme/DarkTheme';
 
 interface RegisterScreenProps {
   navigation: any;
 }
 
 export default function RegisterScreen({ navigation }: RegisterScreenProps) {
+  const theme = useTheme() as AppTheme;
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [step, setStep] = useState<'form' | 'choice' | 'face'>('form');
   const [studentCode, setStudentCode] = useState('');
   const [password, setPassword] = useState('');
@@ -21,45 +23,44 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   const [className, setClassName] = useState('');
   const [registeredUser, setRegisteredUser] = useState<any>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [snackbar, setSnackbar] = useState('');
+
+  const showError = (message: string) => setSnackbar(message);
 
   const validateForm = () => {
     if (!studentCode.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập mã sinh viên');
+      showError('Vui lòng nhập mã sinh viên');
       return false;
     }
     if (studentCode.length < 4) {
-      Alert.alert('Lỗi', 'Mã sinh viên phải có ít nhất 4 ký tự');
+      showError('Mã sinh viên phải có ít nhất 4 ký tự');
       return false;
     }
     if (!fullName.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập họ tên');
+      showError('Vui lòng nhập họ tên');
       return false;
     }
     if (!email.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập email');
+      showError('Vui lòng nhập email');
       return false;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      Alert.alert('Lỗi', 'Email không hợp lệ');
+      showError('Email không hợp lệ');
       return false;
     }
     if (!password) {
-      Alert.alert('Lỗi', 'Vui lòng nhập mật khẩu');
+      showError('Vui lòng nhập mật khẩu');
       return false;
     }
     if (password.length < 6) {
-      Alert.alert('Lỗi', 'Mật khẩu phải có ít nhất 6 ký tự');
+      showError('Mật khẩu phải có ít nhất 6 ký tự');
       return false;
     }
     if (password !== confirmPassword) {
-      Alert.alert('Lỗi', 'Mật khẩu xác nhận không khớp');
+      showError('Mật khẩu xác nhận không khớp');
       return false;
     }
     return true;
-  };
-
-  const handleError = (error: string) => {
-    Alert.alert('Lỗi', error);
   };
 
   const handleRegisterClick = async () => {
@@ -69,7 +70,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
     try {
       const response = await authApi.patronRegister({
         student_code: studentCode.trim(),
-        password: password,
+        password,
         full_name: fullName.trim(),
         email: email.trim(),
         class_name: className.trim() || undefined,
@@ -77,9 +78,8 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
       setRegisteredUser(response.user);
       setStep('choice');
     } catch (error: any) {
-      console.log('[Register] Error:', error?.response?.data || error?.message || error);
       const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || 'Đăng ký thất bại';
-      Alert.alert('Lỗi', message);
+      showError(message);
     } finally {
       setIsUploading(false);
     }
@@ -118,13 +118,11 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
         timeout: 130000,
       });
 
-      Alert.alert('Thành công', 'Đăng ký tài khoản và khuôn mặt thành công!', [
-        { text: 'Đăng nhập ngay', onPress: () => navigation.replace('Login') },
-      ]);
+      setSnackbar('Đăng ký tài khoản và khuôn mặt thành công');
+      navigation.replace('Login');
     } catch (error: any) {
-      console.log('[Register] Enroll error:', error?.response?.data || error?.message || error);
       const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || 'Đăng ký khuôn mặt thất bại';
-      Alert.alert('Lỗi', message);
+      showError(message);
     } finally {
       setIsUploading(false);
     }
@@ -134,30 +132,27 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
     return (
       <SafeAreaView style={styles.container} edges={['bottom']}>
         <View style={styles.choiceContainer}>
-          <View style={styles.checkCircle}>
-            <Text style={styles.checkIcon}>✓</Text>
-          </View>
-          <Text style={styles.choiceTitle}>Đăng ký tài khoản thành công!</Text>
-          <Text style={styles.choiceSubtitle}>
-            Bạn có muốn đăng ký khuôn mặt để đăng nhập nhanh tại cổng thư viện không?
-          </Text>
-          <Button
-            mode="contained"
-            onPress={() => setStep('face')}
-            style={styles.choiceEnrollBtn}
-            labelStyle={styles.choiceEnrollBtnLabel}
-          >
-            Đăng ký khuôn mặt
-          </Button>
-          <Button
-            mode="text"
-            onPress={() => navigation.replace('Login')}
-            textColor={colors.textSecondary}
-            style={styles.choiceSkipBtn}
-          >
-            Bỏ qua
-          </Button>
+          <Card mode="outlined" style={styles.choiceCard}>
+            <Card.Content style={styles.choiceContent}>
+              <View style={styles.checkCircle}>
+                <Text style={styles.checkIcon}>✓</Text>
+              </View>
+              <Text variant="headlineSmall" style={styles.choiceTitle}>Đăng ký tài khoản thành công</Text>
+              <Text style={styles.choiceSubtitle}>
+                Bạn có muốn đăng ký khuôn mặt để đăng nhập nhanh tại cổng thư viện không?
+              </Text>
+              <Button mode="contained" onPress={() => setStep('face')} contentStyle={styles.largeButton}>
+                Đăng ký khuôn mặt
+              </Button>
+              <Button mode="text" onPress={() => navigation.replace('Login')}>
+                Bỏ qua
+              </Button>
+            </Card.Content>
+          </Card>
         </View>
+        <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
+          {snackbar}
+        </Snackbar>
       </SafeAreaView>
     );
   }
@@ -165,300 +160,238 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   if (step === 'face') {
     return (
       <SafeAreaView style={styles.container} edges={['bottom']}>
-        <View style={styles.faceStepHeader}>
-          <Text style={styles.faceStepTitle}>Đăng ký khuôn mặt</Text>
-          <Text style={styles.faceStepSubtitle}>
-            Chụp khuôn mặt từ 4 góc để đăng nhập nhanh sau này
-          </Text>
-        </View>
+        <Card mode="contained" style={styles.faceHeader}>
+          <Card.Content>
+            <Text variant="titleLarge" style={styles.cardTitle}>Đăng ký khuôn mặt</Text>
+            <Text style={styles.mutedText}>Chụp khuôn mặt từ 4 góc để đăng nhập nhanh sau này.</Text>
+          </Card.Content>
+        </Card>
 
         <View style={styles.captureContainer}>
-          <AutoFaceCapture onFilesReady={handleFaceEnroll} onError={handleError} />
+          <AutoFaceCapture onFilesReady={handleFaceEnroll} onError={showError} />
         </View>
 
-        {!isUploading && (
-          <Surface style={styles.faceActions} elevation={0}>
-            <Button
-              mode="text"
-              onPress={() => navigation.replace('Login')}
-              textColor={colors.textSecondary}
-            >
-              Bỏ qua
-            </Button>
-          </Surface>
-        )}
+        {!isUploading ? (
+          <Card mode="contained" style={styles.faceActions}>
+            <Card.Content>
+              <Button mode="text" onPress={() => navigation.replace('Login')}>
+                Bỏ qua
+              </Button>
+            </Card.Content>
+          </Card>
+        ) : null}
 
-        {isUploading && (
+        {isUploading ? (
           <View style={styles.loadingOverlay}>
-            <ActivityIndicator size="large" color={colors.primary} />
+            <ActivityIndicator size="large" color={theme.colors.primary} />
             <Text style={styles.loadingText}>Đang đăng ký khuôn mặt...</Text>
           </View>
-        )}
+        ) : null}
+
+        <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
+          {snackbar}
+        </Snackbar>
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.flex} contentContainerStyle={styles.scrollContent}>
-        <Surface style={styles.formContainer} elevation={0}>
-          <View style={styles.formAccent} />
-          <Text style={styles.formTitle}>Đăng ký tài khoản</Text>
-          <Text style={styles.formSubtitle}>Nhập thông tin để đăng ký tài khoản mới</Text>
+      <ScrollView style={styles.flex} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <Card mode="outlined" style={styles.formContainer}>
+          <Card.Content style={styles.formContent}>
+            <View>
+              <Text variant="headlineSmall" style={styles.formTitle}>Đăng ký tài khoản</Text>
+              <Text style={styles.formSubtitle}>Nhập thông tin để tạo tài khoản độc giả mới.</Text>
+            </View>
 
-          <TextInput
-            label="Mã sinh viên"
-            value={studentCode}
-            onChangeText={setStudentCode}
-            mode="outlined"
-            style={styles.input}
-            outlineStyle={styles.inputOutline}
-            autoCapitalize="none"
-            left={<TextInput.Icon icon="account" color={colors.textSecondary} />}
-            activeOutlineColor={colors.primary}
-          />
+            <TextInput
+              label="Mã sinh viên"
+              value={studentCode}
+              onChangeText={setStudentCode}
+              mode="outlined"
+              autoCapitalize="none"
+              left={<TextInput.Icon icon="account" color={theme.colors.onSurfaceVariant} />}
+            />
 
-          <TextInput
-            label="Họ và tên"
-            value={fullName}
-            onChangeText={setFullName}
-            mode="outlined"
-            style={styles.input}
-            outlineStyle={styles.inputOutline}
-            left={<TextInput.Icon icon="account-outline" color={colors.textSecondary} />}
-            activeOutlineColor={colors.primary}
-          />
+            <TextInput
+              label="Họ và tên"
+              value={fullName}
+              onChangeText={setFullName}
+              mode="outlined"
+              left={<TextInput.Icon icon="account-outline" color={theme.colors.onSurfaceVariant} />}
+            />
 
-          <TextInput
-            label="Lớp (không bắt buộc)"
-            value={className}
-            onChangeText={setClassName}
-            mode="outlined"
-            style={styles.input}
-            outlineStyle={styles.inputOutline}
-            left={<TextInput.Icon icon="school" color={colors.textSecondary} />}
-            activeOutlineColor={colors.primary}
-          />
+            <TextInput
+              label="Lớp (không bắt buộc)"
+              value={className}
+              onChangeText={setClassName}
+              mode="outlined"
+              left={<TextInput.Icon icon="school" color={theme.colors.onSurfaceVariant} />}
+            />
 
-          <TextInput
-            label="Email"
-            value={email}
-            onChangeText={setEmail}
-            mode="outlined"
-            style={styles.input}
-            outlineStyle={styles.inputOutline}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            left={<TextInput.Icon icon="email" color={colors.textSecondary} />}
-            activeOutlineColor={colors.primary}
-          />
+            <TextInput
+              label="Email"
+              value={email}
+              onChangeText={setEmail}
+              mode="outlined"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              left={<TextInput.Icon icon="email" color={theme.colors.onSurfaceVariant} />}
+            />
 
-          <TextInput
-            label="Mật khẩu"
-            value={password}
-            onChangeText={setPassword}
-            mode="outlined"
-            style={styles.input}
-            outlineStyle={styles.inputOutline}
-            secureTextEntry
-            left={<TextInput.Icon icon="lock" color={colors.textSecondary} />}
-            activeOutlineColor={colors.primary}
-          />
+            <TextInput
+              label="Mật khẩu"
+              value={password}
+              onChangeText={setPassword}
+              mode="outlined"
+              secureTextEntry
+              left={<TextInput.Icon icon="lock" color={theme.colors.onSurfaceVariant} />}
+            />
 
-          <TextInput
-            label="Xác nhận mật khẩu"
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            mode="outlined"
-            style={styles.input}
-            outlineStyle={styles.inputOutline}
-            secureTextEntry
-            left={<TextInput.Icon icon="lock-check" color={colors.textSecondary} />}
-            activeOutlineColor={colors.primary}
-          />
+            <TextInput
+              label="Xác nhận mật khẩu"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              mode="outlined"
+              secureTextEntry
+              left={<TextInput.Icon icon="lock-check" color={theme.colors.onSurfaceVariant} />}
+            />
 
-          <Button
-            mode="contained"
-            onPress={handleRegisterClick}
-            loading={isUploading}
-            disabled={isUploading}
-            style={styles.continueButton}
-            contentStyle={styles.continueButtonContent}
-            labelStyle={styles.continueButtonLabel}
-          >
-            Đăng ký
-          </Button>
+            <Button
+              mode="contained"
+              onPress={handleRegisterClick}
+              loading={isUploading}
+              disabled={isUploading}
+              contentStyle={styles.largeButton}
+            >
+              Đăng ký
+            </Button>
 
-          <Button
-            mode="text"
-            onPress={() => navigation.goBack()}
-            textColor={colors.textSecondary}
-            style={styles.loginLink}
-            labelStyle={styles.loginLinkLabel}
-          >
-            Đã có tài khoản? Đăng nhập
-          </Button>
-        </Surface>
+            <Button mode="text" onPress={() => navigation.goBack()}>
+              Đã có tài khoản? Đăng nhập
+            </Button>
+          </Card.Content>
+        </Card>
       </ScrollView>
+
+      <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
+        {snackbar}
+      </Snackbar>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  flex: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    padding: 16,
-  },
-  formContainer: {
-    padding: 24,
-    borderRadius: 8,
-    backgroundColor: colors.surface,
-    position: 'relative',
-    overflow: 'hidden',
-    borderWidth: 0.5,
-    borderColor: colors.border,
-  },
-  formAccent: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 3,
-    backgroundColor: colors.primary,
-    borderTopRightRadius: 2,
-    borderBottomRightRadius: 2,
-  },
-  formTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  formSubtitle: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginBottom: 24,
-  },
-  input: {
-    marginBottom: 16,
-    backgroundColor: 'transparent',
-  },
-  inputOutline: {
-    borderRadius: 6,
-    borderColor: colors.border,
-  },
-  continueButton: {
-    marginTop: 8,
-    borderRadius: 6,
-  },
-  continueButtonContent: {
-    paddingVertical: 10,
-  },
-  continueButtonLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  loginLink: {
-    marginTop: 16,
-  },
-  loginLinkLabel: {
-    fontSize: 13,
-  },
-  choiceContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 32,
-  },
-  checkCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.success + '20',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  checkIcon: {
-    fontSize: 40,
-    color: colors.success,
-    fontWeight: '700',
-  },
-  choiceTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: colors.text,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  choiceSubtitle: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 32,
-  },
-  choiceEnrollBtn: {
-    width: '100%',
-    borderRadius: 8,
-    backgroundColor: colors.primary,
-    marginBottom: 12,
-  },
-  choiceEnrollBtnLabel: {
-    fontSize: 15,
-    fontWeight: '700',
-    paddingVertical: 4,
-  },
-  choiceSkipBtn: {
-    marginBottom: 0,
-  },
-  faceStepHeader: {
-    padding: 16,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.border,
-  },
-  faceStepTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  faceStepSubtitle: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginTop: 4,
-  },
-  captureContainer: {
-    flex: 1,
-  },
-  faceActions: {
-    padding: 12,
-    backgroundColor: colors.surface,
-    borderTopWidth: 0.5,
-    borderTopColor: colors.border,
-    alignItems: 'center',
-  },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    color: colors.text,
-    fontSize: 15,
-    marginTop: 12,
-  },
-});
+function createStyles(theme: AppTheme) {
+  const success = theme.dark ? '#4A8C5C' : '#067647';
+
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    flex: {
+      flex: 1,
+    },
+    scrollContent: {
+      flexGrow: 1,
+      justifyContent: 'center',
+      padding: 16,
+    },
+    formContainer: {
+      borderRadius: 18,
+      borderColor: theme.colors.outlineVariant,
+      backgroundColor: theme.colors.surface,
+    },
+    formContent: {
+      gap: 14,
+      paddingVertical: 22,
+    },
+    formTitle: {
+      color: theme.colors.onSurface,
+      fontWeight: '900',
+    },
+    formSubtitle: {
+      color: theme.colors.onSurfaceVariant,
+      marginTop: 4,
+    },
+    largeButton: {
+      minHeight: 52,
+    },
+    choiceContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      padding: 20,
+    },
+    choiceCard: {
+      borderColor: theme.colors.outlineVariant,
+      backgroundColor: theme.colors.surface,
+      borderRadius: 18,
+    },
+    choiceContent: {
+      alignItems: 'center',
+      gap: 14,
+      paddingVertical: 24,
+    },
+    checkCircle: {
+      width: 84,
+      height: 84,
+      borderRadius: 42,
+      backgroundColor: `${success}22`,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    checkIcon: {
+      fontSize: 42,
+      color: success,
+      fontWeight: '900',
+    },
+    choiceTitle: {
+      color: theme.colors.onSurface,
+      textAlign: 'center',
+      fontWeight: '900',
+    },
+    choiceSubtitle: {
+      color: theme.colors.onSurfaceVariant,
+      textAlign: 'center',
+      lineHeight: 20,
+    },
+    faceHeader: {
+      margin: 12,
+      marginBottom: 0,
+      borderRadius: 16,
+      backgroundColor: theme.colors.surface,
+    },
+    cardTitle: {
+      color: theme.colors.onSurface,
+      fontWeight: '800',
+    },
+    mutedText: {
+      color: theme.colors.onSurfaceVariant,
+      marginTop: 4,
+    },
+    captureContainer: {
+      flex: 1,
+    },
+    faceActions: {
+      margin: 12,
+      borderRadius: 16,
+      backgroundColor: theme.colors.surface,
+    },
+    loadingOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0,0,0,0.65)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    loadingText: {
+      color: '#FFFFFF',
+      fontSize: 15,
+      marginTop: 12,
+    },
+  });
+}

@@ -50,7 +50,7 @@ export const DarkTheme = {
       warning: colors.warning,
     },
   },
-  roundness: 6,
+  roundness: 8,
   fonts: configureFonts({ config: fontConfig }),
 };
 

@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { TextInput, Button, Text, Surface } from 'react-native-paper';
+import { Button, Card, SegmentedButtons, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
 import { useAuth } from '../context/AuthContext';
-import { colors } from '../theme/colors';
+import { AppTheme } from '../theme/DarkTheme';
 
 interface LoginScreenProps {
   navigation: any;
@@ -12,48 +12,48 @@ interface LoginScreenProps {
 type LoginMode = 'patron' | 'staff';
 
 export default function LoginScreen({ navigation }: LoginScreenProps) {
+  const theme = useTheme() as AppTheme;
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [loginMode, setLoginMode] = useState<LoginMode>('patron');
   const [studentCode, setStudentCode] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const { patronLogin, staffLogin } = useAuth();
 
   const handleLogin = async () => {
     const identifier = loginMode === 'staff' ? email.trim() : studentCode.trim();
     if (!identifier || !password.trim()) {
-      Alert.alert(
-        'Lỗi',
-        loginMode === 'staff'
-          ? 'Vui lòng nhập email và mật khẩu'
-          : 'Vui lòng nhập mã sinh viên và mật khẩu',
-      );
+      setError(loginMode === 'staff'
+        ? 'Vui lòng nhập email và mật khẩu'
+        : 'Vui lòng nhập mã sinh viên và mật khẩu');
       return;
     }
 
     setIsLoading(true);
+    setError('');
     try {
       if (loginMode === 'staff') {
         await staffLogin(email.trim(), password);
       } else {
         await patronLogin(studentCode.trim(), password);
       }
-    } catch (error: any) {
-      console.log('Login error:', error);
+    } catch (err: any) {
       let message = 'Đăng nhập thất bại';
-      if (error.message && !error.response) {
-        message = error.message;
-      } else if (error.response?.data?.detail) {
-        message = error.response.data.detail;
-      } else if (error.response?.data?.error) {
-        message = error.response.data.error;
-      } else if (error.code === 'ECONNABORTED') {
+      if (err.message && !err.response) {
+        message = err.message;
+      } else if (err.response?.data?.detail) {
+        message = err.response.data.detail;
+      } else if (err.response?.data?.error) {
+        message = err.response.data.error;
+      } else if (err.code === 'ECONNABORTED') {
         message = 'Kết nối quá lâu. Vui lòng thử lại.';
-      } else if (!error.response) {
+      } else if (!err.response) {
         message = 'Không thể kết nối server. Vui lòng kiểm tra mạng.';
       }
-      Alert.alert('Lỗi', message);
+      setError(message);
     } finally {
       setIsLoading(false);
     }
@@ -65,260 +65,178 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={styles.content}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.brandSection}>
             <View style={styles.logoCircle}>
               <Text style={styles.logoText}>TV</Text>
             </View>
-            <Text variant="displaySmall" style={styles.title}>
-              Thư Viện
-            </Text>
-            <Text variant="bodyLarge" style={styles.subtitle}>
-              Đăng nhập để tiếp tục
-            </Text>
+            <Text variant="displaySmall" style={styles.title}>Thư Viện</Text>
+            <Text variant="bodyLarge" style={styles.subtitle}>Đăng nhập để tiếp tục</Text>
           </View>
 
-          <Surface style={styles.form} elevation={0}>
-            <View style={styles.formAccent} />
-
-            <View style={styles.modeSwitch}>
-              <Button
-                mode={loginMode === 'patron' ? 'contained' : 'outlined'}
-                onPress={() => setLoginMode('patron')}
-                style={styles.modeButton}
-                labelStyle={styles.modeButtonLabel}
-              >
-                Độc giả
-              </Button>
-              <Button
-                mode={loginMode === 'staff' ? 'contained' : 'outlined'}
-                onPress={() => setLoginMode('staff')}
-                style={styles.modeButton}
-                labelStyle={styles.modeButtonLabel}
-              >
-                Nhân viên
-              </Button>
-            </View>
-
-            {loginMode === 'staff' ? (
-              <TextInput
-                label="Email"
-                value={email}
-                onChangeText={setEmail}
-                mode="outlined"
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
-                style={styles.input}
-                outlineStyle={styles.inputOutline}
-                left={<TextInput.Icon icon="email" color={colors.textSecondary} />}
-                activeOutlineColor={colors.primary}
+          <Card mode="outlined" style={styles.form}>
+            <Card.Content style={styles.formContent}>
+              <SegmentedButtons
+                value={loginMode}
+                onValueChange={(value) => setLoginMode(value as LoginMode)}
+                buttons={[
+                  { value: 'patron', label: 'Độc giả', icon: 'account' },
+                  { value: 'staff', label: 'Nhân viên', icon: 'shield-account' },
+                ]}
               />
-            ) : (
-              <TextInput
-                label="Mã sinh viên"
-                value={studentCode}
-                onChangeText={setStudentCode}
-                mode="outlined"
-                autoCapitalize="none"
-                autoCorrect={false}
-                style={styles.input}
-                outlineStyle={styles.inputOutline}
-                left={<TextInput.Icon icon="account" color={colors.textSecondary} />}
-                activeOutlineColor={colors.primary}
-              />
-            )}
 
-            <TextInput
-              label="Mật khẩu"
-              value={password}
-              onChangeText={setPassword}
-              mode="outlined"
-              secureTextEntry={!showPassword}
-              style={styles.input}
-              outlineStyle={styles.inputOutline}
-              left={<TextInput.Icon icon="lock" color={colors.textSecondary} />}
-              right={
-                <TextInput.Icon
-                  icon={showPassword ? 'eye-off' : 'eye'}
-                  onPress={() => setShowPassword(!showPassword)}
-                  color={colors.textSecondary}
-                />
-              }
-              activeOutlineColor={colors.primary}
-            />
-
-            <Button
-              mode="contained"
-              onPress={handleLogin}
-              loading={isLoading}
-              disabled={isLoading}
-              style={styles.button}
-              contentStyle={styles.buttonContent}
-              labelStyle={styles.buttonLabel}
-            >
-              {loginMode === 'staff' ? 'Đăng nhập nhân viên' : 'Đăng nhập'}
-            </Button>
-
-            {loginMode === 'patron' && (
-              <>
-                <View style={styles.divider}>
-                  <View style={styles.dividerLine} />
-                  <Text variant="bodySmall" style={styles.dividerText}>
-                    hoặc
-                  </Text>
-                  <View style={styles.dividerLine} />
-                </View>
-
-                <Button
+              {loginMode === 'staff' ? (
+                <TextInput
+                  label="Email"
+                  value={email}
+                  onChangeText={setEmail}
                   mode="outlined"
-                  onPress={() => navigation.navigate('FaceLogin')}
-                  style={styles.faceButton}
-                  contentStyle={styles.faceButtonContent}
-                  labelStyle={styles.faceButtonLabel}
-                  icon="face-recognition"
-                >
-                  Đăng nhập bằng khuôn mặt
-                </Button>
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                  left={<TextInput.Icon icon="email" color={theme.colors.onSurfaceVariant} />}
+                />
+              ) : (
+                <TextInput
+                  label="Mã sinh viên"
+                  value={studentCode}
+                  onChangeText={setStudentCode}
+                  mode="outlined"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  left={<TextInput.Icon icon="account" color={theme.colors.onSurfaceVariant} />}
+                />
+              )}
 
-                <Button
-                  mode="text"
-                  onPress={() => navigation.navigate('Register')}
-                  style={styles.registerButton}
-                  labelStyle={styles.registerLabel}
-                >
-                  Chưa có tài khoản? Đăng ký ngay
-                </Button>
-              </>
-            )}
-          </Surface>
-        </View>
+              <TextInput
+                label="Mật khẩu"
+                value={password}
+                onChangeText={setPassword}
+                mode="outlined"
+                secureTextEntry={!showPassword}
+                left={<TextInput.Icon icon="lock" color={theme.colors.onSurfaceVariant} />}
+                right={
+                  <TextInput.Icon
+                    icon={showPassword ? 'eye-off' : 'eye'}
+                    onPress={() => setShowPassword(!showPassword)}
+                    color={theme.colors.onSurfaceVariant}
+                  />
+                }
+              />
+
+              <Button
+                mode="contained"
+                onPress={handleLogin}
+                loading={isLoading}
+                disabled={isLoading}
+                contentStyle={styles.largeButton}
+              >
+                {loginMode === 'staff' ? 'Đăng nhập nhân viên' : 'Đăng nhập'}
+              </Button>
+
+              {loginMode === 'patron' ? (
+                <>
+                  <View style={styles.divider}>
+                    <View style={styles.dividerLine} />
+                    <Text variant="bodySmall" style={styles.dividerText}>hoặc</Text>
+                    <View style={styles.dividerLine} />
+                  </View>
+
+                  <Button
+                    mode="outlined"
+                    onPress={() => navigation.navigate('FaceLogin')}
+                    icon="face-recognition"
+                    contentStyle={styles.mediumButton}
+                  >
+                    Đăng nhập bằng khuôn mặt
+                  </Button>
+
+                  <Button mode="text" onPress={() => navigation.navigate('Register')}>
+                    Chưa có tài khoản? Đăng ký ngay
+                  </Button>
+                </>
+              ) : null}
+            </Card.Content>
+          </Card>
+        </ScrollView>
       </KeyboardAvoidingView>
+
+      <Snackbar visible={!!error} onDismiss={() => setError('')} duration={4000}>
+        {error}
+      </Snackbar>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  flex: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: 24,
-  },
-  brandSection: {
-    alignItems: 'center',
-    marginBottom: 36,
-  },
-  logoCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  logoText: {
-    color: colors.background,
-    fontSize: 24,
-    fontWeight: '800',
-    letterSpacing: 2,
-  },
-  title: {
-    color: colors.text,
-    fontWeight: '700',
-    fontSize: 32,
-  },
-  subtitle: {
-    color: colors.textSecondary,
-    marginTop: 6,
-  },
-  form: {
-    padding: 24,
-    borderRadius: 8,
-    backgroundColor: colors.surface,
-    position: 'relative',
-    overflow: 'hidden',
-    borderWidth: 0.5,
-    borderColor: colors.border,
-  },
-  formAccent: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 3,
-    backgroundColor: colors.primary,
-    borderTopRightRadius: 2,
-    borderBottomRightRadius: 2,
-  },
-  modeSwitch: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
-  },
-  modeButton: {
-    flex: 1,
-    borderRadius: 6,
-  },
-  modeButtonLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  input: {
-    marginBottom: 16,
-    backgroundColor: 'transparent',
-  },
-  inputOutline: {
-    borderRadius: 6,
-    borderColor: colors.border,
-  },
-  button: {
-    marginTop: 8,
-    borderRadius: 6,
-  },
-  buttonContent: {
-    paddingVertical: 10,
-  },
-  buttonLabel: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 24,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.divider,
-  },
-  dividerText: {
-    color: colors.textSecondary,
-    marginHorizontal: 16,
-    fontSize: 12,
-  },
-  faceButton: {
-    borderColor: colors.primary,
-    borderRadius: 6,
-  },
-  faceButtonContent: {
-    paddingVertical: 8,
-  },
-  faceButtonLabel: {
-    fontSize: 14,
-  },
-  registerButton: {
-    marginTop: 16,
-  },
-  registerLabel: {
-    fontSize: 13,
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    flex: {
+      flex: 1,
+    },
+    content: {
+      flexGrow: 1,
+      justifyContent: 'center',
+      padding: 20,
+      gap: 28,
+    },
+    brandSection: {
+      alignItems: 'center',
+      gap: 8,
+    },
+    logoCircle: {
+      width: 72,
+      height: 72,
+      borderRadius: 22,
+      backgroundColor: theme.colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 6,
+    },
+    logoText: {
+      color: theme.colors.onPrimary,
+      fontSize: 26,
+      fontWeight: '900',
+      letterSpacing: 2,
+    },
+    title: {
+      color: theme.colors.onBackground,
+      fontWeight: '900',
+    },
+    subtitle: {
+      color: theme.colors.onSurfaceVariant,
+    },
+    form: {
+      borderRadius: 18,
+      borderColor: theme.colors.outlineVariant,
+      backgroundColor: theme.colors.surface,
+    },
+    formContent: {
+      gap: 16,
+      paddingVertical: 22,
+    },
+    largeButton: {
+      minHeight: 52,
+    },
+    mediumButton: {
+      minHeight: 48,
+    },
+    divider: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingVertical: 4,
+    },
+    dividerLine: {
+      flex: 1,
+      height: 1,
+      backgroundColor: theme.colors.outlineVariant,
+    },
+    dividerText: {
+      color: theme.colors.onSurfaceVariant,
+    },
+  });
+}

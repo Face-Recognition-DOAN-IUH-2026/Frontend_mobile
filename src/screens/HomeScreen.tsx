@@ -1,20 +1,29 @@
-import React, { useState, useCallback } from 'react';
-import { View, Image, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, Surface, Button, Avatar, Badge } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useFocusEffect } from '@react-navigation/native';
-import { useAuth } from '../context/AuthContext';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Image, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Avatar, Button, Card, Chip, Text, useTheme } from 'react-native-paper';
 import { borrowApi } from '../api/borrow';
+import { useAuth } from '../context/AuthContext';
+import { AppTheme } from '../theme/DarkTheme';
 import { BorrowRecord } from '../types';
-import { colors } from '../theme/colors';
 import { formatDate, getDaysUntil, isOverdue } from '../utils/dateUtils';
 
 interface HomeScreenProps {
   navigation: any;
 }
 
+type StaffAction = {
+  title: string;
+  description: string;
+  icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+  route: string;
+};
+
 export default function HomeScreen({ navigation }: HomeScreenProps) {
+  const theme = useTheme() as AppTheme;
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const { user, patron } = useAuth();
   const isStaffScanner = user?.role === 'admin' || user?.role === 'staff';
   const [borrows, setBorrows] = useState<BorrowRecord[]>([]);
@@ -27,13 +36,13 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       setBorrows([]);
       return;
     }
+
     try {
       setLoadError(null);
       const history = await borrowApi.getHistory('borrowed');
       setBorrows(history);
     } catch (error: any) {
-      console.error('Failed to load borrows:', error);
-      const message = error?.response?.data?.detail || error?.message || 'Không thể tải danh sách';
+      const message = error?.response?.data?.detail || error?.message || 'Không thể tải danh sách sách đang mượn';
       setLoadError(message);
       setBorrows([]);
     }
@@ -42,7 +51,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   useFocusEffect(
     useCallback(() => {
       loadBorrows();
-    }, [isStaffScanner])
+    }, [isStaffScanner]),
   );
 
   const onRefresh = async () => {
@@ -51,481 +60,342 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
     setRefreshing(false);
   };
 
-  const activeBorrows = borrows.filter((b) => b.status === 'borrowed');
-  const overdueCount = activeBorrows.filter((b) => isOverdue(b.due_at)).length;
+  const activeBorrows = borrows.filter((item) => item.status === 'borrowed');
+  const overdueCount = activeBorrows.filter((item) => isOverdue(item.due_at)).length;
+  const displayName = user?.full_name || user?.email || 'Người dùng';
+  const roleLabel = user?.role === 'admin' ? 'Quản trị viên' : user?.role === 'staff' ? 'Nhân viên' : 'Độc giả';
+
+  const staffActions: StaffAction[] = [
+    {
+      title: 'Trả sách',
+      description: 'Nhập MSSV, xem sách đang mượn và xác nhận trả bằng ISBN.',
+      icon: 'barcode-scan',
+      route: 'Borrow',
+    },
+    {
+      title: 'Lịch trực',
+      description: 'Xem ca hôm nay và lịch làm việc trong tuần.',
+      icon: 'calendar-clock',
+      route: 'Schedule',
+    },
+    {
+      title: 'Hồ sơ',
+      description: 'Cài đặt tài khoản, bảo mật và giao diện.',
+      icon: 'account-cog',
+      route: 'Profile',
+    },
+  ];
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView
         style={styles.flex}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
       >
-        <Surface style={styles.header} elevation={0}>
-          <View style={styles.headerSpine} />
-          <View style={styles.headerContent}>
-            <View style={styles.avatarRow}>
-              <Avatar.Text size={52} label={user?.full_name?.[0] || user?.email?.[0] || 'U'} color={colors.background} style={styles.avatar} />
-              <View style={styles.greetingBlock}>
-                <Text variant="bodySmall" style={styles.greeting}>
-                  Xin chào
-                </Text>
-                <Text variant="titleLarge" style={styles.userName}>
-                  {user?.full_name || user?.email}
-                </Text>
-              </View>
+        <Card mode="contained" style={styles.heroCard}>
+          <Card.Content style={styles.heroContent}>
+            <Avatar.Text
+              size={58}
+              label={displayName.slice(0, 1).toUpperCase()}
+              color={theme.colors.onPrimary}
+              style={styles.avatar}
+            />
+            <View style={styles.heroText}>
+              <Text variant="labelLarge" style={styles.kicker}>Xin chào</Text>
+              <Text variant="headlineSmall" style={styles.userName} numberOfLines={2}>
+                {displayName}
+              </Text>
+              <Chip compact icon={isStaffScanner ? 'shield-account' : 'account'} style={styles.roleChip} textStyle={styles.roleChipText}>
+                {roleLabel}
+              </Chip>
             </View>
-          </View>
-        </Surface>
+          </Card.Content>
+        </Card>
 
-        {!isStaffScanner && (
-        <View style={styles.statsRow}>
-          <Surface style={styles.statCard} elevation={0}>
-            <View style={styles.statSpine} />
-            <Text style={styles.statNumber}>{activeBorrows.length}</Text>
-            <Text style={styles.statLabel}>Đang mượn</Text>
-          </Surface>
-          <Surface style={[styles.statCard, overdueCount > 0 && styles.statCardWarning]} elevation={0}>
-            <View style={[styles.statSpine, overdueCount > 0 && styles.statSpineWarning]} />
-            <Text style={[styles.statNumber, overdueCount > 0 && styles.statNumberWarning]}>
-              {overdueCount}
-            </Text>
-            <Text style={styles.statLabel}>Quá hạn</Text>
-          </Surface>
-        </View>
-        )}
-
-        {patron?.password_auto_generated && (
-          <View style={styles.passwordBanner}>
-            <Surface style={styles.passwordBannerInner} elevation={0}>
-              <View style={styles.passwordBannerAccent} />
-              <View style={styles.passwordBannerContent}>
-                <MaterialCommunityIcons name="shield-alert" size={20} color={colors.warning} />
-                <View style={styles.passwordBannerText}>
-                  <Text variant="bodyMedium" style={styles.passwordBannerTitle}>
-                    Mật khẩu mặc định
-                  </Text>
-                  <Text variant="bodySmall" style={styles.passwordBannerDesc}>
-                    Đổi mật khẩu để bảo mật tài khoản
-                  </Text>
-                </View>
+        {patron?.password_auto_generated ? (
+          <Card mode="outlined" style={styles.warningCard}>
+            <Card.Content style={styles.warningContent}>
+              <MaterialCommunityIcons name="shield-alert" size={24} color={theme.colors.tertiary} />
+              <View style={styles.warningText}>
+                <Text variant="titleSmall" style={styles.cardTitle}>Mật khẩu mặc định</Text>
+                <Text variant="bodySmall" style={styles.mutedText}>Đổi mật khẩu để bảo mật tài khoản.</Text>
               </View>
-              <Button
-                mode="contained"
-                onPress={() => navigation.navigate('ChangePassword')}
-                style={styles.passwordBannerButton}
-                labelStyle={styles.passwordBannerButtonLabel}
-                compact
-              >
+              <Button mode="contained-tonal" compact onPress={() => navigation.navigate('ChangePassword')}>
                 Đổi
               </Button>
-            </Surface>
-          </View>
-        )}
+            </Card.Content>
+          </Card>
+        ) : null}
 
-        <View style={styles.actions}>
-          <TouchableOpacity activeOpacity={0.8} onPress={() => navigation.navigate('Borrow')}>
-            <Surface style={styles.actionCard} elevation={0}>
-              <View style={styles.actionIconWrap}>
-                <MaterialCommunityIcons name={isStaffScanner ? 'barcode-scan' : 'book-outline'} size={22} color={colors.background} />
-              </View>
-              <View style={styles.actionTextWrap}>
-                <Text style={styles.actionTitle}>{isStaffScanner ? 'Trả sách' : 'Mượn sách'}</Text>
-                <Text style={styles.actionDesc}>
-                  {isStaffScanner ? 'Quét mã vạch để xác nhận trả sách' : 'Quét mã vạch để mượn sách'}
-                </Text>
-              </View>
-              <MaterialCommunityIcons name="chevron-right" size={22} color={colors.textSecondary} />
-            </Surface>
-          </TouchableOpacity>
-          {!isStaffScanner && (
-            <TouchableOpacity activeOpacity={0.8} onPress={() => navigation.navigate('History')}>
-              <Surface style={styles.actionCard} elevation={0}>
-                <View style={[styles.actionIconWrap, styles.actionIconSecondaryWrap]}>
-                  <MaterialCommunityIcons name="history" size={22} color={colors.text} />
-                </View>
-                <View style={styles.actionTextWrap}>
-                  <Text style={styles.actionTitle}>Lịch sử</Text>
-                  <Text style={styles.actionDesc}>Xem sách đã mượn</Text>
-                </View>
-                <MaterialCommunityIcons name="chevron-right" size={22} color={colors.textSecondary} />
-              </Surface>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionSpine} />
-            <Text style={styles.sectionTitle}>{isStaffScanner ? 'Máy quét trả sách' : 'Sách đang mượn'}</Text>
-          </View>
-
-          {loadError ? (
-            <Surface style={styles.stateCard} elevation={0}>
-              <MaterialCommunityIcons name="cloud-off-outline" size={36} color={colors.textSecondary} />
-              <Text variant="bodyMedium" style={styles.stateText}>
-                Không thể kết nối server
-              </Text>
-              <Text variant="bodySmall" style={styles.stateDetail}>
-                {loadError}
-              </Text>
-              <Button mode="outlined" onPress={loadBorrows} style={styles.stateButton} labelStyle={styles.stateButtonLabel} icon="refresh">
-                Thử lại
-              </Button>
-            </Surface>
-          ) : activeBorrows.length === 0 ? (
-            <Surface style={styles.stateCard} elevation={0}>
-              <MaterialCommunityIcons name={isStaffScanner ? 'barcode-scan' : 'bookshelf'} size={36} color={colors.textSecondary} />
-              <Text variant="bodyMedium" style={styles.stateText}>
-                {isStaffScanner ? 'Sẵn sàng quét trả sách' : 'Bạn chưa mượn cuốn sách nào'}
-              </Text>
-              <Button mode="contained" onPress={() => navigation.navigate('Borrow')} style={styles.stateButton} labelStyle={styles.stateButtonLabel}>
-                {isStaffScanner ? 'Mở máy quét' : 'Mượn sách ngay'}
-              </Button>
-            </Surface>
-          ) : (
-            activeBorrows.map((record) => {
-              const daysLeft = getDaysUntil(record.due_at);
-              const overdue = daysLeft < 0;
-              return (
-                <Surface key={record.id} style={styles.borrowCard} elevation={0}>
-                  <View style={[styles.borrowSpine, overdue ? styles.borrowSpineOverdue : styles.borrowSpineActive]} />
-                  {record.book?.cover_url ? (
-                    <Image source={{ uri: record.book.cover_url }} style={styles.bookCover} />
-                  ) : (
-                    <View style={styles.bookCoverPlaceholder}>
-                      <MaterialCommunityIcons name="book-variant" size={24} color={colors.textSecondary} />
-                    </View>
-                  )}
-                  <View style={styles.borrowContent}>
-                    <View style={styles.borrowHeader}>
-                      <Text style={styles.bookTitle} numberOfLines={2}>
-                        {record.book?.title || record.book_id}
-                      </Text>
-                      <View style={[styles.badge, overdue ? styles.badgeOverdue : styles.badgeActive]}>
-                        <Text style={styles.badgeText}>
-                          {overdue ? 'Quá hạn' : `Còn ${daysLeft} ngày`}
-                        </Text>
-                      </View>
-                    </View>
-                    {record.book?.author ? (
-                      <Text style={styles.borrowInfo} numberOfLines={1}>
-                        {record.book.author}
-                      </Text>
-                    ) : null}
-                    <Text style={styles.borrowInfo}>
-                      Hạn trả: {formatDate(record.due_at)}
-                    </Text>
+        {isStaffScanner ? (
+          <View style={styles.section}>
+            <Text variant="titleMedium" style={styles.sectionTitle}>Công việc nhanh</Text>
+            {staffActions.map((action) => (
+              <Card key={action.route} mode="outlined" style={styles.actionCard} onPress={() => navigation.navigate(action.route)}>
+                <Card.Content style={styles.actionContent}>
+                  <View style={styles.actionIcon}>
+                    <MaterialCommunityIcons name={action.icon} size={24} color={theme.colors.onPrimary} />
                   </View>
-                </Surface>
-              );
-            })
-          )}
-        </View>
+                  <View style={styles.actionText}>
+                    <Text variant="titleMedium" style={styles.cardTitle}>{action.title}</Text>
+                    <Text variant="bodySmall" style={styles.mutedText}>{action.description}</Text>
+                  </View>
+                  <MaterialCommunityIcons name="chevron-right" size={24} color={theme.colors.onSurfaceVariant} />
+                </Card.Content>
+              </Card>
+            ))}
+          </View>
+        ) : (
+          <>
+            <View style={styles.statsRow}>
+              <Card mode="contained" style={styles.statCard}>
+                <Card.Content>
+                  <Text variant="headlineMedium" style={styles.statNumber}>{activeBorrows.length}</Text>
+                  <Text variant="bodySmall" style={styles.mutedText}>Đang mượn</Text>
+                </Card.Content>
+              </Card>
+              <Card mode="contained" style={[styles.statCard, overdueCount > 0 && styles.overdueCard]}>
+                <Card.Content>
+                  <Text variant="headlineMedium" style={[styles.statNumber, overdueCount > 0 && styles.overdueText]}>{overdueCount}</Text>
+                  <Text variant="bodySmall" style={styles.mutedText}>Quá hạn</Text>
+                </Card.Content>
+              </Card>
+            </View>
+
+            <View style={styles.section}>
+              <Text variant="titleMedium" style={styles.sectionTitle}>Sách đang mượn</Text>
+              {loadError ? (
+                <Card mode="outlined" style={styles.stateCard}>
+                  <Card.Content style={styles.stateContent}>
+                    <MaterialCommunityIcons name="cloud-off-outline" size={38} color={theme.colors.onSurfaceVariant} />
+                    <Text variant="titleSmall" style={styles.cardTitle}>Không thể kết nối server</Text>
+                    <Text variant="bodySmall" style={styles.stateDescription} selectable>{loadError}</Text>
+                    <Button mode="outlined" icon="refresh" onPress={loadBorrows}>Thử lại</Button>
+                  </Card.Content>
+                </Card>
+              ) : activeBorrows.length === 0 ? (
+                <Card mode="outlined" style={styles.stateCard}>
+                  <Card.Content style={styles.stateContent}>
+                    <MaterialCommunityIcons name="bookshelf" size={38} color={theme.colors.onSurfaceVariant} />
+                    <Text variant="titleSmall" style={styles.cardTitle}>Bạn chưa mượn cuốn sách nào</Text>
+                    <Button mode="contained" onPress={() => navigation.navigate('Borrow')}>Mượn sách ngay</Button>
+                  </Card.Content>
+                </Card>
+              ) : (
+                activeBorrows.map((record) => {
+                  const daysLeft = getDaysUntil(record.due_at);
+                  const overdue = daysLeft < 0;
+                  return (
+                    <Card key={record.id} mode="outlined" style={styles.borrowCard}>
+                      <Card.Content style={styles.borrowContent}>
+                        {record.book?.cover_url ? (
+                          <Image source={{ uri: record.book.cover_url }} style={styles.bookCover} />
+                        ) : (
+                          <View style={styles.bookCoverPlaceholder}>
+                            <MaterialCommunityIcons name="book-variant" size={24} color={theme.colors.onSurfaceVariant} />
+                          </View>
+                        )}
+                        <View style={styles.borrowInfo}>
+                          <View style={styles.borrowHeader}>
+                            <Text variant="titleSmall" style={styles.cardTitle} numberOfLines={2}>
+                              {record.book?.title || record.book_id}
+                            </Text>
+                            <Chip compact style={overdue ? styles.errorChip : styles.successChip} textStyle={overdue ? styles.errorChipText : styles.successChipText}>
+                              {overdue ? 'Quá hạn' : `Còn ${daysLeft} ngày`}
+                            </Chip>
+                          </View>
+                          {record.book?.author ? (
+                            <Text variant="bodySmall" style={styles.mutedText} numberOfLines={1}>{record.book.author}</Text>
+                          ) : null}
+                          <Text variant="bodySmall" style={styles.mutedText}>Hạn trả: {formatDate(record.due_at)}</Text>
+                        </View>
+                      </Card.Content>
+                    </Card>
+                  );
+                })
+              )}
+            </View>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  flex: {
-    flex: 1,
-  },
+function createStyles(theme: AppTheme) {
+  const success = theme.dark ? '#4A8C5C' : '#067647';
 
-  header: {
-    flexDirection: 'row',
-    backgroundColor: colors.surface,
-    marginHorizontal: 16,
-    marginTop: 16,
-    borderRadius: 10,
-    overflow: 'hidden',
-  },
-  headerSpine: {
-    width: 4,
-    backgroundColor: colors.primary,
-  },
-  headerContent: {
-    flex: 1,
-    padding: 16,
-  },
-  avatarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  avatar: {
-    backgroundColor: colors.primary,
-  },
-  greetingBlock: {
-    flex: 1,
-  },
-  greeting: {
-    color: colors.textSecondary,
-    letterSpacing: 0.5,
-  },
-  userName: {
-    color: colors.text,
-    fontWeight: '700',
-    marginTop: -1,
-  },
-
-  statsRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    gap: 12,
-  },
-  statCard: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 10,
-    backgroundColor: colors.surface,
-    overflow: 'hidden',
-  },
-  statSpine: {
-    position: 'absolute',
-    left: 0,
-    top: 10,
-    bottom: 10,
-    width: 3,
-    backgroundColor: colors.primary,
-    borderRadius: 2,
-  },
-  statSpineWarning: {
-    backgroundColor: colors.warning,
-  },
-  statCardWarning: {
-    borderWidth: 0.5,
-    borderColor: colors.warning,
-  },
-  statNumber: {
-    color: colors.primary,
-    fontWeight: '700',
-    fontSize: 30,
-    lineHeight: 36,
-  },
-  statNumberWarning: {
-    color: colors.warning,
-  },
-  statLabel: {
-    color: colors.textSecondary,
-    marginTop: 2,
-    fontSize: 13,
-  },
-
-  passwordBanner: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-  },
-  passwordBannerInner: {
-    padding: 12,
-    borderRadius: 10,
-    backgroundColor: colors.surface,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 0.5,
-    borderColor: colors.warning,
-    overflow: 'hidden',
-  },
-  passwordBannerAccent: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 3,
-    backgroundColor: colors.warning,
-  },
-  passwordBannerContent: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  passwordBannerText: {
-    flex: 1,
-  },
-  passwordBannerTitle: {
-    color: colors.text,
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  passwordBannerDesc: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    marginTop: 1,
-  },
-  passwordBannerButton: {
-    borderRadius: 6,
-    backgroundColor: colors.warning,
-  },
-  passwordBannerButtonLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.background,
-  },
-
-  actions: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    gap: 8,
-  },
-  actionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 10,
-    backgroundColor: colors.surface,
-    borderWidth: 0.5,
-    borderColor: colors.border,
-  },
-  actionIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 9,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionIconSecondaryWrap: {
-    backgroundColor: colors.secondary,
-  },
-  actionTextWrap: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  actionTitle: {
-    color: colors.text,
-    fontWeight: '600',
-    fontSize: 15,
-  },
-  actionDesc: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    marginTop: 1,
-  },
-
-  section: {
-    paddingHorizontal: 16,
-    paddingTop: 20,
-    paddingBottom: 24,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    gap: 10,
-  },
-  sectionSpine: {
-    width: 3,
-    height: 18,
-    backgroundColor: colors.primary,
-    borderRadius: 2,
-  },
-  sectionTitle: {
-    color: colors.text,
-    fontWeight: '700',
-    fontSize: 16,
-  },
-
-  stateCard: {
-    padding: 32,
-    borderRadius: 10,
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderWidth: 0.5,
-    borderColor: colors.border,
-  },
-  stateText: {
-    color: colors.text,
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  stateDetail: {
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  stateButton: {
-    borderRadius: 6,
-  },
-  stateButtonLabel: {
-    fontSize: 14,
-  },
-
-  borrowCard: {
-    marginBottom: 10,
-    backgroundColor: colors.surface,
-    borderRadius: 10,
-    flexDirection: 'row',
-    overflow: 'hidden',
-    borderWidth: 0.5,
-    borderColor: colors.border,
-  },
-  borrowSpine: {
-    width: 4,
-  },
-  borrowSpineActive: {
-    backgroundColor: colors.primary,
-  },
-  borrowSpineOverdue: {
-    backgroundColor: colors.error,
-  },
-  bookCover: {
-    width: 56,
-    height: 78,
-    borderRadius: 4,
-    margin: 10,
-    marginRight: 0,
-  },
-  bookCoverPlaceholder: {
-    width: 56,
-    height: 78,
-    borderRadius: 4,
-    margin: 10,
-    marginRight: 0,
-    backgroundColor: colors.surfaceVariant,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  borrowContent: {
-    flex: 1,
-    padding: 14,
-  },
-  borrowHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  bookTitle: {
-    color: colors.text,
-    flex: 1,
-    marginRight: 8,
-    fontWeight: '600',
-    fontSize: 15,
-  },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
-  },
-  badgeActive: {
-    backgroundColor: colors.success,
-  },
-  badgeOverdue: {
-    backgroundColor: colors.error,
-  },
-  badgeText: {
-    color: colors.background,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  borrowInfo: {
-    color: colors.textSecondary,
-    marginTop: 2,
-    fontSize: 13,
-  },
-});
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    flex: {
+      flex: 1,
+    },
+    content: {
+      padding: 16,
+      paddingBottom: 28,
+      gap: 14,
+    },
+    heroCard: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: 18,
+    },
+    heroContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+    },
+    avatar: {
+      backgroundColor: theme.colors.primary,
+    },
+    heroText: {
+      flex: 1,
+      gap: 4,
+    },
+    kicker: {
+      color: theme.colors.primary,
+      fontWeight: '800',
+    },
+    userName: {
+      color: theme.colors.onSurface,
+      fontWeight: '800',
+    },
+    roleChip: {
+      alignSelf: 'flex-start',
+      backgroundColor: theme.colors.primaryContainer,
+    },
+    roleChipText: {
+      color: theme.dark ? theme.colors.primary : theme.colors.onSurface,
+      fontWeight: '800',
+    },
+    warningCard: {
+      borderColor: theme.colors.tertiary,
+      backgroundColor: theme.colors.surface,
+    },
+    warningContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    warningText: {
+      flex: 1,
+    },
+    section: {
+      gap: 10,
+    },
+    sectionTitle: {
+      color: theme.colors.onBackground,
+      fontWeight: '800',
+    },
+    actionCard: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.outlineVariant,
+      borderRadius: 14,
+    },
+    actionContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    actionIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 12,
+      backgroundColor: theme.colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    actionText: {
+      flex: 1,
+      gap: 2,
+    },
+    cardTitle: {
+      color: theme.colors.onSurface,
+      fontWeight: '800',
+    },
+    mutedText: {
+      color: theme.colors.onSurfaceVariant,
+    },
+    statsRow: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    statCard: {
+      flex: 1,
+      backgroundColor: theme.colors.surface,
+    },
+    statNumber: {
+      color: theme.colors.primary,
+      fontWeight: '900',
+      fontVariant: ['tabular-nums'],
+    },
+    overdueCard: {
+      backgroundColor: theme.colors.errorContainer,
+    },
+    overdueText: {
+      color: theme.colors.error,
+    },
+    stateCard: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.outlineVariant,
+      borderRadius: 14,
+    },
+    stateContent: {
+      alignItems: 'center',
+      gap: 10,
+      paddingVertical: 18,
+    },
+    stateDescription: {
+      color: theme.colors.onSurfaceVariant,
+      textAlign: 'center',
+    },
+    borrowCard: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.outlineVariant,
+      borderRadius: 14,
+    },
+    borrowContent: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    bookCover: {
+      width: 58,
+      height: 82,
+      borderRadius: 8,
+    },
+    bookCoverPlaceholder: {
+      width: 58,
+      height: 82,
+      borderRadius: 8,
+      backgroundColor: theme.colors.surfaceVariant,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    borrowInfo: {
+      flex: 1,
+      gap: 5,
+    },
+    borrowHeader: {
+      gap: 8,
+    },
+    successChip: {
+      alignSelf: 'flex-start',
+      backgroundColor: `${success}22`,
+    },
+    successChipText: {
+      color: success,
+      fontWeight: '800',
+    },
+    errorChip: {
+      alignSelf: 'flex-start',
+      backgroundColor: theme.colors.errorContainer,
+    },
+    errorChipText: {
+      color: theme.colors.error,
+      fontWeight: '800',
+    },
+  });
+}
