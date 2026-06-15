@@ -8,6 +8,7 @@ interface AuthContextType {
   patron: any | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  staffLogin: (email: string, password: string) => Promise<void>;
   patronLogin: (studentCode: string, password: string) => Promise<void>;
   faceLogin: (imageUri: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -25,10 +26,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const token = await AsyncStorage.getItem('accessToken');
       const patronDataStr = await AsyncStorage.getItem('patronData');
+      const userDataStr = await AsyncStorage.getItem('userData');
       if (token && patronDataStr) {
         const patronData = JSON.parse(patronDataStr);
         setPatron(patronData);
         setUser({ id: patronData.id, email: patronData.email || '', full_name: patronData.fullName, role: 'patron' });
+      } else if (token && userDataStr) {
+        const userData = JSON.parse(userDataStr);
+        setPatron(null);
+        setUser({
+          id: userData.id,
+          email: userData.email || '',
+          full_name: userData.fullName || userData.full_name,
+          role: userData.role,
+        });
       }
     } catch (error) {
       console.error('Auth check failed:', error);
@@ -52,6 +63,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('setPatron called');
       setUser({ id: response.user.id, email: response.user.email || '', full_name: response.user.fullName, role: 'patron' });
       console.log('setUser called');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const staffLogin = async (email: string, password: string) => {
+    setIsLoading(true);
+    try {
+      const response = await authApi.login({ email, password });
+      const userData = response.user;
+      if (!userData || !['admin', 'staff'].includes(userData.role)) {
+        await authApi.logout();
+        throw new Error('Tài khoản này không có quyền dùng máy quét trả sách');
+      }
+      setPatron(null);
+      setUser({
+        id: userData.id,
+        email: userData.email || email,
+        full_name: userData.fullName || userData.full_name,
+        role: userData.role,
+      });
     } finally {
       setIsLoading(false);
     }
@@ -83,6 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         patron,
         isLoading,
         isAuthenticated: !!user,
+        staffLogin,
         patronLogin,
         faceLogin,
         logout,

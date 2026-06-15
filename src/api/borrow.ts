@@ -1,5 +1,5 @@
 import api from './client';
-import { BorrowResponse, ReturnResponse, BorrowRecord, Book } from '../types';
+import { BorrowResponse, ReturnResponse, BorrowRecord, Book, StaffPatronActiveBorrowsResponse } from '../types';
 
 export interface BorrowRequest {
   barcode: string;
@@ -16,6 +16,26 @@ export const borrowApi = {
   returnBook: async (barcode: string): Promise<ReturnResponse> => {
     console.log('[borrowApi] returnBook called with barcode:', barcode);
     const response = await api.post<ReturnResponse>('/borrow/staff-return', { barcode });
+    return response.data;
+  },
+
+  lookupByBarcode: async (barcode: string): Promise<BorrowRecord> => {
+    const response = await api.get<BorrowRecord>(`/borrow/barcode/${encodeURIComponent(barcode)}`);
+    return response.data;
+  },
+
+  getActiveBorrowsByStudentCode: async (studentCode: string): Promise<StaffPatronActiveBorrowsResponse> => {
+    const response = await api.get<StaffPatronActiveBorrowsResponse>(
+      `/borrow/staff/patrons/${encodeURIComponent(studentCode)}/active`,
+    );
+    return response.data;
+  },
+
+  returnByPatron: async (studentCode: string, barcodeOrIsbn: string): Promise<ReturnResponse> => {
+    const response = await api.post<ReturnResponse>('/borrow/staff-return/by-patron', {
+      student_code: studentCode,
+      barcode_or_isbn: barcodeOrIsbn,
+    });
     return response.data;
   },
 

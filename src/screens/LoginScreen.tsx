@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { TextInput, Button, Text, Surface, useTheme } from 'react-native-paper';
+import { TextInput, Button, Text, Surface } from 'react-native-paper';
 import { useAuth } from '../context/AuthContext';
 import { colors } from '../theme/colors';
 
@@ -9,28 +9,45 @@ interface LoginScreenProps {
   navigation: any;
 }
 
+type LoginMode = 'patron' | 'staff';
+
 export default function LoginScreen({ navigation }: LoginScreenProps) {
+  const [loginMode, setLoginMode] = useState<LoginMode>('patron');
   const [studentCode, setStudentCode] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { patronLogin } = useAuth();
-  const theme = useTheme();
+  const { patronLogin, staffLogin } = useAuth();
 
   const handleLogin = async () => {
-    if (!studentCode.trim() || !password.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập mã sinh viên và mật khẩu');
+    const identifier = loginMode === 'staff' ? email.trim() : studentCode.trim();
+    if (!identifier || !password.trim()) {
+      Alert.alert(
+        'Lỗi',
+        loginMode === 'staff'
+          ? 'Vui lòng nhập email và mật khẩu'
+          : 'Vui lòng nhập mã sinh viên và mật khẩu',
+      );
       return;
     }
 
     setIsLoading(true);
     try {
-      await patronLogin(studentCode.trim(), password);
+      if (loginMode === 'staff') {
+        await staffLogin(email.trim(), password);
+      } else {
+        await patronLogin(studentCode.trim(), password);
+      }
     } catch (error: any) {
       console.log('Login error:', error);
       let message = 'Đăng nhập thất bại';
-      if (error.response?.data?.detail) {
+      if (error.message && !error.response) {
+        message = error.message;
+      } else if (error.response?.data?.detail) {
         message = error.response.data.detail;
+      } else if (error.response?.data?.error) {
+        message = error.response.data.error;
       } else if (error.code === 'ECONNABORTED') {
         message = 'Kết nối quá lâu. Vui lòng thử lại.';
       } else if (!error.response) {
@@ -63,18 +80,54 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
 
           <Surface style={styles.form} elevation={0}>
             <View style={styles.formAccent} />
-            <TextInput
-              label="Mã sinh viên"
-              value={studentCode}
-              onChangeText={setStudentCode}
-              mode="outlined"
-              autoCapitalize="none"
-              autoCorrect={false}
-              style={styles.input}
-              outlineStyle={styles.inputOutline}
-              left={<TextInput.Icon icon="account" color={colors.textSecondary} />}
-              activeOutlineColor={colors.primary}
-            />
+
+            <View style={styles.modeSwitch}>
+              <Button
+                mode={loginMode === 'patron' ? 'contained' : 'outlined'}
+                onPress={() => setLoginMode('patron')}
+                style={styles.modeButton}
+                labelStyle={styles.modeButtonLabel}
+              >
+                Độc giả
+              </Button>
+              <Button
+                mode={loginMode === 'staff' ? 'contained' : 'outlined'}
+                onPress={() => setLoginMode('staff')}
+                style={styles.modeButton}
+                labelStyle={styles.modeButtonLabel}
+              >
+                Nhân viên
+              </Button>
+            </View>
+
+            {loginMode === 'staff' ? (
+              <TextInput
+                label="Email"
+                value={email}
+                onChangeText={setEmail}
+                mode="outlined"
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+                style={styles.input}
+                outlineStyle={styles.inputOutline}
+                left={<TextInput.Icon icon="email" color={colors.textSecondary} />}
+                activeOutlineColor={colors.primary}
+              />
+            ) : (
+              <TextInput
+                label="Mã sinh viên"
+                value={studentCode}
+                onChangeText={setStudentCode}
+                mode="outlined"
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={styles.input}
+                outlineStyle={styles.inputOutline}
+                left={<TextInput.Icon icon="account" color={colors.textSecondary} />}
+                activeOutlineColor={colors.primary}
+              />
+            )}
 
             <TextInput
               label="Mật khẩu"
@@ -104,36 +157,40 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
               contentStyle={styles.buttonContent}
               labelStyle={styles.buttonLabel}
             >
-              Đăng nhập
+              {loginMode === 'staff' ? 'Đăng nhập nhân viên' : 'Đăng nhập'}
             </Button>
 
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text variant="bodySmall" style={styles.dividerText}>
-                hoặc
-              </Text>
-              <View style={styles.dividerLine} />
-            </View>
+            {loginMode === 'patron' && (
+              <>
+                <View style={styles.divider}>
+                  <View style={styles.dividerLine} />
+                  <Text variant="bodySmall" style={styles.dividerText}>
+                    hoặc
+                  </Text>
+                  <View style={styles.dividerLine} />
+                </View>
 
-            <Button
-              mode="outlined"
-              onPress={() => navigation.navigate('FaceLogin')}
-              style={styles.faceButton}
-              contentStyle={styles.faceButtonContent}
-              labelStyle={styles.faceButtonLabel}
-              icon="face-recognition"
-            >
-              Đăng nhập bằng khuôn mặt
-            </Button>
+                <Button
+                  mode="outlined"
+                  onPress={() => navigation.navigate('FaceLogin')}
+                  style={styles.faceButton}
+                  contentStyle={styles.faceButtonContent}
+                  labelStyle={styles.faceButtonLabel}
+                  icon="face-recognition"
+                >
+                  Đăng nhập bằng khuôn mặt
+                </Button>
 
-            <Button
-              mode="text"
-              onPress={() => navigation.navigate('Register')}
-              style={styles.registerButton}
-              labelStyle={styles.registerLabel}
-            >
-              Chưa có tài khoản? Đăng ký ngay
-            </Button>
+                <Button
+                  mode="text"
+                  onPress={() => navigation.navigate('Register')}
+                  style={styles.registerButton}
+                  labelStyle={styles.registerLabel}
+                >
+                  Chưa có tài khoản? Đăng ký ngay
+                </Button>
+              </>
+            )}
           </Surface>
         </View>
       </KeyboardAvoidingView>
@@ -200,6 +257,19 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     borderTopRightRadius: 2,
     borderBottomRightRadius: 2,
+  },
+  modeSwitch: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  modeButton: {
+    flex: 1,
+    borderRadius: 6,
+  },
+  modeButtonLabel: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   input: {
     marginBottom: 16,

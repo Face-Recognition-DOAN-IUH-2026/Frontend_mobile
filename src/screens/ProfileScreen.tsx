@@ -11,6 +11,12 @@ interface ProfileScreenProps {
 
 export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   const { user, patron, logout } = useAuth();
+  const roleLabel =
+    user?.role === 'admin'
+      ? 'Quản trị viên'
+      : user?.role === 'staff'
+        ? 'Nhân viên'
+        : 'Độc giả';
 
   const handleLogout = () => {
     Alert.alert('Đăng xuất', 'Bạn có chắc muốn đăng xuất?', [
@@ -39,7 +45,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         )}
         <View style={styles.roleBadge}>
           <Text variant="bodySmall" style={styles.role}>
-            {user?.role === 'admin' ? 'Quản trị viên' : 'Độc giả'}
+            {roleLabel}
           </Text>
         </View>
       </Surface>
@@ -80,7 +86,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           <List.Item
             title="Vai trò"
             titleStyle={styles.itemTitle}
-            description={user?.role === 'admin' ? 'Quản trị viên' : 'Độc giả'}
+            description={roleLabel}
             descriptionStyle={styles.itemDescription}
             left={(props) => <List.Icon {...props} icon="shield-account" color={colors.primary} />}
           />

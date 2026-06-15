@@ -12,6 +12,7 @@ import FaceLoginScreen from '../screens/FaceLoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import HomeScreen from '../screens/HomeScreen';
 import BorrowScreen from '../screens/BorrowScreen';
+import ReturnScreen from '../screens/ReturnScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import FaceCameraScreen from '../screens/FaceCameraScreen';
 import ChangePasswordScreen from '../screens/ChangePasswordScreen';
@@ -49,6 +50,9 @@ function AuthNavigator() {
 }
 
 function MainTabNavigator() {
+  const { user } = useAuth();
+  const isStaffScanner = user?.role === 'admin' || user?.role === 'staff';
+
   return (
     <MainTab.Navigator
       screenOptions={{
@@ -77,11 +81,11 @@ function MainTabNavigator() {
       />
       <MainTab.Screen
         name="Borrow"
-        component={BorrowScreen}
+        component={isStaffScanner ? ReturnScreen : BorrowScreen}
         options={{
-          title: 'Mượn sách',
+          title: isStaffScanner ? 'Trả sách' : 'Mượn sách',
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="book-plus" size={size} color={color} />
+            <MaterialCommunityIcons name={isStaffScanner ? 'barcode-scan' : 'book-plus'} size={size} color={color} />
           ),
         }}
       />

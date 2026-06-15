@@ -24,6 +24,7 @@ export interface LoginResponse {
   access_token: string;
   refresh_token: string;
   token_type: string;
+  user?: any;
 }
 
 export interface PatronLoginResponse {
@@ -49,6 +50,10 @@ export const authApi = {
     };
     await AsyncStorage.setItem('accessToken', tokens.access_token);
     await AsyncStorage.setItem('refreshToken', tokens.refresh_token);
+    if (response.data.user) {
+      await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
+      await AsyncStorage.removeItem('patronData');
+    }
     return response.data;
   },
 
@@ -98,7 +103,7 @@ export const authApi = {
   },
 
   logout: async (): Promise<void> => {
-    await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'patronData']);
+    await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'patronData', 'userData']);
   },
 
   getCurrentUser: async (): Promise<User> => {

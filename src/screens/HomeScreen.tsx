@@ -16,11 +16,17 @@ interface HomeScreenProps {
 
 export default function HomeScreen({ navigation }: HomeScreenProps) {
   const { user, patron } = useAuth();
+  const isStaffScanner = user?.role === 'admin' || user?.role === 'staff';
   const [borrows, setBorrows] = useState<BorrowRecord[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadBorrows = async () => {
+    if (isStaffScanner) {
+      setLoadError(null);
+      setBorrows([]);
+      return;
+    }
     try {
       setLoadError(null);
       const history = await borrowApi.getHistory('borrowed');
@@ -36,7 +42,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   useFocusEffect(
     useCallback(() => {
       loadBorrows();
-    }, [])
+    }, [isStaffScanner])
   );
 
   const onRefresh = async () => {
@@ -71,6 +77,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           </View>
         </Surface>
 
+        {!isStaffScanner && (
         <View style={styles.statsRow}>
           <Surface style={styles.statCard} elevation={0}>
             <View style={styles.statSpine} />
@@ -85,6 +92,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             <Text style={styles.statLabel}>Quá hạn</Text>
           </Surface>
         </View>
+        )}
 
         {patron?.password_auto_generated && (
           <View style={styles.passwordBanner}>
@@ -118,33 +126,37 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           <TouchableOpacity activeOpacity={0.8} onPress={() => navigation.navigate('Borrow')}>
             <Surface style={styles.actionCard} elevation={0}>
               <View style={styles.actionIconWrap}>
-                <MaterialCommunityIcons name="book-outline" size={22} color={colors.background} />
+                <MaterialCommunityIcons name={isStaffScanner ? 'barcode-scan' : 'book-outline'} size={22} color={colors.background} />
               </View>
               <View style={styles.actionTextWrap}>
-                <Text style={styles.actionTitle}>Mượn sách</Text>
-                <Text style={styles.actionDesc}>Quét mã vạch để mượn sách</Text>
+                <Text style={styles.actionTitle}>{isStaffScanner ? 'Trả sách' : 'Mượn sách'}</Text>
+                <Text style={styles.actionDesc}>
+                  {isStaffScanner ? 'Quét mã vạch để xác nhận trả sách' : 'Quét mã vạch để mượn sách'}
+                </Text>
               </View>
               <MaterialCommunityIcons name="chevron-right" size={22} color={colors.textSecondary} />
             </Surface>
           </TouchableOpacity>
-          <TouchableOpacity activeOpacity={0.8} onPress={() => navigation.navigate('History')}>
-            <Surface style={styles.actionCard} elevation={0}>
-              <View style={[styles.actionIconWrap, styles.actionIconSecondaryWrap]}>
-                <MaterialCommunityIcons name="history" size={22} color={colors.text} />
-              </View>
-              <View style={styles.actionTextWrap}>
-                <Text style={styles.actionTitle}>Lịch sử</Text>
-                <Text style={styles.actionDesc}>Xem sách đã mượn</Text>
-              </View>
-              <MaterialCommunityIcons name="chevron-right" size={22} color={colors.textSecondary} />
-            </Surface>
-          </TouchableOpacity>
+          {!isStaffScanner && (
+            <TouchableOpacity activeOpacity={0.8} onPress={() => navigation.navigate('History')}>
+              <Surface style={styles.actionCard} elevation={0}>
+                <View style={[styles.actionIconWrap, styles.actionIconSecondaryWrap]}>
+                  <MaterialCommunityIcons name="history" size={22} color={colors.text} />
+                </View>
+                <View style={styles.actionTextWrap}>
+                  <Text style={styles.actionTitle}>Lịch sử</Text>
+                  <Text style={styles.actionDesc}>Xem sách đã mượn</Text>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={22} color={colors.textSecondary} />
+              </Surface>
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionSpine} />
-            <Text style={styles.sectionTitle}>Sách đang mượn</Text>
+            <Text style={styles.sectionTitle}>{isStaffScanner ? 'Máy quét trả sách' : 'Sách đang mượn'}</Text>
           </View>
 
           {loadError ? (
@@ -162,12 +174,12 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             </Surface>
           ) : activeBorrows.length === 0 ? (
             <Surface style={styles.stateCard} elevation={0}>
-              <MaterialCommunityIcons name="bookshelf" size={36} color={colors.textSecondary} />
+              <MaterialCommunityIcons name={isStaffScanner ? 'barcode-scan' : 'bookshelf'} size={36} color={colors.textSecondary} />
               <Text variant="bodyMedium" style={styles.stateText}>
-                Bạn chưa mượn cuốn sách nào
+                {isStaffScanner ? 'Sẵn sàng quét trả sách' : 'Bạn chưa mượn cuốn sách nào'}
               </Text>
               <Button mode="contained" onPress={() => navigation.navigate('Borrow')} style={styles.stateButton} labelStyle={styles.stateButtonLabel}>
-                Mượn sách ngay
+                {isStaffScanner ? 'Mở máy quét' : 'Mượn sách ngay'}
               </Button>
             </Surface>
           ) : (
