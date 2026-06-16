@@ -1,5 +1,5 @@
 import api from './client';
-import { BorrowResponse, ReturnResponse, BorrowRecord, Book, BookWithStats, BookImportResponse, StaffPatronActiveBorrowsResponse } from '../types';
+import { BorrowResponse, ReturnResponse, BorrowRecord, Book, BookWithStats, BookImportResponse, StaffPatronActiveBorrowsResponse, CreateBorrowSlipRequest, CreateBorrowSlipResponse } from '../types';
 
 export interface BorrowRequest {
   barcode: string;
@@ -62,6 +62,11 @@ export const borrowApi = {
 
   batchImportByIsbn: async (items: { isbn: string; quantity: number }[]): Promise<BookImportResponse> => {
     const response = await api.post<BookImportResponse>('/borrow/isbn-import/batch', { items });
+    return response.data;
+  },
+
+  createSlip: async (data: CreateBorrowSlipRequest): Promise<CreateBorrowSlipResponse> => {
+    const response = await api.post<CreateBorrowSlipResponse>('/borrow/staff/slip/create', data);
     return response.data;
   },
 };

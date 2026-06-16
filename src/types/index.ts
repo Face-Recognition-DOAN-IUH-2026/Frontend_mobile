@@ -209,3 +209,33 @@ export interface BookImportResponse {
   errors: number;
   results: BookImportResultRow[];
 }
+
+export interface BorrowSlipItem {
+  barcode: string;
+  isbn?: string;
+}
+
+export interface CreateBorrowSlipRequest {
+  patron_id: string;
+  items: BorrowSlipItem[];
+}
+
+export interface BorrowSlip {
+  id: string;
+  patron_id: string;
+  borrow_at: string;
+  due_at: string;
+  status: string;
+  created_by_user_id?: string;
+  created_by_email?: string;
+  total_items: number;
+  created_at: string;
+  updated_at: string;
+  records?: BorrowRecord[];
+}
+
+export interface CreateBorrowSlipResponse {
+  status: string;
+  message: string;
+  slip?: BorrowSlip;
+}

@@ -9,6 +9,7 @@ import {
   Card,
   Chip,
   Menu,
+  Portal,
   Snackbar,
   Text,
   TextInput,
@@ -18,6 +19,7 @@ import { borrowApi } from '../api/borrow';
 import { AppTheme } from '../theme/DarkTheme';
 import { BorrowRecord, StaffPatronActiveBorrowsResponse } from '../types';
 import { formatDate, getDaysUntil, isOverdue } from '../utils/dateUtils';
+import { getErrorMessage } from '../utils/errorUtils';
 
 type StepState = 'lookup' | 'scan';
 
@@ -95,25 +97,39 @@ export default function ReturnScreen() {
     }
   };
 
+  type ItemResult = { isbn: string; title: string; status: 'ok' | 'fail'; error?: string };
   const handleBatchReturn = async () => {
     const code = studentCode.trim();
     if (!code || !staffLookup || !scannedReturns.length) return;
 
     setBatchReturning(true);
     setError(null);
-    let ok = 0;
-    let fail = 0;
+    const results: ItemResult[] = [];
     for (const item of scannedReturns) {
       try {
         await borrowApi.returnByPatron(code, item.isbn, item.condition || undefined);
-        ok++;
-      } catch {
-        fail++;
+        results.push({ isbn: item.isbn, title: item.record.book?.title || item.isbn, status: 'ok' });
+      } catch (err) {
+        results.push({ isbn: item.isbn, title: item.record.book?.title || item.isbn, status: 'fail', error: getErrorMessage(err) });
       }
     }
     setBatchReturning(false);
+
+    const okList = results.filter(r => r.status === 'ok');
+    const failList = results.filter(r => r.status === 'fail');
+
+    if (okList.length > 0 && failList.length === 0) {
+      setSnackbar(`✓ Đã trả ${okList.length} sách thành công`);
+    } else if (okList.length > 0 && failList.length > 0) {
+      const failTitles = failList.map(f => f.title).join(', ');
+      setSnackbar(`✓ Đã trả ${okList.length} sách thành công\n✗ Thất bại: ${failTitles}`);
+    } else {
+      const failTitles = failList.map(f => f.title).join(', ');
+      const failErrors = failList.map(f => `${f.title}: ${f.error}`).join(' | ');
+      setSnackbar(`✗ Trả thất bại: ${failTitles}\n${failErrors}`);
+    }
+
     setScannedReturns([]);
-    setSnackbar(`Trả ${ok} sách thành công${fail > 0 ? `, ${fail} thất bại` : ''}`);
     await loadPatronBorrows(code);
   };
 
@@ -205,13 +221,14 @@ export default function ReturnScreen() {
   };
 
   const renderScanner = () => {
-    if (!staffLookup || activeRecords.length === 0) return null;
+    if (!staffLookup) return null;
 
     if (!permission) {
       return <ActivityIndicator color={theme.colors.primary} style={styles.loader} />;
     }
 
     const hasScanned = scannedReturns.length > 0;
+    const hasActiveRecords = activeRecords.length > 0;
 
     return (
       <Card mode="outlined" style={styles.panel}>
@@ -323,6 +340,14 @@ export default function ReturnScreen() {
             </View>
           ) : (
             <Text style={styles.scannedEmpty}>Chưa có sách nào được quét</Text>
+          )}
+
+          {!hasActiveRecords && !hasScanned && (
+            <View style={styles.emptyCameraOverlay}>
+              <MaterialCommunityIcons name="book-check-outline" size={36} color={theme.colors.onSurfaceVariant} />
+              <Text style={styles.mutedCenterText}>Không có sách đang mượn</Text>
+              <Text style={styles.mutedCenterText}>Có thể đổi patron để tiếp tục</Text>
+            </View>
           )}
 
           <Button
@@ -461,13 +486,27 @@ export default function ReturnScreen() {
         {renderScanner()}
       </ScrollView>
 
-      <Snackbar visible={!!scanToast} onDismiss={() => setScanToast('')} duration={2000}>
-        {scanToast}
-      </Snackbar>
+      <Portal>
+        <View style={styles.topSnackbarContainer}>
+          <Snackbar
+            visible={!!scanToast}
+            onDismiss={() => setScanToast('')}
+            duration={2000}
+            style={styles.topSnackbar}
+          >
+            {scanToast}
+          </Snackbar>
 
-      <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={3000}>
-        {snackbar}
-      </Snackbar>
+          <Snackbar
+            visible={!!snackbar}
+            onDismiss={() => setSnackbar('')}
+            duration={4000}
+            style={[styles.topSnackbar, snackbar?.includes('\n') ? styles.multiLineSnackbar : undefined]}
+          >
+            {snackbar}
+          </Snackbar>
+        </View>
+      </Portal>
     </SafeAreaView>
   );
 }
@@ -699,6 +738,11 @@ function createStyles(theme: AppTheme) {
       paddingVertical: 28,
       gap: 6,
     },
+    emptyCameraOverlay: {
+      alignItems: 'center',
+      paddingVertical: 16,
+      gap: 6,
+    },
     cameraWrap: {
       height: 190,
       borderRadius: 12,
@@ -853,6 +897,22 @@ function createStyles(theme: AppTheme) {
       fontSize: 13,
       marginTop: 12,
       textAlign: 'center',
+    },
+    multiLineSnackbar: {
+      flexWrap: 'wrap',
+      whiteSpace: 'pre-wrap',
+    },
+    topSnackbarContainer: {
+      position: 'absolute',
+      top: 50,
+      left: 0,
+      right: 0,
+      zIndex: 1000,
+      paddingHorizontal: 16,
+      gap: 8,
+    },
+    topSnackbar: {
+      width: '100%',
     },
   });
 }
