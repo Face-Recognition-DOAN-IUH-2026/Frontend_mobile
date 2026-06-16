@@ -19,6 +19,7 @@ import ProfileScreen from '../screens/ProfileScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import ReturnScreen from '../screens/ReturnScreen';
 import ScheduleScreen from '../screens/ScheduleScreen';
+import StaffBorrowScreen from '../screens/StaffBorrowScreen';
 
 import { AuthStackParamList, MainStackParamList, MainTabParamList } from './types';
 
@@ -84,16 +85,43 @@ function MainTabNavigator() {
           ),
         }}
       />
-      <MainTab.Screen
-        name="Borrow"
-        component={isStaffScanner ? ReturnScreen : BorrowScreen}
-        options={{
-          title: isStaffScanner ? 'Trả sách' : 'Mượn sách',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name={isStaffScanner ? 'barcode-scan' : 'book-plus'} size={size} color={color} />
-          ),
-        }}
-      />
+      {/* Patron tabs - hidden for admin/staff */}
+      {!isStaffScanner && (
+        <MainTab.Screen
+          name="Borrow"
+          component={BorrowScreen}
+          options={{
+            title: 'Mượn sách',
+            tabBarIcon: ({ color, size }) => (
+              <MaterialCommunityIcons name="book-plus" size={size} color={color} />
+            ),
+          }}
+        />
+      )}
+      {isStaffScanner && (
+        <>
+          <MainTab.Screen
+            name="StaffReturn"
+            component={ReturnScreen}
+            options={{
+              title: 'Trả sách',
+              tabBarIcon: ({ color, size }) => (
+                <MaterialCommunityIcons name="barcode-scan" size={size} color={color} />
+              ),
+            }}
+          />
+          <MainTab.Screen
+            name="StaffBorrow"
+            component={StaffBorrowScreen}
+            options={{
+              title: 'Tạo phiếu mượn',
+              tabBarIcon: ({ color, size }) => (
+                <MaterialCommunityIcons name="book-plus-multiple" size={size} color={color} />
+              ),
+            }}
+          />
+        </>
+      )}
       {isStaffScanner && (
         <MainTab.Screen
           name="Schedule"
@@ -106,16 +134,19 @@ function MainTabNavigator() {
           }}
         />
       )}
-      <MainTab.Screen
-        name="History"
-        component={HistoryScreen}
-        options={{
-          title: 'Lịch sử',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="history" size={size} color={color} />
-          ),
-        }}
-      />
+      {/* Patron tab - hidden for admin/staff */}
+      {!isStaffScanner && (
+        <MainTab.Screen
+          name="History"
+          component={HistoryScreen}
+          options={{
+            title: 'Lịch sử',
+            tabBarIcon: ({ color, size }) => (
+              <MaterialCommunityIcons name="history" size={size} color={color} />
+            ),
+          }}
+        />
+      )}
       <MainTab.Screen
         name="Profile"
         component={ProfileScreen}
