@@ -18,6 +18,10 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function getFullName(data: any): string {
+  return data?.fullName || data?.full_name || '';
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [patron, setPatron] = useState<any | null>(null);
@@ -31,14 +35,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (token && patronDataStr) {
         const patronData = JSON.parse(patronDataStr);
         setPatron(patronData);
-        setUser({ id: patronData.id, email: patronData.email || '', full_name: patronData.fullName, role: 'patron' });
+        setUser({ id: patronData.id, email: patronData.email || '', full_name: getFullName(patronData), role: 'patron' });
       } else if (token && userDataStr) {
         const userData = JSON.parse(userDataStr);
         setPatron(null);
         setUser({
           id: userData.id,
           email: userData.email || '',
-          full_name: userData.fullName || userData.full_name,
+          full_name: getFullName(userData),
           role: userData.role,
         });
       }
@@ -59,7 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const response = await authApi.patronLogin({ student_code: studentCode, password });
       setPatron(response.user);
-      setUser({ id: response.user.id, email: response.user.email || '', full_name: response.user.fullName, role: 'patron' });
+      setUser({ id: response.user.id, email: response.user.email || '', full_name: getFullName(response.user), role: 'patron' });
     } finally {
       setIsLoading(false);
     }
@@ -78,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser({
         id: userData.id,
         email: userData.email || email,
-        full_name: userData.fullName || userData.full_name,
+        full_name: getFullName(userData),
         role: userData.role,
       });
     } finally {
@@ -86,14 +90,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const faceLogin = async (imageBase64: string) => {
+  const faceLogin = async (imageUri: string) => {
     setIsLoading(true);
     try {
-      await authApi.faceLogin(imageBase64);
+      await authApi.faceLogin(imageUri);
       const patronData = await authApi.getCurrentPatron();
       await AsyncStorage.setItem('patronData', JSON.stringify(patronData));
       setPatron(patronData);
-      setUser({ id: patronData.id, email: patronData.email || '', full_name: patronData.fullName, role: 'patron' });
+      setUser({ id: patronData.id, email: patronData.email || '', full_name: getFullName(patronData), role: 'patron' });
+    } catch (error) {
+      await authApi.logout();
+      throw error;
     } finally {
       setIsLoading(false);
     }
