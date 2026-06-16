@@ -10,6 +10,7 @@ export type MainTabParamList = {
   Home: undefined;
   Borrow: undefined;
   Schedule: undefined;
+  History: undefined;
   Profile: undefined;
 };
 
@@ -17,7 +18,7 @@ export type MainStackParamList = {
   MainTabs: NavigatorScreenParams<MainTabParamList>;
   FaceCamera: undefined;
   ChangePassword: undefined;
-  History: undefined;
+  ImportBooks: undefined;
 };
 
 export type RootStackParamList = {

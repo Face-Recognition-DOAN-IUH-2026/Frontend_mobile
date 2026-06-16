@@ -138,6 +138,11 @@ export default function HistoryScreen({ navigation }: HistoryScreenProps) {
                         Hạn trả: {formatDate(record.due_at)}
                       </Text>
                     )}
+                    {record.note ? (
+                      <Text style={styles.noteText}>
+                        Tình trạng: {record.note}
+                      </Text>
+                    ) : null}
                   </View>
                   <View style={[styles.statusBadge, isReturned ? styles.statusReturned : overdue ? styles.statusOverdue : styles.statusActive]}>
                     <Text style={styles.statusText}>
@@ -295,6 +300,11 @@ const styles = StyleSheet.create({
   metaText: {
     color: colors.textDisabled,
     fontSize: 11,
+  },
+  noteText: {
+    color: colors.primary,
+    fontSize: 11,
+    marginTop: 1,
   },
   statusBadge: {
     alignSelf: 'flex-start',

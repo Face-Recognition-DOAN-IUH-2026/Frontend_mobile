@@ -39,6 +39,7 @@ export interface BorrowRecord {
   returned_by_user_id?: string;
   returned_by_email?: string;
   return_method?: string;
+  note?: string;
   book?: Book;
 }
 
@@ -53,6 +54,7 @@ export interface ReturnResponse {
   status: 'success' | 'error';
   message: string;
   record?: BorrowRecord;
+  note?: string;
 }
 
 export interface Patron {
@@ -176,4 +178,34 @@ export interface StaffAvailabilityRequest {
   type: string;
   reason?: string | null;
   status: string;
+}
+
+export interface BookWithStats {
+  id: string;
+  isbn: string;
+  title: string;
+  author: string | null;
+  cover_url: string | null;
+  shelf_location: string | null;
+  total_copies: number;
+  available_copies: number;
+  created_at: string;
+}
+
+export interface BookImportResultRow {
+  isbn: string;
+  title: string;
+  quantity: number;
+  barcodes: string[];
+  status: string;
+  message: string | null;
+}
+
+export interface BookImportResponse {
+  success: boolean;
+  total_rows: number;
+  imported: number;
+  skipped: number;
+  errors: number;
+  results: BookImportResultRow[];
 }
