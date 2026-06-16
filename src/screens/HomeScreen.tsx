@@ -73,6 +73,12 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       route: 'Borrow',
     },
     {
+      title: 'Nhập sách',
+      description: 'Quét ISBN và nhập sách mới vào thư viện.',
+      icon: 'package-variant-closed',
+      route: 'ImportBooks',
+    },
+    {
       title: 'Lịch trực',
       description: 'Xem ca hôm nay và lịch làm việc trong tuần.',
       icon: 'calendar-clock',

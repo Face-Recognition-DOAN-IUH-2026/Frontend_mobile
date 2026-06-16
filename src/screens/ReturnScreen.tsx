@@ -8,8 +8,7 @@ import {
   Button,
   Card,
   Chip,
-  Dialog,
-  Portal,
+  Menu,
   Snackbar,
   Text,
   TextInput,
@@ -20,7 +19,13 @@ import { AppTheme } from '../theme/DarkTheme';
 import { BorrowRecord, StaffPatronActiveBorrowsResponse } from '../types';
 import { formatDate, getDaysUntil, isOverdue } from '../utils/dateUtils';
 
-type StepState = 'lookup' | 'scan' | 'ready';
+type StepState = 'lookup' | 'scan';
+
+interface ScannedReturnItem {
+  isbn: string;
+  record: BorrowRecord;
+  condition: string;
+}
 type MaterialIconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
 const normalizeBookCode = (value?: string | null) =>
@@ -34,29 +39,31 @@ export default function ReturnScreen() {
   const theme = useTheme() as AppTheme;
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [studentCode, setStudentCode] = useState('');
-  const [isbn, setIsbn] = useState('');
   const [staffLookup, setStaffLookup] = useState<StaffPatronActiveBorrowsResponse | null>(null);
   const [isLoadingPatron, setIsLoadingPatron] = useState(false);
-  const [isReturning, setIsReturning] = useState(false);
   const [scanned, setScanned] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [scannedReturns, setScannedReturns] = useState<ScannedReturnItem[]>([]);
+  const [batchReturning, setBatchReturning] = useState(false);
+  const [conditionMenuIsbn, setConditionMenuIsbn] = useState<string | null>(null);
   const [snackbar, setSnackbar] = useState('');
+  const [scanToast, setScanToast] = useState('');
   const [permission, requestPermission] = useCameraPermissions();
 
+  const CONDITION_OPTIONS = useMemo(() => [
+    { label: 'Còn mới', value: 'Còn mới' },
+    { label: 'Bình thường', value: 'Bình thường' },
+    { label: 'Sách cũ', value: 'Sách cũ' },
+    { label: 'Rách bìa', value: 'Rách bìa' },
+    { label: 'Rách trang', value: 'Rách trang' },
+    { label: 'Thiếu trang', value: 'Thiếu trang' },
+    { label: 'Ẩm mốc', value: 'Ẩm mốc' },
+    { label: 'Viết/bôi bẩn', value: 'Viết/bôi bẩn' },
+    { label: 'Hư hỏng nặng', value: 'Hư hỏng nặng' },
+  ], []);
+
   const activeRecords = staffLookup?.records ?? [];
-  const normalizedIsbn = normalizeBookCode(isbn);
-
-  const matchedRecord = useMemo(() => {
-    if (!normalizedIsbn) return null;
-    return activeRecords.find((record) => normalizeBookCode(record.book?.isbn) === normalizedIsbn) ?? null;
-  }, [activeRecords, normalizedIsbn]);
-
-  const step: StepState = !staffLookup ? 'lookup' : normalizedIsbn && matchedRecord ? 'ready' : 'scan';
-  const canReturn = !!staffLookup && !!normalizedIsbn && !!matchedRecord && !isReturning;
-
-  const extractErrorMessage = (err: any, fallback: string) =>
-    err?.response?.data?.detail || err?.response?.data?.error || fallback;
+  const step: StepState = !staffLookup ? 'lookup' : 'scan';
 
   const extractLookupErrorMessage = (err: any) => {
     const status = err?.response?.status;
@@ -75,7 +82,7 @@ export default function ReturnScreen() {
 
     setIsLoadingPatron(true);
     setError(null);
-    setIsbn('');
+    setScannedReturns([]);
     setScanned(false);
     try {
       const result = await borrowApi.getActiveBorrowsByStudentCode(code);
@@ -88,46 +95,72 @@ export default function ReturnScreen() {
     }
   };
 
+  const handleBatchReturn = async () => {
+    const code = studentCode.trim();
+    if (!code || !staffLookup || !scannedReturns.length) return;
+
+    setBatchReturning(true);
+    setError(null);
+    let ok = 0;
+    let fail = 0;
+    for (const item of scannedReturns) {
+      try {
+        await borrowApi.returnByPatron(code, item.isbn, item.condition || undefined);
+        ok++;
+      } catch {
+        fail++;
+      }
+    }
+    setBatchReturning(false);
+    setScannedReturns([]);
+    setSnackbar(`Trả ${ok} sách thành công${fail > 0 ? `, ${fail} thất bại` : ''}`);
+    await loadPatronBorrows(code);
+  };
+
+  const updateCondition = (isbn: string, value: string) => {
+    setScannedReturns((prev) => prev.map((item) =>
+      item.isbn === isbn ? { ...item, condition: value } : item
+    ));
+  };
+
+  const removeScanned = (isbn: string) => {
+    setScannedReturns((prev) => prev.filter((item) => item.isbn !== isbn));
+  };
+
   const handleBarCodeScanned = (result: BarcodeScanningResult) => {
     if (scanned || !result.data) return;
     const code = normalizeBookCode(result.data);
-    if (!code) return;
+    if (!code || !/^\d{10,13}$/.test(code)) return;
     setScanned(true);
-    setIsbn(code);
     setTimeout(() => setScanned(false), 1200);
-  };
-
-  const handleReturn = async () => {
-    const code = studentCode.trim();
-    if (!code || !normalizedIsbn || !staffLookup || !matchedRecord) return;
-
-    setConfirmVisible(false);
-    setIsReturning(true);
-    setError(null);
-    try {
-      const result = await borrowApi.returnByPatron(code, normalizedIsbn);
-      setSnackbar(result.message || 'Đã cập nhật phiếu mượn');
-      setIsbn('');
-      setScanned(false);
-      await loadPatronBorrows(code);
-    } catch (err: any) {
-      setError(extractErrorMessage(err, 'Trả sách thất bại'));
-    } finally {
-      setIsReturning(false);
-    }
+    let toast = '';
+    setScannedReturns((prev) => {
+      if (prev.some((item) => item.isbn === code)) {
+        toast = `Sách ${code} đã có trong danh sách`;
+        return prev;
+      }
+      const match = activeRecords.find((r) => normalizeBookCode(r.book?.isbn) === code);
+      if (match) {
+        toast = `Đã thêm: ${match.book?.title || code}`;
+        return [...prev, { isbn: code, record: match, condition: '' }];
+      }
+      toast = `Không tìm thấy sách đang mượn: ${code}`;
+      return prev;
+    });
+    setScanToast(toast);
   };
 
   const resetPatron = () => {
     setStaffLookup(null);
     setStudentCode('');
-    setIsbn('');
+    setScannedReturns([]);
     setScanned(false);
     setError(null);
   };
 
   const renderStepPill = (value: StepState, label: string, icon: MaterialIconName) => {
     const active = step === value;
-    const complete = value === 'lookup' ? !!staffLookup : value === 'scan' ? !!normalizedIsbn : !!matchedRecord;
+    const complete = value === 'lookup' ? !!staffLookup : scannedReturns.length > 0;
     return (
       <View style={[styles.stepPill, (active || complete) && styles.stepPillActive]}>
         <MaterialCommunityIcons
@@ -143,10 +176,9 @@ export default function ReturnScreen() {
   const renderBorrowRecord = (record: BorrowRecord) => {
     const daysLeft = getDaysUntil(record.due_at);
     const overdue = isOverdue(record.due_at);
-    const isMatched = matchedRecord?.id === record.id;
 
     return (
-      <Card key={record.id} mode="outlined" style={[styles.recordCard, isMatched && styles.recordCardMatched]}>
+      <Card key={record.id} mode="outlined" style={styles.recordCard}>
         <Card.Content style={styles.recordContent}>
           <View style={styles.recordHeader}>
             <View style={styles.recordTitleWrap}>
@@ -179,6 +211,8 @@ export default function ReturnScreen() {
       return <ActivityIndicator color={theme.colors.primary} style={styles.loader} />;
     }
 
+    const hasScanned = scannedReturns.length > 0;
+
     return (
       <Card mode="outlined" style={styles.panel}>
         <Card.Content>
@@ -190,9 +224,9 @@ export default function ReturnScreen() {
                 <Text style={styles.mutedText}>Mã góc ISBN trên bìa sách</Text>
               </View>
             </View>
-            {normalizedIsbn ? (
-              <Button mode="text" compact onPress={() => { setIsbn(''); setScanned(false); }}>
-                Xóa
+            {hasScanned ? (
+              <Button mode="text" compact onPress={() => setScannedReturns([])}>
+                Xóa tất cả
               </Button>
             ) : null}
           </View>
@@ -227,50 +261,80 @@ export default function ReturnScreen() {
             </View>
           )}
 
-          <TextInput
-            label="ISBN / mã góc sách"
-            value={isbn}
-            onChangeText={(value) => {
-              setIsbn(value);
-              setScanned(false);
-            }}
-            mode="outlined"
-            keyboardType="number-pad"
-            style={styles.input}
-            right={<TextInput.Icon icon="barcode" color={theme.colors.primary} />}
-          />
-
-          {normalizedIsbn && !matchedRecord ? (
-            <View style={styles.inlineWarning}>
-              <MaterialCommunityIcons name="alert-circle-outline" size={18} color={theme.colors.tertiary} />
-              <Text style={styles.warningText}>
-                MSSV này không có sách đang mượn với ISBN {normalizedIsbn}
+          {hasScanned ? (
+            <View style={styles.scannedList}>
+              <Text variant="titleSmall" style={styles.scannedListTitle}>
+                Đã quét ({scannedReturns.length} cuốn)
               </Text>
+              {scannedReturns.map((item) => (
+                <View key={item.isbn} style={styles.scannedItem}>
+                  <View style={styles.scannedItemInfo}>
+                    <Text variant="bodySmall" style={styles.cardTitle} numberOfLines={1}>
+                      {item.record.book?.title || item.record.book_id}
+                    </Text>
+                    <Text style={styles.scannedIsbn}>{item.isbn}</Text>
+                  </View>
+                  <Menu
+                    visible={conditionMenuIsbn === item.isbn}
+                    onDismiss={() => setConditionMenuIsbn(null)}
+                    anchor={
+                      <Button
+                        mode="outlined"
+                        compact
+                        onPress={() => setConditionMenuIsbn(item.isbn)}
+                        style={styles.scannedConditionBtn}
+                        contentStyle={styles.scannedConditionContent}
+                        icon={item.condition ? 'check-circle' : 'note-plus-outline'}
+                      >
+                        {item.condition || 'Tình trạng'}
+                      </Button>
+                    }
+                    anchorPosition="bottom"
+                  >
+                    {CONDITION_OPTIONS.map((opt) => (
+                      <Menu.Item
+                        key={opt.value}
+                        onPress={() => {
+                          updateCondition(item.isbn, opt.value);
+                          setConditionMenuIsbn(null);
+                        }}
+                        title={opt.label}
+                        leadingIcon={item.condition === opt.value ? 'check' : undefined}
+                      />
+                    ))}
+                    <Menu.Item
+                      onPress={() => {
+                        updateCondition(item.isbn, '');
+                        setConditionMenuIsbn(null);
+                      }}
+                      title="Xoá lựa chọn"
+                      leadingIcon="close"
+                    />
+                  </Menu>
+                  <MaterialCommunityIcons
+                    name="close-circle-outline"
+                    size={22}
+                    color={theme.colors.error}
+                    onPress={() => removeScanned(item.isbn)}
+                    style={styles.scannedRemove}
+                  />
+                </View>
+              ))}
             </View>
-          ) : null}
-
-          {matchedRecord ? (
-            <View style={styles.matchBox}>
-              <MaterialCommunityIcons name="book-check-outline" size={24} color={theme.dark ? '#4A8C5C' : '#067647'} />
-              <View style={styles.matchTextWrap}>
-                <Text style={styles.cardTitle} numberOfLines={2}>
-                  {matchedRecord.book?.title || matchedRecord.book_id}
-                </Text>
-                <Text style={styles.successText}>Sẵn sàng xác nhận trả</Text>
-              </View>
-            </View>
-          ) : null}
+          ) : (
+            <Text style={styles.scannedEmpty}>Chưa có sách nào được quét</Text>
+          )}
 
           <Button
             mode="contained"
-            onPress={() => setConfirmVisible(true)}
-            loading={isReturning}
-            disabled={!canReturn}
+            onPress={handleBatchReturn}
+            loading={batchReturning}
+            disabled={batchReturning || !hasScanned}
             style={styles.returnButton}
             icon="check"
             contentStyle={styles.largeButtonContent}
           >
-            Xác nhận trả
+            {batchReturning ? 'Đang trả...' : `Xác nhận trả (${scannedReturns.length} cuốn)`}
           </Button>
         </Card.Content>
       </Card>
@@ -286,7 +350,6 @@ export default function ReturnScreen() {
           <View style={styles.stepsRow}>
             {renderStepPill('lookup', 'MSSV', 'account-search-outline')}
             {renderStepPill('scan', 'ISBN', 'barcode-scan')}
-            {renderStepPill('ready', 'Trả', 'check')}
           </View>
         </View>
 
@@ -398,20 +461,9 @@ export default function ReturnScreen() {
         {renderScanner()}
       </ScrollView>
 
-      <Portal>
-        <Dialog visible={confirmVisible} onDismiss={() => setConfirmVisible(false)}>
-          <Dialog.Title>Xác nhận trả sách</Dialog.Title>
-          <Dialog.Content>
-            <Text variant="bodyMedium">
-              Trả sách "{matchedRecord?.book?.title || matchedRecord?.book_id}" cho MSSV {studentCode.trim()}?
-            </Text>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setConfirmVisible(false)}>Hủy</Button>
-            <Button onPress={handleReturn} loading={isReturning}>Xác nhận</Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
+      <Snackbar visible={!!scanToast} onDismiss={() => setScanToast('')} duration={2000}>
+        {scanToast}
+      </Snackbar>
 
       <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={3000}>
         {snackbar}
@@ -757,6 +809,50 @@ function createStyles(theme: AppTheme) {
     },
     largeButtonContent: {
       minHeight: 48,
+    },
+    scannedList: {
+      marginTop: 12,
+      gap: 8,
+    },
+    scannedListTitle: {
+      color: theme.colors.onSurface,
+      fontWeight: '800',
+      marginBottom: 4,
+    },
+    scannedItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 8,
+      paddingHorizontal: 10,
+      borderRadius: 8,
+      backgroundColor: theme.colors.surfaceVariant,
+    },
+    scannedItemInfo: {
+      flex: 1,
+      minWidth: 0,
+    },
+    scannedIsbn: {
+      color: theme.colors.primary,
+      fontSize: 11,
+      fontFamily: 'monospace',
+      marginTop: 2,
+    },
+    scannedConditionBtn: {
+      borderRadius: 6,
+      minWidth: 0,
+    },
+    scannedConditionContent: {
+      minHeight: 30,
+    },
+    scannedRemove: {
+      padding: 4,
+    },
+    scannedEmpty: {
+      color: theme.colors.onSurfaceVariant,
+      fontSize: 13,
+      marginTop: 12,
+      textAlign: 'center',
     },
   });
 }

@@ -13,6 +13,7 @@ import FaceCameraScreen from '../screens/FaceCameraScreen';
 import FaceLoginScreen from '../screens/FaceLoginScreen';
 import HistoryScreen from '../screens/HistoryScreen';
 import HomeScreen from '../screens/HomeScreen';
+import ImportBooksScreen from '../screens/ImportBooksScreen';
 import LoginScreen from '../screens/LoginScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import RegisterScreen from '../screens/RegisterScreen';
@@ -106,6 +107,16 @@ function MainTabNavigator() {
         />
       )}
       <MainTab.Screen
+        name="History"
+        component={HistoryScreen}
+        options={{
+          title: 'Lịch sử',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="history" size={size} color={color} />
+          ),
+        }}
+      />
+      <MainTab.Screen
         name="Profile"
         component={ProfileScreen}
         options={{
@@ -152,10 +163,10 @@ function MainStackNavigator() {
         }}
       />
       <MainStack.Screen
-        name="History"
-        component={HistoryScreen}
+        name="ImportBooks"
+        component={ImportBooksScreen}
         options={{
-          title: 'Lịch sử mượn sách',
+          title: 'Nhập sách từ ISBN',
           presentation: 'card',
         }}
       />

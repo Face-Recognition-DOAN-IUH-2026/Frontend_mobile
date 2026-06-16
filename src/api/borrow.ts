@@ -1,5 +1,5 @@
 import api from './client';
-import { BorrowResponse, ReturnResponse, BorrowRecord, Book, StaffPatronActiveBorrowsResponse } from '../types';
+import { BorrowResponse, ReturnResponse, BorrowRecord, Book, BookWithStats, BookImportResponse, StaffPatronActiveBorrowsResponse } from '../types';
 
 export interface BorrowRequest {
   barcode: string;
@@ -11,8 +11,8 @@ export const borrowApi = {
     return response.data;
   },
 
-  returnBook: async (barcode: string): Promise<ReturnResponse> => {
-    const response = await api.post<ReturnResponse>('/borrow/staff-return', { barcode });
+  returnBook: async (barcode: string, note?: string): Promise<ReturnResponse> => {
+    const response = await api.post<ReturnResponse>('/borrow/staff-return', { barcode, note });
     return response.data;
   },
 
@@ -28,10 +28,11 @@ export const borrowApi = {
     return response.data;
   },
 
-  returnByPatron: async (studentCode: string, barcodeOrIsbn: string): Promise<ReturnResponse> => {
+  returnByPatron: async (studentCode: string, barcodeOrIsbn: string, note?: string): Promise<ReturnResponse> => {
     const response = await api.post<ReturnResponse>('/borrow/staff-return/by-patron', {
       student_code: studentCode,
       barcode_or_isbn: barcodeOrIsbn,
+      note,
     });
     return response.data;
   },
@@ -51,6 +52,16 @@ export const borrowApi = {
 
   getBook: async (isbn: string): Promise<Book> => {
     const response = await api.get<Book>(`/borrow/book/${isbn}`);
+    return response.data;
+  },
+
+  lookupBookByIsbn: async (isbn: string): Promise<BookWithStats> => {
+    const response = await api.get<BookWithStats>(`/borrow/book/${isbn}`);
+    return response.data;
+  },
+
+  batchImportByIsbn: async (items: { isbn: string; quantity: number }[]): Promise<BookImportResponse> => {
+    const response = await api.post<BookImportResponse>('/borrow/isbn-import/batch', { items });
     return response.data;
   },
 };
