@@ -191,8 +191,18 @@ export interface BookWithStats {
   id: string;
   isbn: string;
   title: string;
+  subtitle: string | null;
   author: string | null;
   cover_url: string | null;
+  publisher: string | null;
+  published_date: string | null;
+  description: string | null;
+  page_count: number | null;
+  categories: string | null;
+  average_rating: number | null;
+  language: string | null;
+  isbn10: string | null;
+  isbn13: string | null;
   shelf_location: string | null;
   total_copies: number;
   available_copies: number;

@@ -7,10 +7,9 @@ import {
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { borrowApi } from '../api/borrow';
-import { openLibraryApi } from '../api/openlibrary';
 import { authApi } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
-import { Book, OpenLibraryBook } from '../types';
+import { BookWithStats } from '../types';
 import { AppTheme } from '../theme/DarkTheme';
 import { devError, devLog } from '../utils/logger';
 
@@ -22,8 +21,7 @@ export default function BorrowScreen() {
   const [scanned, setScanned] = useState(false);
   const [isbn, setIsbn] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-  const [book, setBook] = useState<OpenLibraryBook | null>(null);
-  const [localBook, setLocalBook] = useState<Book | null>(null);
+  const [localBook, setLocalBook] = useState<BookWithStats | null>(null);
   const [isBorrowing, setIsBorrowing] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [permission, requestPermission] = useCameraPermissions();
@@ -61,19 +59,11 @@ export default function BorrowScreen() {
     setIsSearching(true);
     setSearchError(null);
     try {
-      try {
-        const localBookData = await borrowApi.getBook(isbnToSearch.trim());
-        setLocalBook(localBookData);
-      } catch {}
-      const openLibraryBook = await openLibraryApi.getBookByIsbn(isbnToSearch.trim());
-      if (openLibraryBook) {
-        setBook(openLibraryBook);
-      } else if (!localBook) {
-        setSearchError('Không tìm thấy sách với ISBN này');
-      }
+      const bookData = await borrowApi.getBook(isbnToSearch.trim());
+      setLocalBook(bookData);
     } catch (error) {
       devError('[Borrow] Search error:', error);
-      setSearchError('Không thể tìm kiếm sách');
+      setSearchError('Không tìm thấy sách với ISBN này');
     } finally {
       setIsSearching(false);
     }
@@ -131,20 +121,11 @@ export default function BorrowScreen() {
 
   const searchAgain = () => {
     setScanned(false);
-    setBook(null);
     setLocalBook(null);
     setSearchError(null);
   };
 
-  const displayBook = book || (localBook ? {
-    title: localBook.title,
-    author: localBook.author,
-    cover: localBook.cover_url ? { medium: localBook.cover_url } : undefined,
-    authors: localBook.author ? [{ name: localBook.author }] : undefined,
-    publish_date: localBook.publish_year?.toString(),
-    number_of_pages: localBook.pages,
-    publishers: localBook.publisher ? [localBook.publisher] : undefined,
-  } : null);
+  const displayBook = localBook;
 
   if (!permission) {
     return (
@@ -291,8 +272,8 @@ export default function BorrowScreen() {
             ) : displayBook ? (
               <Card style={[styles.bookCard, { backgroundColor: c.surface, borderColor: c.outlineVariant }]}>
                 <View style={[styles.cardAccent, { backgroundColor: c.primary }]} />
-                {displayBook.cover?.medium ? (
-                  <Card.Cover source={{ uri: displayBook.cover.medium }} style={styles.cover} />
+                {displayBook.cover_url ? (
+                  <Card.Cover source={{ uri: displayBook.cover_url }} style={styles.cover} />
                 ) : (
                   <View style={[styles.coverPlaceholder, { backgroundColor: c.surfaceVariant }]}>
                     <MaterialCommunityIcons name="book-open-variant" size={48} color={c.onSurfaceVariant} />
@@ -301,22 +282,20 @@ export default function BorrowScreen() {
                 )}
                 <Card.Content>
                   <Text variant="titleLarge" style={[styles.bookTitle, { color: c.onSurface }]}>{displayBook.title}</Text>
-                  {'authors' in displayBook && displayBook.authors && displayBook.authors.length > 0 ? (
-                    <Text variant="bodyMedium" style={[styles.bookAuthor, { color: c.onSurfaceVariant }]}>{displayBook.authors.map(a => a.name).join(', ')}</Text>
-                  ) : 'author' in displayBook && displayBook.author ? (
+                  {displayBook.author ? (
                     <Text variant="bodyMedium" style={[styles.bookAuthor, { color: c.onSurfaceVariant }]}>{displayBook.author}</Text>
                   ) : null}
                   <View style={styles.metaRow}>
-                    {'publish_date' in displayBook && displayBook.publish_date ? (
+                    {displayBook.published_date ? (
                       <View style={styles.metaItem}>
                         <MaterialCommunityIcons name="calendar" size={14} color={c.onSurfaceVariant} />
-                        <Text style={[styles.metaText, { color: c.onSurfaceVariant }]}>{displayBook.publish_date}</Text>
+                        <Text style={[styles.metaText, { color: c.onSurfaceVariant }]}>{displayBook.published_date}</Text>
                       </View>
                     ) : null}
-                    {'number_of_pages' in displayBook && displayBook.number_of_pages ? (
+                    {displayBook.page_count ? (
                       <View style={styles.metaItem}>
                         <MaterialCommunityIcons name="book-open-page-variant" size={14} color={c.onSurfaceVariant} />
-                        <Text style={[styles.metaText, { color: c.onSurfaceVariant }]}>{displayBook.number_of_pages} trang</Text>
+                        <Text style={[styles.metaText, { color: c.onSurfaceVariant }]}>{displayBook.page_count} trang</Text>
                       </View>
                     ) : null}
                   </View>
