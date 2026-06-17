@@ -5,6 +5,7 @@ import { ActivityIndicator, Button, Card, Snackbar, Text, TextInput, useTheme } 
 import api from '../api/client';
 import { authApi } from '../api/auth';
 import AutoFaceCapture from '../components/AutoFaceCapture';
+import StudentCardScanner, { ScannedCardData } from '../components/StudentCardScanner';
 import { AppTheme } from '../theme/DarkTheme';
 
 interface RegisterScreenProps {
@@ -14,18 +15,29 @@ interface RegisterScreenProps {
 export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   const theme = useTheme() as AppTheme;
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const [step, setStep] = useState<'form' | 'choice' | 'face'>('form');
+  const [step, setStep] = useState<'scan' | 'form' | 'choice' | 'face'>('scan');
   const [studentCode, setStudentCode] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [className, setClassName] = useState('');
+  const [course, setCourse] = useState('');
+  const [permanentAddress, setPermanentAddress] = useState('');
   const [registeredUser, setRegisteredUser] = useState<any>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [snackbar, setSnackbar] = useState('');
 
   const showError = (message: string) => setSnackbar(message);
+
+  const handleScanned = (data: ScannedCardData) => {
+    setStudentCode(data.studentCode || '');
+    setFullName(data.fullName || '');
+    setClassName(data.className || '');
+    setCourse(data.course || '');
+    setPermanentAddress(data.permanentAddress || '');
+    setStep('form');
+  };
 
   const validateForm = () => {
     if (!studentCode.trim()) {
@@ -74,6 +86,8 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
         full_name: fullName.trim(),
         email: email.trim(),
         class_name: className.trim() || undefined,
+        course: course.trim() || undefined,
+        permanent_address: permanentAddress.trim() || undefined,
       });
       setRegisteredUser(response.user);
       setStep('choice');
@@ -127,6 +141,23 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
       setIsUploading(false);
     }
   };
+
+  if (step === 'scan') {
+    return (
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <StudentCardScanner
+          onScanned={handleScanned}
+          onError={showError}
+          onSkip={() => {
+            setStep('form');
+          }}
+        />
+        <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
+          {snackbar}
+        </Snackbar>
+      </SafeAreaView>
+    );
+  }
 
   if (step === 'choice') {
     return (
@@ -205,6 +236,12 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               <Text style={styles.formSubtitle}>Nhập thông tin để tạo tài khoản độc giả mới.</Text>
             </View>
 
+            {studentCode || fullName ? (
+              <View style={styles.prefillBanner}>
+                <Text style={styles.prefillText}>Đã điền thông tin từ thẻ sinh viên</Text>
+              </View>
+            ) : null}
+
             <TextInput
               label="Mã sinh viên"
               value={studentCode}
@@ -228,6 +265,24 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               onChangeText={setClassName}
               mode="outlined"
               left={<TextInput.Icon icon="school" color={theme.colors.onSurfaceVariant} />}
+            />
+
+            <TextInput
+              label="Khóa học (không bắt buộc)"
+              value={course}
+              onChangeText={setCourse}
+              mode="outlined"
+              left={<TextInput.Icon icon="bookmark-outline" color={theme.colors.onSurfaceVariant} />}
+            />
+
+            <TextInput
+              label="HKTT (không bắt buộc)"
+              value={permanentAddress}
+              onChangeText={setPermanentAddress}
+              mode="outlined"
+              multiline
+              numberOfLines={2}
+              left={<TextInput.Icon icon="home-outline" color={theme.colors.onSurfaceVariant} />}
             />
 
             <TextInput
@@ -314,6 +369,19 @@ function createStyles(theme: AppTheme) {
     formSubtitle: {
       color: theme.colors.onSurfaceVariant,
       marginTop: 4,
+    },
+    prefillBanner: {
+      backgroundColor: `${theme.dark ? '#4A8C5C' : '#067647'}22`,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 8,
+      borderLeftWidth: 3,
+      borderLeftColor: theme.dark ? '#4A8C5C' : '#067647',
+    },
+    prefillText: {
+      color: theme.dark ? '#4A8C5C' : '#067647',
+      fontSize: 13,
+      fontWeight: '600',
     },
     largeButton: {
       minHeight: 52,

@@ -13,6 +13,7 @@ import {
   Text,
   useTheme,
 } from 'react-native-paper';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useAuth } from '../context/AuthContext';
 import { useMobileTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme/DarkTheme';
@@ -20,6 +21,42 @@ import { AppTheme } from '../theme/DarkTheme';
 interface ProfileScreenProps {
   navigation: any;
 }
+
+function InfoField({ icon, label, value, theme }: { icon: string; label: string; value: string; theme: AppTheme }) {
+  return (
+    <View style={infoStyles.row}>
+      <MaterialCommunityIcons name={icon as any} size={16} color={theme.colors.primary} />
+      <View style={infoStyles.textWrap}>
+        <Text style={[infoStyles.label, { color: theme.colors.onSurfaceVariant }]}>{label}</Text>
+        <Text style={[infoStyles.value, { color: theme.colors.onSurface }]} selectable numberOfLines={2}>
+          {value}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+const infoStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  textWrap: {
+    flex: 1,
+    gap: 1,
+  },
+  label: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  value: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+});
 
 export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   const theme = useTheme() as AppTheme;
@@ -41,6 +78,22 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     setLogoutVisible(false);
     await logout();
   };
+
+  const studentFields = [
+    { icon: 'card-account-details', label: 'MSSV', value: patron?.student_code || '—' },
+    { icon: 'account-school', label: 'Lớp', value: patron?.class_name || patron?.className || '—' },
+    { icon: 'bookmark-outline', label: 'Khóa học', value: patron?.course || '—' },
+    { icon: 'domain', label: 'Khoa', value: patron?.faculty || '—' },
+    { icon: 'cake-variant-outline', label: 'Ngày sinh', value: patron?.date_of_birth || patron?.dateOfBirth || '—' },
+    { icon: 'home-outline', label: 'HKTT', value: patron?.permanent_address || patron?.permanentAddress || '—' },
+    { icon: 'card-bulleted-outline', label: 'CCCD', value: patron?.identity_number || '—' },
+    { icon: 'badge-account', label: 'Số thẻ TV', value: patron?.card_number || '—' },
+    { icon: 'calendar-plus', label: 'Ngày cấp thẻ', value: patron?.issue_date || patron?.issueDate || '—' },
+    { icon: 'calendar-clock', label: 'Hạn thẻ', value: patron?.membership_expiry || patron?.membershipExpiry || '—' },
+    { icon: 'card-account-phone', label: 'Số điện thoại', value: patron?.phone || '—' },
+  ];
+
+  const isStudent = user?.role === 'patron' && !!patron?.student_code;
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -64,15 +117,44 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                 MSSV: {patron.student_code}
               </Text>
             ) : null}
-            <View style={styles.roleBadge}>
-              <Text variant="labelMedium" style={styles.role}>{roleLabel}</Text>
-            </View>
           </Card.Content>
         </Card>
+
+        {isStudent && (
+          <Card mode="outlined" style={styles.section}>
+            <View style={styles.sectionAccent} />
+            <List.Section>
+              <List.Subheader style={styles.subheader}>
+                <View style={styles.subheaderRow}>
+                  <MaterialCommunityIcons name="school" size={16} color={theme.colors.primary} />
+                  <Text style={styles.subheaderText}>Thông tin sinh viên</Text>
+                </View>
+              </List.Subheader>
+              <View style={styles.infoGrid}>
+                {studentFields.map((field, i) => (
+                  <View key={i} style={styles.infoGridItem}>
+                    <InfoField theme={theme} icon={field.icon} label={field.label} value={field.value} />
+                    {i < studentFields.length - 1 && i % 2 === 0 && (
+                      <View style={{ height: 1, backgroundColor: theme.colors.outlineVariant, marginVertical: 8 }} />
+                    )}
+                  </View>
+                ))}
+              </View>
+            </List.Section>
+          </Card>
+        )}
 
         <Card mode="outlined" style={styles.section}>
           <List.Section>
             <List.Subheader style={styles.subheader}>Tài khoản</List.Subheader>
+            <List.Item
+              title="Mã người dùng"
+              description={user?.id || '—'}
+              titleStyle={styles.itemTitle}
+              descriptionStyle={styles.itemDescription}
+              left={(props) => <List.Icon {...props} icon="barcode" color={theme.colors.primary} />}
+            />
+            <Divider />
             <List.Item
               title="Họ và tên"
               description={user?.full_name || 'Chưa cập nhật'}
@@ -101,12 +183,33 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                 <Divider />
               </>
             ) : null}
+            {patron?.status ? (
+              <>
+                <List.Item
+                  title="Trạng thái thẻ"
+                  description={patron.status === 'active' ? 'Đang hoạt động' : patron.status === 'inactive' ? 'Ngừng hoạt động' : patron.status === 'expired' ? 'Đã hết hạn' : patron.status}
+                  titleStyle={styles.itemTitle}
+                  descriptionStyle={[styles.itemDescription, { color: patron.status === 'active' ? theme.colors.custom.success : theme.colors.error }]}
+                  left={(props) => <List.Icon {...props} icon={patron.status === 'active' ? 'check-circle' : 'alert-circle'} color={patron.status === 'active' ? theme.colors.custom.success : theme.colors.error} />}
+                />
+                <Divider />
+              </>
+            ) : null}
             <List.Item
               title="Vai trò"
-              description={roleLabel}
               titleStyle={styles.itemTitle}
-              descriptionStyle={styles.itemDescription}
               left={(props) => <List.Icon {...props} icon="shield-account" color={theme.colors.primary} />}
+              right={() => (
+                <View style={[styles.rolePill, { backgroundColor: theme.colors.primaryContainer }]}>
+                  <Text style={[styles.rolePillText, { color: theme.colors.primary }]}>{roleLabel}</Text>
+                </View>
+              )}
+            />
+            <List.Item
+              title=""
+              description={user?.role === 'admin' ? 'Toàn quyền quản lý hệ thống' : user?.role === 'staff' ? 'Quản lý mượn/trả sách, xem báo cáo' : 'Mượn/trả sách, quản lý hồ sơ cá nhân'}
+              descriptionStyle={[styles.itemDescription, { fontStyle: 'italic', marginTop: -8 }]}
+              left={() => null}
             />
           </List.Section>
         </Card>
@@ -239,17 +342,54 @@ function createStyles(theme: AppTheme) {
       fontWeight: '800',
       textTransform: 'uppercase',
     },
+    rolePill: {
+      paddingHorizontal: 12,
+      paddingVertical: 4,
+      borderRadius: 999,
+    },
+    rolePillText: {
+      fontSize: 12,
+      fontWeight: '800',
+      textTransform: 'uppercase',
+    },
     section: {
       backgroundColor: theme.colors.surface,
       borderColor: theme.colors.outlineVariant,
       borderRadius: 14,
       overflow: 'hidden',
+      position: 'relative',
+    },
+    sectionAccent: {
+      position: 'absolute',
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: 3,
+      backgroundColor: theme.colors.primary,
+      zIndex: 1,
     },
     subheader: {
       color: theme.colors.primary,
       fontWeight: '800',
       fontSize: 13,
     },
+    subheaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    subheaderText: {
+      color: theme.colors.primary,
+      fontWeight: '800',
+      fontSize: 13,
+      textTransform: 'uppercase',
+    },
+    infoGrid: {
+      paddingHorizontal: 16,
+      paddingBottom: 12,
+      gap: 10,
+    },
+    infoGridItem: {},
     itemTitle: {
       color: theme.colors.onSurface,
       fontSize: 14,

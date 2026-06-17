@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, StyleSheet, Alert, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, Button, Surface, TextInput, ActivityIndicator, Card, Divider } from 'react-native-paper';
+import {
+  Text, Button, Surface, TextInput, ActivityIndicator, Card, Divider, useTheme,
+} from 'react-native-paper';
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { borrowApi } from '../api/borrow';
@@ -9,10 +11,13 @@ import { openLibraryApi } from '../api/openlibrary';
 import { authApi } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
 import { Book, OpenLibraryBook } from '../types';
-import { colors } from '../theme/colors';
+import { AppTheme } from '../theme/DarkTheme';
 import { devError, devLog } from '../utils/logger';
 
 export default function BorrowScreen() {
+  const theme = useTheme() as AppTheme;
+  const c = theme.colors;
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const { patron } = useAuth();
   const [scanned, setScanned] = useState(false);
   const [isbn, setIsbn] = useState('');
@@ -25,7 +30,6 @@ export default function BorrowScreen() {
   const [activeCount, setActiveCount] = useState(0);
   const [overdueCount, setOverdueCount] = useState(0);
   const [isLoadingQuota, setIsLoadingQuota] = useState(false);
-  const [borrowStep, setBorrowStep] = useState<'confirm' | 'scan'>('confirm');
 
   const MAX_BORROW_BOOKS = 3;
   const remaining = MAX_BORROW_BOOKS - activeCount;
@@ -39,22 +43,17 @@ export default function BorrowScreen() {
       setActiveCount(data.total ?? 0);
       setOverdueCount(data.overdue_count ?? 0);
     } catch {
-      // silently fail
     } finally {
       setIsLoadingQuota(false);
     }
   };
 
   useEffect(() => {
-    if (patron) {
-      loadPatronQuota();
-    }
+    if (patron) loadPatronQuota();
   }, [patron]);
 
   useEffect(() => {
-    if (!scanned && patron) {
-      loadPatronQuota();
-    }
+    if (!scanned && patron) loadPatronQuota();
   }, [scanned]);
 
   const searchBook = async (isbnToSearch: string) => {
@@ -65,10 +64,7 @@ export default function BorrowScreen() {
       try {
         const localBookData = await borrowApi.getBook(isbnToSearch.trim());
         setLocalBook(localBookData);
-      } catch {
-        // local not found, try OpenLibrary
-      }
-
+      } catch {}
       const openLibraryBook = await openLibraryApi.getBookByIsbn(isbnToSearch.trim());
       if (openLibraryBook) {
         setBook(openLibraryBook);
@@ -107,7 +103,6 @@ export default function BorrowScreen() {
         setIsBorrowing(false);
         return;
       }
-
       const result = await borrowApi.borrowBook(isbn.trim());
       if (result.status === 'success') {
         Alert.alert('Thành công', result.message, [
@@ -153,23 +148,23 @@ export default function BorrowScreen() {
 
   if (!permission) {
     return (
-      <SafeAreaView style={styles.container}>
-        <ActivityIndicator color={colors.primary} />
+      <SafeAreaView style={[styles.container, { backgroundColor: c.background }]}>
+        <ActivityIndicator color={c.primary} />
       </SafeAreaView>
     );
   }
 
   if (!permission.granted) {
     return (
-      <SafeAreaView style={styles.permissionContainer} edges={['bottom']}>
-        <Text style={styles.permissionText}>Cần quyền camera để quét mã vạch</Text>
+      <SafeAreaView style={[styles.permissionContainer, { backgroundColor: c.background }]} edges={['bottom']}>
+        <Text style={[styles.permissionText, { color: c.onSurface }]}>Cần quyền camera để quét mã vạch</Text>
         <Button mode="contained" onPress={requestPermission} style={styles.permissionButton}>
           Cấp quyền
         </Button>
         <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.orText}>hoặc nhập ISBN thủ công</Text>
-          <View style={styles.dividerLine} />
+          <View style={[styles.dividerLine, { backgroundColor: c.outlineVariant }]} />
+          <Text style={[styles.orText, { color: c.onSurfaceVariant }]}>hoặc nhập ISBN thủ công</Text>
+          <View style={[styles.dividerLine, { backgroundColor: c.outlineVariant }]} />
         </View>
         <TextInput
           label="ISBN"
@@ -177,285 +172,252 @@ export default function BorrowScreen() {
           onChangeText={setIsbn}
           mode="outlined"
           style={styles.isbnInput}
-          outlineStyle={styles.inputOutline}
-          activeOutlineColor={colors.primary}
-          right={<TextInput.Icon icon="magnify" onPress={() => searchBook(isbn)} color={colors.primary} testID="search-button-permission" />}
+          outlineStyle={{ borderRadius: 6, borderColor: c.outlineVariant }}
+          activeOutlineColor={c.primary}
+          right={<TextInput.Icon icon="magnify" onPress={() => searchBook(isbn)} color={c.primary} testID="search-button-permission" />}
         />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
-      {borrowStep === 'confirm' ? (
-        <View style={styles.confirmContainer}>
-          <View style={styles.confirmHeader}>
-            <Text variant="labelMedium" style={styles.confirmKicker}>Xác nhận thông tin</Text>
-            <Text variant="headlineSmall" style={styles.confirmTitle}>Mượn sách tại quầy</Text>
-          </View>
-
-          <Card style={styles.patronCard}>
-            <Card.Content style={styles.patronCardContent}>
-              <View style={styles.patronAvatar}>
-                <Text style={styles.patronAvatarText}>
-                  {(patron?.full_name || patron?.student_code || '?').slice(0, 1).toUpperCase()}
-                </Text>
-              </View>
-              <View style={styles.patronInfo}>
-                <Text variant="titleMedium" style={styles.patronName} numberOfLines={1}>
-                  {patron?.full_name || 'Không rõ tên'}
-                </Text>
-                <Text variant="bodySmall" style={styles.patronMssv}>
-                  MSSV: {patron?.student_code || '—'}
-                </Text>
-              </View>
-            </Card.Content>
-          </Card>
-
-          {isLoadingQuota ? (
-            <ActivityIndicator color={colors.primary} style={styles.quotaLoader} />
-          ) : (
-            <View style={[styles.quotaBanner, !canBorrow && overdueCount > 0 ? styles.quotaBannerError : !canBorrow ? styles.quotaBannerWarning : styles.quotaBannerOk]}>
-              <MaterialCommunityIcons
-                name={canBorrow ? 'check-circle' : 'alert-circle'}
-                size={18}
-                color={canBorrow ? colors.success : colors.error}
-              />
-              <Text style={[styles.quotaText, !canBorrow && styles.quotaTextError]}>
-                {overdueCount > 0
-                  ? `Có ${overdueCount} sách quá hạn - không thể mượn thêm`
-                  : remaining > 0
-                    ? `Còn có thể mượn ${remaining} cuốn`
-                    : 'Đã mượn đủ 3 cuốn - không thể mượn thêm'}
-              </Text>
-            </View>
-          )}
-
-          <View style={styles.confirmActions}>
-            <Button
-              mode="contained"
-              onPress={() => setBorrowStep('scan')}
-              disabled={!canBorrow || isLoadingQuota}
-              style={styles.confirmButton}
-              contentStyle={styles.confirmButtonContent}
-              icon="book-plus"
-            >
-              {!canBorrow ? 'Không thể mượn thêm' : 'Bắt đầu quét sách'}
-            </Button>
-          </View>
+    <SafeAreaView style={[styles.container, { backgroundColor: c.background }]} edges={['bottom']}>
+      <View style={[styles.scanTopBar, { backgroundColor: c.surface, borderBottomColor: c.outlineVariant }]}>
+        <View>
+          <Text style={[styles.topBarTitle, { color: c.onSurface }]} numberOfLines={1}>
+            Mượn sách
+          </Text>
+          <Text style={[styles.topBarSub, { color: c.onSurfaceVariant }]} numberOfLines={1}>
+            {patron?.full_name || patron?.student_code || ''}
+          </Text>
         </View>
-      ) : (
-        <View style={styles.scanStepContainer}>
-          <View style={styles.scanTopBar}>
-            <Button mode="text" compact onPress={() => { setBorrowStep('confirm'); searchAgain(); }} icon="arrow-left">
-              Đổi patron
-            </Button>
-            <View style={styles.scanQuotaSmall}>
-              <MaterialCommunityIcons
-                name={canBorrow ? 'check-circle' : 'alert-circle'}
-                size={14}
-                color={canBorrow ? colors.success : colors.error}
-              />
-              <Text style={[styles.scanQuotaText, !canBorrow && styles.scanQuotaTextError]}>
-                {remaining > 0 ? `Còn ${remaining} cuốn` : 'Đã đủ'}
-              </Text>
-            </View>
+        {isLoadingQuota ? (
+          <ActivityIndicator size={16} color={c.primary} />
+        ) : (
+          <View style={[
+            styles.quotaPill,
+            { backgroundColor: c.surfaceVariant },
+            overdueCount > 0 && styles.quotaPillOverdue,
+            !canBorrow && overdueCount === 0 && styles.quotaPillFull,
+          ]}>
+            <MaterialCommunityIcons
+              name={overdueCount > 0 ? 'alert-circle' : remaining > 0 ? 'book-check' : 'book-off'}
+              size={14}
+              color={overdueCount > 0 ? c.error : remaining > 0 ? '#4A8C5C' : c.onSurfaceVariant}
+            />
+            <Text style={[
+              styles.quotaPillText,
+              { color: c.onSurface },
+              overdueCount > 0 && { color: c.error },
+            ]}>
+              {overdueCount > 0
+                ? `${overdueCount} quá hạn`
+                : `Còn ${remaining}/${MAX_BORROW_BOOKS}`}
+            </Text>
           </View>
+        )}
+      </View>
 
-          {!scanned ? (
-            <View style={styles.scannerContainer}>
-              <CameraView
-                style={styles.camera}
-                facing="back"
-                barcodeScannerSettings={{
-                  barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
-                }}
-                onBarcodeScanned={handleBarCodeScanned}
-              />
-              <View style={styles.overlay}>
-                <View style={styles.scanArea}>
-                  <View style={[styles.corner, styles.topLeft]} />
-                  <View style={[styles.corner, styles.topRight]} />
-                  <View style={[styles.corner, styles.bottomLeft]} />
-                  <View style={[styles.corner, styles.bottomRight]} />
-                </View>
-                <Text style={styles.scanText}>Đặt mã vạch trong khung hình</Text>
+      <View style={styles.scannerContainer}>
+        {!scanned ? (
+          <>
+            <CameraView
+              style={styles.camera}
+              facing="back"
+              barcodeScannerSettings={{
+                barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
+              }}
+              onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+            />
+            <View style={styles.overlay}>
+              <View style={styles.scanArea}>
+                <View style={[styles.corner, styles.topLeft, { borderColor: c.primary }]} />
+                <View style={[styles.corner, styles.topRight, { borderColor: c.primary }]} />
+                <View style={[styles.corner, styles.bottomLeft, { borderColor: c.primary }]} />
+                <View style={[styles.corner, styles.bottomRight, { borderColor: c.primary }]} />
               </View>
-
-              <Surface style={styles.manualInput} elevation={0}>
-                <View style={styles.manualAccent} />
-                <Text variant="bodyMedium" style={styles.manualLabel}>Hoặc nhập ISBN thủ công:</Text>
-                <TextInput
-                  label="ISBN"
-                  value={isbn}
-                  onChangeText={setIsbn}
-                  mode="outlined"
-                  style={styles.isbnInputFull}
-                  outlineStyle={styles.inputOutline}
-                  activeOutlineColor={colors.primary}
-                  right={<TextInput.Icon icon="magnify" onPress={() => searchBook(isbn)} disabled={isSearching} color={colors.primary} testID="search-button" />}
-                />
-              </Surface>
+              <Text style={[styles.scanText, { color: c.onSurface }]}>Đặt mã vạch trong khung hình</Text>
             </View>
-          ) : (
-            <ScrollView style={styles.resultContainer} contentContainerStyle={styles.resultContent}>
-              {isSearching ? (
-                <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
-              ) : searchError ? (
-                <Card style={styles.errorCard}>
-                  <View style={styles.errorIconContainer}>
-                    <MaterialCommunityIcons name="book-search-outline" size={64} color={colors.textSecondary} />
+
+            {!canBorrow && (
+              <View style={[styles.blockOverlay, { backgroundColor: theme.dark ? 'rgba(13,17,23,0.88)' : 'rgba(246,248,251,0.92)' }]}>
+                <MaterialCommunityIcons
+                  name={overdueCount > 0 ? 'calendar-remove' : 'book-off'}
+                  size={40}
+                  color={c.onSurfaceVariant}
+                />
+                <Text style={[styles.blockTitle, { color: c.onSurface }]}>
+                  {overdueCount > 0 ? 'Có sách quá hạn' : 'Đã mượn đủ sách'}
+                </Text>
+                <Text style={[styles.blockSub, { color: c.onSurfaceVariant }]}>
+                  {overdueCount > 0
+                    ? `Bạn có ${overdueCount} sách quá hạn. Vui lòng trả trước khi mượn thêm.`
+                    : `Bạn đã mượn tối đa ${MAX_BORROW_BOOKS} cuốn. Vui lòng trả sách trước khi mượn thêm.`}
+                </Text>
+              </View>
+            )}
+
+            <Surface style={[styles.manualInput, { backgroundColor: c.surface, borderTopColor: c.outlineVariant }]} elevation={0}>
+              <View style={[styles.manualAccent, { backgroundColor: c.primary }]} />
+              <Text style={[styles.manualLabel, { color: c.onSurfaceVariant }]}>Hoặc nhập ISBN thủ công:</Text>
+              <TextInput
+                label="ISBN"
+                value={isbn}
+                onChangeText={setIsbn}
+                mode="outlined"
+                style={styles.isbnInputFull}
+                outlineStyle={{ borderRadius: 6, borderColor: c.outlineVariant }}
+                activeOutlineColor={c.primary}
+                right={<TextInput.Icon icon="magnify" onPress={() => searchBook(isbn)} disabled={isSearching || !canBorrow} color={c.primary} testID="search-button" />}
+              />
+            </Surface>
+          </>
+        ) : (
+          <ScrollView style={styles.resultContainer} contentContainerStyle={styles.resultContent}>
+            {isSearching ? (
+              <ActivityIndicator size="large" color={c.primary} style={styles.loader} />
+            ) : searchError ? (
+              <Card style={[styles.errorCard, { backgroundColor: c.surface, borderColor: c.outlineVariant }]}>
+                <View style={styles.errorIconContainer}>
+                  <MaterialCommunityIcons name="book-search-outline" size={64} color={c.onSurfaceVariant} />
+                </View>
+                <Text variant="titleMedium" style={[styles.errorTitle, { color: c.onSurface }]}>Không tìm thấy sách</Text>
+                <Text variant="bodyMedium" style={[styles.errorMessage, { color: c.onSurfaceVariant }]}>{searchError}</Text>
+                {isbn ? <Text variant="bodySmall" style={[styles.errorIsbn, { color: c.onSurfaceVariant }]}>ISBN: {isbn}</Text> : null}
+                <Button mode="contained" onPress={searchAgain} style={styles.retryButton} icon="barcode-scan">
+                  Quét lại
+                </Button>
+              </Card>
+            ) : displayBook ? (
+              <Card style={[styles.bookCard, { backgroundColor: c.surface, borderColor: c.outlineVariant }]}>
+                <View style={[styles.cardAccent, { backgroundColor: c.primary }]} />
+                {displayBook.cover?.medium ? (
+                  <Card.Cover source={{ uri: displayBook.cover.medium }} style={styles.cover} />
+                ) : (
+                  <View style={[styles.coverPlaceholder, { backgroundColor: c.surfaceVariant }]}>
+                    <MaterialCommunityIcons name="book-open-variant" size={48} color={c.onSurfaceVariant} />
+                    <Text style={[styles.coverPlaceholderText, { color: c.onSurfaceVariant }]}>Không có ảnh</Text>
                   </View>
-                  <Text variant="titleMedium" style={styles.errorTitle}>Không tìm thấy sách</Text>
-                  <Text variant="bodyMedium" style={styles.errorMessage}>{searchError}</Text>
-                  {isbn ? <Text variant="bodySmall" style={styles.errorIsbn}>ISBN: {isbn}</Text> : null}
-                  <Button mode="contained" onPress={searchAgain} style={styles.retryButton} icon="barcode-scan">
-                    Quét lại
-                  </Button>
-                </Card>
-              ) : displayBook ? (
-                <Card style={styles.bookCard}>
-                  <View style={styles.cardAccent} />
-                  {displayBook.cover?.medium ? (
-                    <Card.Cover source={{ uri: displayBook.cover.medium }} style={styles.cover} />
-                  ) : (
-                    <View style={styles.coverPlaceholder}>
-                      <MaterialCommunityIcons name="book-open-variant" size={48} color={colors.textSecondary} />
-                      <Text style={styles.coverPlaceholderText}>Không có ảnh</Text>
+                )}
+                <Card.Content>
+                  <Text variant="titleLarge" style={[styles.bookTitle, { color: c.onSurface }]}>{displayBook.title}</Text>
+                  {'authors' in displayBook && displayBook.authors && displayBook.authors.length > 0 ? (
+                    <Text variant="bodyMedium" style={[styles.bookAuthor, { color: c.onSurfaceVariant }]}>{displayBook.authors.map(a => a.name).join(', ')}</Text>
+                  ) : 'author' in displayBook && displayBook.author ? (
+                    <Text variant="bodyMedium" style={[styles.bookAuthor, { color: c.onSurfaceVariant }]}>{displayBook.author}</Text>
+                  ) : null}
+                  <View style={styles.metaRow}>
+                    {'publish_date' in displayBook && displayBook.publish_date ? (
+                      <View style={styles.metaItem}>
+                        <MaterialCommunityIcons name="calendar" size={14} color={c.onSurfaceVariant} />
+                        <Text style={[styles.metaText, { color: c.onSurfaceVariant }]}>{displayBook.publish_date}</Text>
+                      </View>
+                    ) : null}
+                    {'number_of_pages' in displayBook && displayBook.number_of_pages ? (
+                      <View style={styles.metaItem}>
+                        <MaterialCommunityIcons name="book-open-page-variant" size={14} color={c.onSurfaceVariant} />
+                        <Text style={[styles.metaText, { color: c.onSurfaceVariant }]}>{displayBook.number_of_pages} trang</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  {localBook?.shelf_location && (
+                    <Text variant="bodySmall" style={[styles.locationLabel, { color: c.primary }]}>
+                      <MaterialCommunityIcons name="map-marker" size={13} color={c.primary} /> Vị trí: {localBook.shelf_location}
+                    </Text>
+                  )}
+                  {!canBorrow && (
+                    <View style={[styles.quotaWarningBox, { backgroundColor: theme.dark ? 'rgba(196,78,78,0.12)' : 'rgba(196,78,78,0.08)', borderColor: theme.dark ? 'rgba(196,78,78,0.3)' : 'rgba(196,78,78,0.2)' }]}>
+                      <MaterialCommunityIcons name="alert-circle-outline" size={16} color={c.error} />
+                      <Text style={[styles.quotaWarningText, { color: c.error }]}>
+                        {overdueCount > 0
+                          ? 'Bạn có sách quá hạn, không thể mượn thêm'
+                          : 'Bạn đã mượn đủ 3 cuốn, không thể mượn thêm'}
+                      </Text>
                     </View>
                   )}
-                  <Card.Content>
-                    <Text variant="titleLarge" style={styles.bookTitle}>{displayBook.title}</Text>
-                    {'authors' in displayBook && displayBook.authors && displayBook.authors.length > 0 ? (
-                      <Text variant="bodyMedium" style={styles.bookAuthor}>{displayBook.authors.map(a => a.name).join(', ')}</Text>
-                    ) : 'author' in displayBook && displayBook.author ? (
-                      <Text variant="bodyMedium" style={styles.bookAuthor}>{displayBook.author}</Text>
-                    ) : null}
-
-                    <View style={styles.metaRow}>
-                      {'publish_date' in displayBook && displayBook.publish_date ? (
-                        <View style={styles.metaItem}>
-                          <MaterialCommunityIcons name="calendar" size={14} color={colors.textSecondary} />
-                          <Text style={styles.metaText}>{displayBook.publish_date}</Text>
-                        </View>
-                      ) : null}
-                      {'number_of_pages' in displayBook && displayBook.number_of_pages ? (
-                        <View style={styles.metaItem}>
-                          <MaterialCommunityIcons name="book-open-page-variant" size={14} color={colors.textSecondary} />
-                          <Text style={styles.metaText}>{displayBook.number_of_pages} trang</Text>
-                        </View>
-                      ) : null}
-                    </View>
-
-                    {localBook?.shelf_location && (
-                      <Text variant="bodySmall" style={styles.locationLabel}>
-                        <MaterialCommunityIcons name="map-marker" size={13} color={colors.primary} /> Vị trí: {localBook.shelf_location}
-                      </Text>
-                    )}
-
-                    {!canBorrow && (
-                      <View style={styles.quotaWarningBox}>
-                        <MaterialCommunityIcons name="alert-circle-outline" size={16} color={colors.error} />
-                        <Text style={styles.quotaWarningText}>
-                          {overdueCount > 0
-                            ? 'Bạn có sách quá hạn, không thể mượn thêm'
-                            : 'Bạn đã mượn đủ 3 cuốn, không thể mượn thêm'}
-                        </Text>
-                      </View>
-                    )}
-                  </Card.Content>
-                  <Card.Actions style={styles.cardActions}>
-                    <Button mode="outlined" onPress={searchAgain} style={styles.cardActionButton} labelStyle={styles.cardActionButtonLabel}>
-                      Quét lại
-                    </Button>
-                    <Button mode="contained" onPress={handleBorrow} loading={isBorrowing} disabled={isBorrowing || !canBorrow} style={styles.cardActionButton} labelStyle={styles.cardActionButtonLabel}>
-                      Xác nhận mượn
-                    </Button>
-                  </Card.Actions>
-                </Card>
-              ) : null}
-            </ScrollView>
-          )}
-        </View>
-      )}
+                </Card.Content>
+                <Card.Actions style={styles.cardActions}>
+                  <Button mode="outlined" onPress={searchAgain} style={styles.cardActionButton} labelStyle={{ fontSize: 13, fontWeight: '600' }}>
+                    Quét lại
+                  </Button>
+                  <Button mode="contained" onPress={handleBorrow} loading={isBorrowing} disabled={isBorrowing || !canBorrow} style={styles.cardActionButton} labelStyle={{ fontSize: 13, fontWeight: '600' }}>
+                    Xác nhận mượn
+                  </Button>
+                </Card.Actions>
+              </Card>
+            ) : null}
+          </ScrollView>
+        )}
+      </View>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  permissionContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: colors.background },
-  permissionText: { color: colors.text, fontSize: 16, marginBottom: 16, textAlign: 'center' },
-  permissionButton: { borderRadius: 6 },
-  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 24, paddingHorizontal: 16 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: colors.divider },
-  orText: { color: colors.textSecondary, marginHorizontal: 12, fontSize: 12 },
-  isbnInput: { width: '80%', marginTop: 4, backgroundColor: 'transparent' },
-  inputOutline: { borderRadius: 6, borderColor: colors.border },
-  scannerContainer: { flex: 1, position: 'relative' },
-  camera: { flex: 1 },
-  overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  scanArea: { width: 280, height: 150, borderRadius: 8, position: 'relative' },
-  corner: { position: 'absolute', width: 36, height: 36, borderColor: colors.primary, borderWidth: 2 },
-  topLeft: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 8 },
-  topRight: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 8 },
-  bottomLeft: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 8 },
-  bottomRight: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 8 },
-  scanText: { color: colors.text, marginTop: 20, fontSize: 16, textAlign: 'center', fontWeight: '500' },
-  manualInput: { padding: 16, backgroundColor: colors.surface, position: 'relative', overflow: 'hidden', borderTopWidth: 0.5, borderTopColor: colors.border },
-  manualAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, backgroundColor: colors.primary },
-  manualLabel: { color: colors.textSecondary, marginBottom: 8, fontSize: 13 },
-  isbnInputFull: { marginTop: 4, backgroundColor: 'transparent' },
-  resultContainer: { flex: 1, padding: 16 },
-  resultContent: { flexGrow: 1, justifyContent: 'center' },
-  loader: { alignSelf: 'center' },
-  bookCard: { backgroundColor: colors.surface, borderRadius: 8, overflow: 'hidden', position: 'relative', borderWidth: 0.5, borderColor: colors.border },
-  cardAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, backgroundColor: colors.primary, zIndex: 1 },
-  cover: { height: 280, resizeMode: 'contain', backgroundColor: colors.surfaceVariant },
-  coverPlaceholder: { height: 200, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.surfaceVariant },
-  coverPlaceholderText: { color: colors.textSecondary, marginTop: 8, fontSize: 13 },
-  bookTitle: { color: colors.text, marginTop: 12, fontWeight: '700', fontSize: 20 },
-  bookAuthor: { color: colors.textSecondary, marginTop: 4, fontSize: 14 },
-  metaRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8, gap: 16 },
-  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  metaText: { color: colors.textSecondary, fontSize: 13 },
-  locationLabel: { color: colors.primary, marginTop: 4, fontSize: 13, fontWeight: '600' },
-  cardActions: { padding: 12, gap: 8 },
-  cardActionButton: { borderRadius: 6 },
-  cardActionButtonLabel: { fontSize: 13, fontWeight: '600' },
-  errorCard: { backgroundColor: colors.surface, borderRadius: 8, padding: 32, alignItems: 'center', borderWidth: 0.5, borderColor: colors.border },
-  errorIconContainer: { marginBottom: 16 },
-  errorTitle: { color: colors.text, fontWeight: '700', marginBottom: 8 },
-  errorMessage: { color: colors.textSecondary, textAlign: 'center', marginBottom: 4 },
-  errorIsbn: { color: colors.textSecondary, marginTop: 8, marginBottom: 20, fontSize: 12 },
-  retryButton: { borderRadius: 6, marginTop: 12 },
-  quotaLoading: { paddingVertical: 8, alignItems: 'center' },
-  quotaBanner: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
-  quotaBannerOk: { backgroundColor: colors.surfaceVariant },
-  quotaBannerWarning: { backgroundColor: 'rgba(196, 154, 60, 0.15)' },
-  quotaBannerError: { backgroundColor: 'rgba(196, 78, 78, 0.15)' },
-  quotaText: { color: colors.text, fontSize: 13, fontWeight: '600' },
-  quotaTextError: { color: colors.error },
-  quotaWarningBox: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, padding: 10, borderRadius: 6, backgroundColor: 'rgba(196, 78, 78, 0.12)', borderWidth: 1, borderColor: 'rgba(196, 78, 78, 0.3)' },
-  quotaWarningText: { color: colors.error, fontSize: 13, flex: 1 },
-  quotaLoader: { alignSelf: 'center', marginVertical: 16 },
-  confirmContainer: { flex: 1, padding: 20, justifyContent: 'center', gap: 20 },
-  confirmHeader: { alignItems: 'center', gap: 4 },
-  confirmKicker: { color: colors.primary, fontWeight: '800', textTransform: 'uppercase', fontSize: 12 },
-  confirmTitle: { color: colors.text, fontWeight: '800', fontSize: 22 },
-  patronCard: { backgroundColor: colors.surface, borderRadius: 12, borderColor: colors.border },
-  patronCardContent: { padding: 16 },
-  patronAvatar: { width: 64, height: 64, borderRadius: 32, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginBottom: 12 },
-  patronAvatarText: { color: colors.background, fontWeight: '900', fontSize: 28 },
-  patronInfo: { alignItems: 'center', gap: 4 },
-  patronName: { color: colors.text, fontWeight: '700', fontSize: 18 },
-  patronMssv: { color: colors.textSecondary, fontSize: 13 },
-  confirmActions: { marginTop: 8 },
-  confirmButton: { borderRadius: 8 },
-  confirmButtonContent: { minHeight: 52 },
-  scanStepContainer: { flex: 1 },
-  scanTopBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 8, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
-  scanQuotaSmall: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 16, backgroundColor: colors.surfaceVariant },
-  scanQuotaText: { color: colors.text, fontSize: 13, fontWeight: '600' },
-  scanQuotaTextError: { color: colors.error },
-});
+function createStyles(theme: AppTheme) {
+  const c = theme.colors;
+  return StyleSheet.create({
+    container: { flex: 1 },
+    permissionContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+    permissionText: { fontSize: 16, marginBottom: 16, textAlign: 'center' },
+    permissionButton: { borderRadius: 6 },
+    divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 24, paddingHorizontal: 16 },
+    dividerLine: { flex: 1, height: 1 },
+    orText: { marginHorizontal: 12, fontSize: 12 },
+    isbnInput: { width: '80%', marginTop: 4, backgroundColor: 'transparent' },
+    scannerContainer: { flex: 1, position: 'relative' },
+    camera: { flex: 1 },
+    overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+    scanArea: { width: 280, height: 150, borderRadius: 8, position: 'relative' },
+    corner: { position: 'absolute', width: 36, height: 36, borderWidth: 2 },
+    topLeft: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 8 },
+    topRight: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 8 },
+    bottomLeft: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 8 },
+    bottomRight: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 8 },
+    scanText: { marginTop: 20, fontSize: 16, textAlign: 'center', fontWeight: '500' },
+    manualInput: { padding: 16, position: 'relative', overflow: 'hidden', borderTopWidth: 0.5 },
+    manualAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3 },
+    manualLabel: { marginBottom: 8, fontSize: 13 },
+    isbnInputFull: { marginTop: 4, backgroundColor: 'transparent' },
+    resultContainer: { flex: 1, padding: 16 },
+    resultContent: { flexGrow: 1, justifyContent: 'center' },
+    loader: { alignSelf: 'center' },
+    bookCard: { borderRadius: 8, overflow: 'hidden', position: 'relative', borderWidth: 0.5 },
+    cardAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, zIndex: 1 },
+    cover: { height: 280, resizeMode: 'contain' },
+    coverPlaceholder: { height: 200, justifyContent: 'center', alignItems: 'center' },
+    coverPlaceholderText: { marginTop: 8, fontSize: 13 },
+    bookTitle: { marginTop: 12, fontWeight: '700', fontSize: 20 },
+    bookAuthor: { marginTop: 4, fontSize: 14 },
+    metaRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8, gap: 16 },
+    metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    metaText: { fontSize: 13 },
+    locationLabel: { marginTop: 4, fontSize: 13, fontWeight: '600' },
+    cardActions: { padding: 12, gap: 8 },
+    cardActionButton: { borderRadius: 6 },
+    errorCard: { borderRadius: 8, padding: 32, alignItems: 'center', borderWidth: 0.5 },
+    errorIconContainer: { marginBottom: 16 },
+    errorTitle: { fontWeight: '700', marginBottom: 8 },
+    errorMessage: { textAlign: 'center', marginBottom: 4 },
+    errorIsbn: { marginTop: 8, marginBottom: 20, fontSize: 12 },
+    retryButton: { borderRadius: 6, marginTop: 12 },
+    quotaWarningBox: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, padding: 10, borderRadius: 6, borderWidth: 1 },
+    quotaWarningText: { fontSize: 13, flex: 1 },
+    scanTopBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderBottomWidth: 1,
+    },
+    topBarTitle: { fontSize: 17, fontWeight: '800' },
+    topBarSub: { fontSize: 12, marginTop: 1 },
+    quotaPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
+    quotaPillOverdue: { backgroundColor: 'rgba(196, 78, 78, 0.15)' },
+    quotaPillFull: { backgroundColor: 'rgba(90, 85, 80, 0.25)' },
+    quotaPillText: { fontSize: 13, fontWeight: '700' },
+    blockOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', padding: 32, gap: 8 },
+    blockTitle: { fontSize: 18, fontWeight: '800', textAlign: 'center' },
+    blockSub: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  });
+}

@@ -106,485 +106,6 @@ tsconfig.json
 <files>
 This section contains the contents of the repository's files.
 
-<file path="src/screens/StaffBorrowScreen.tsx">
-import React, { useState, useCallback } from 'react';
-import { View, StyleSheet, Alert, FlatList } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, Button, Surface, TextInput, ActivityIndicator, Card, Divider, Snackbar, Avatar, Portal } from 'react-native-paper';
-import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { borrowApi } from '../api/borrow';
-import { Book, BorrowRecord } from '../types';
-import { colors } from '../theme/colors';
-import { devError } from '../utils/logger';
-
-interface ScannedBorrowItem {
-  barcode: string;
-  book: Book;
-  alreadyBorrowed?: boolean;
-}
-
-export default function StaffBorrowScreen() {
-  const [scanned, setScanned] = useState(false);
-  const [patronCode, setPatronCode] = useState('');
-  const [patronId, setPatronId] = useState<string | null>(null);
-  const [patronName, setPatronName] = useState('');
-  const [scannedItems, setScannedItems] = useState<ScannedBorrowItem[]>([]);
-  const [isCreating, setIsCreating] = useState(false);
-  const [isLookingUp, setIsLookingUp] = useState(false);
-  const [permission, requestPermission] = useCameraPermissions();
-  const [scanToast, setScanToast] = useState('');
-  const [cameraReady, setCameraReady] = useState(false);
-  const [activeCount, setActiveCount] = useState(0);
-  const [overdueCount, setOverdueCount] = useState(0);
-  const [activeRecords, setActiveRecords] = useState<BorrowRecord[]>([]);
-
-  const MAX_BORROW = 3;
-  const remaining = MAX_BORROW - activeCount;
-  const canBorrow = remaining > 0 && overdueCount === 0;
-
-  const handleBarCodeScanned = useCallback(async (result: BarcodeScanningResult) => {
-    if (scanned || !result.data) return;
-    setScanned(true);
-    const barcode = result.data;
-
-    if (scannedItems.find((item) => item.barcode === barcode)) {
-      setScanToast('Sách này đã có trong danh sách');
-      setTimeout(() => setScanned(false), 500);
-      return;
-    }
-
-    if (scannedItems.length >= remaining) {
-      setScanToast(`Chỉ được mượn tối đa ${MAX_BORROW} cuốn`);
-      setTimeout(() => setScanned(false), 500);
-      return;
-    }
-
-    const normalizeCode = (v: string) => v?.replace(/[\s-]+/g, '').replace(/\.0+$/, '') ?? '';
-    const barcodeNormalized = normalizeCode(barcode);
-    const alreadyBorrowedRecord = activeRecords.find(
-      (r) => normalizeCode(r.book?.isbn) === barcodeNormalized || normalizeCode(r.book_id) === barcodeNormalized
-    );
-
-    if (alreadyBorrowedRecord) {
-      // Thêm vào list với flag alreadyBorrowed để hiển thị inline
-      setScannedItems((prev) => [...prev, { 
-        barcode, 
-        book: {
-          id: alreadyBorrowedRecord.book_id,
-          isbn: alreadyBorrowedRecord.book?.isbn || barcode,
-          title: alreadyBorrowedRecord.book?.title || barcode,
-          author: alreadyBorrowedRecord.book?.author,
-          cover_url: alreadyBorrowedRecord.book?.cover_url,
-          shelf_location: alreadyBorrowedRecord.book?.shelf_location,
-        }, 
-        alreadyBorrowed: true 
-      }]);
-      setScanToast(`⚠️ "${alreadyBorrowedRecord.book?.title || barcode}" đã được mượn — sẽ không thêm vào phiếu`);
-      setTimeout(() => setScanned(false), 2000);
-      return;
-    }
-
-    try {
-      const localBook = await borrowApi.getBook(barcode);
-      if (localBook) {
-        setScannedItems((prev) => [...prev, { barcode, book: localBook }]);
-        setScanToast(`Đã thêm: ${localBook.title}`);
-      }
-    } catch {
-      try {
-        const bookWithStats = await borrowApi.lookupBookByIsbn(barcode);
-        if (bookWithStats) {
-          const book: Book = {
-            id: bookWithStats.id,
-            isbn: bookWithStats.isbn,
-            title: bookWithStats.title,
-            author: bookWithStats.author,
-            cover_url: bookWithStats.cover_url,
-            shelf_location: bookWithStats.shelf_location,
-          };
-          setScannedItems((prev) => [...prev, { barcode, book }]);
-          setScanToast(`Đã thêm: ${book.title}`);
-        }
-      } catch {
-        setScanToast(`Không tìm thấy sách: ${barcode}`);
-      }
-    }
-    setTimeout(() => setScanned(false), 500);
-  }, [scanned, scannedItems, remaining, activeRecords]);
-
-  const lookupPatron = async () => {
-    if (!patronCode.trim()) return;
-    setIsLookingUp(true);
-    try {
-      const data = await borrowApi.getActiveBorrowsByStudentCode(patronCode.trim());
-      if (data.patron) {
-        setPatronId(data.patron.id);
-        setPatronName(data.patron.full_name || data.patron.student_code);
-        setActiveCount(data.total ?? 0);
-        setOverdueCount(data.overdue_count ?? 0);
-        setActiveRecords(data.records ?? []);
-        setScanToast(`Đã chọn độc giả: ${data.patron.full_name || data.patron.student_code}`);
-      }
-    } catch {
-      setScanToast('Không tìm thấy độc giả với mã số này');
-      setPatronId(null);
-      setPatronName('');
-      setActiveCount(0);
-      setOverdueCount(0);
-      setActiveRecords([]);
-    } finally {
-      setIsLookingUp(false);
-    }
-  };
-
-  const removeItem = (index: number) => {
-    setScannedItems((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const resetState = () => {
-    setScanned(false);
-    setScannedItems([]);
-    setPatronCode('');
-    setPatronId(null);
-    setPatronName('');
-    setActiveCount(0);
-    setOverdueCount(0);
-    setActiveRecords([]);
-    setCameraReady(false);
-  };
-
-  const handleCreateSlip = async () => {
-    if (!scannedItems.length || !patronId) return;
-
-    const validItems = scannedItems.filter((item) => !item.alreadyBorrowed);
-    const alreadyBorrowedItems = scannedItems.filter((item) => item.alreadyBorrowed);
-
-    if (alreadyBorrowedItems.length > 0) {
-      const titles = alreadyBorrowedItems.map((b) => `"${b.book.title || b.barcode}"`).join(', ');
-      Alert.alert(
-        'Sách đã được mượn trước đó',
-        `${alreadyBorrowedItems.length} sách trong danh sách đang được mượn: ${titles}`,
-        [
-          { text: 'Bỏ qua', style: 'cancel' },
-          {
-            text: 'Tạo phiếu',
-            onPress: () => submitSlip(validItems),
-          },
-        ]
-      );
-      return;
-    }
-
-    if (activeCount + validItems.length > MAX_BORROW) {
-      Alert.alert('Vượt quá giới hạn', `Tổng sách mượn sẽ là ${activeCount + validItems.length} cuốn, tối đa ${MAX_BORROW} cuốn`);
-      return;
-    }
-
-    submitSlip(validItems);
-  };
-
-  const submitSlip = async (items: ScannedBorrowItem[]) => {
-    if (!items.length || !patronId) return;
-    setIsCreating(true);
-    try {
-      const apiItems = items.map((item) => ({
-        barcode: item.barcode,
-        isbn: item.book.isbn || item.barcode,
-      }));
-      const result = await borrowApi.createSlip({ patron_id: patronId, items: apiItems });
-      if (result.status === 'success') {
-        Alert.alert('Thành công', result.message, [
-          { text: 'OK', onPress: resetState },
-        ]);
-      }
-    } catch (error: any) {
-      devError('[StaffBorrow] Create slip error:', error);
-      let msg = 'Tạo phiếu mượn thất bại';
-      if (error.response?.data?.detail) msg = error.response.data.detail;
-      Alert.alert('Lỗi', msg);
-    } finally {
-      setIsCreating(false);
-    }
-  };
-
-  if (!permission) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <ActivityIndicator color={colors.primary} />
-      </SafeAreaView>
-    );
-  }
-
-  if (!permission.granted) {
-    return (
-      <SafeAreaView style={styles.permissionContainer} edges={['bottom']}>
-        <Text style={styles.permissionText}>Cần quyền camera để quét mã vạch sách</Text>
-        <Button mode="contained" onPress={requestPermission} style={styles.permissionButton}>
-          Cấp quyền
-        </Button>
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
-      <Surface style={styles.patronInput} elevation={0}>
-        <Text style={styles.patronLabel}>Mã số độc giả</Text>
-        <View style={styles.patronRow}>
-          <TextInput
-            value={patronCode}
-            onChangeText={setPatronCode}
-            placeholder="Nhập MSSV..."
-            mode="outlined"
-            style={styles.patronField}
-            outlineStyle={styles.inputOutline}
-            activeOutlineColor={colors.primary}
-          />
-          <Button mode="contained" onPress={lookupPatron} loading={isLookingUp} disabled={isLookingUp || !patronCode.trim()} style={styles.lookupButton}>
-            Tra
-          </Button>
-        </View>
-
-        {patronId ? (
-          <View style={styles.quotaRow}>
-            <View style={styles.patronReadyBanner}>
-              <MaterialCommunityIcons name="check-circle" size={15} color={colors.success} />
-              <Text style={styles.patronReadyText}>{patronName}</Text>
-            </View>
-            <View style={[styles.quotaBadge, !canBorrow && overdueCount > 0 ? styles.quotaBadgeError : !canBorrow ? styles.quotaBadgeWarning : styles.quotaBadgeOk]}>
-              <MaterialCommunityIcons
-                name={canBorrow ? 'check-circle' : 'alert-circle'}
-                size={13}
-                color={canBorrow ? colors.success : colors.error}
-              />
-              <Text style={[styles.quotaBadgeText, !canBorrow && styles.quotaBadgeTextError]}>
-                {overdueCount > 0
-                  ? `${overdueCount} quá hạn`
-                  : `${remaining} cuốn khả dụng`}
-              </Text>
-            </View>
-          </View>
-        ) : null}
-      </Surface>
-
-      <View style={styles.scannerContainer}>
-        {permission?.granted && patronId && canBorrow ? (
-          <>
-            <CameraView
-              style={styles.camera}
-              facing="back"
-              onCameraReady={() => setCameraReady(true)}
-              barcodeScannerSettings={{
-                barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
-              }}
-              onBarcodeScanned={cameraReady && !scanned ? handleBarCodeScanned : undefined}
-            />
-            <View style={styles.overlay}>
-              <View style={styles.scanArea}>
-                <View style={[styles.corner, styles.topLeft]} />
-                <View style={[styles.corner, styles.topRight]} />
-                <View style={[styles.corner, styles.bottomLeft]} />
-                <View style={[styles.corner, styles.bottomRight]} />
-              </View>
-              <Text style={styles.scanText}>Quét mã vạch sách</Text>
-            </View>
-          </>
-        ) : (
-          <View style={styles.cameraPlaceholder}>
-            <MaterialCommunityIcons
-              name={!canBorrow ? 'book-lock-outline' : 'barcode-scan'}
-              size={48}
-              color={colors.textSecondary}
-            />
-            <Text style={styles.cameraPlaceholderText}>
-              {!canBorrow
-                ? overdueCount > 0
-                  ? 'Có sách quá hạn, không thể mượn thêm'
-                  : 'Đã mượn tối đa 3 cuốn'
-                : permission?.granted
-                  ? 'Cần tra độc giả trước'
-                  : 'Cần cấp quyền camera'}
-            </Text>
-          </View>
-        )}
-      </View>
-
-      <Surface style={styles.listPanel} elevation={2}>
-        <View style={styles.listHeader}>
-          <MaterialCommunityIcons name="book-open-variant" size={20} color={colors.primary} />
-          <Text style={styles.listTitle}>
-            Danh sách mượn ({scannedItems.length} cuốn)
-          </Text>
-        </View>
-
-        <Divider />
-
-        {scannedItems.length === 0 ? (
-          <View style={styles.emptyState}>
-            <MaterialCommunityIcons name="barcode-scan" size={48} color={colors.textSecondary} />
-            <Text style={styles.emptyText}>Quét sách để thêm vào phiếu mượn</Text>
-          </View>
-        ) : (
-          <FlatList
-            data={scannedItems}
-            keyExtractor={(_, index) => String(index)}
-            style={styles.list}
-renderItem={({ item, index }) => (
-                <Card
-                  style={[
-                    styles.itemCard,
-                    item.alreadyBorrowed && styles.itemCardAlreadyBorrowed,
-                  ]}
-                  key={index}
-                >
-                <View style={styles.itemRow}>
-                  {item.book.cover_url ? (
-                    <Card.Cover source={{ uri: item.book.cover_url }} style={styles.itemCover} />
-                  ) : (
-                    <View style={styles.itemCoverPlaceholder}>
-                      <MaterialCommunityIcons name="book-open-variant" size={24} color={colors.textSecondary} />
-                    </View>
-                  )}
-                  <View style={styles.itemInfo}>
-                    <View style={styles.itemTitleRow}>
-                      <Text style={styles.itemTitle} numberOfLines={2}>{item.book.title}</Text>
-                      {item.alreadyBorrowed && (
-                        <View style={styles.alreadyBorrowedBadge}>
-                          <MaterialCommunityIcons name="book-lock" size={12} color={colors.error} />
-                          <Text style={styles.alreadyBorrowedText}>Đã mượn</Text>
-                        </View>
-                      )}
-                    </View>
-                    {item.book.author && <Text style={styles.itemAuthor} numberOfLines={1}>{item.book.author}</Text>}
-                    <Text style={styles.itemIsbn}>{item.barcode}</Text>
-                    {item.alreadyBorrowed && (
-                      <Text style={styles.alreadyBorrowedNote}>Sách này đang được mượn — sẽ không thêm vào phiếu</Text>
-                    )}
-                  </View>
-                  <Button mode="text" compact onPress={() => removeItem(index)} textColor={colors.error} style={styles.removeButton}>
-                    Xoá
-                  </Button>
-                </View>
-              </Card>
-            )}
-          />
-        )}
-
-        <Divider />
-
-        <View style={styles.actionRow}>
-          <Button mode="outlined" onPress={resetState} style={styles.actionButton} textColor={colors.textSecondary}>
-            Xoá tất cả
-          </Button>
-          <Button mode="contained" onPress={handleCreateSlip} loading={isCreating} disabled={isCreating || scannedItems.length === 0 || !patronId || !canBorrow} style={styles.actionButton}>
-            {isCreating ? 'Đang tạo phiếu...' : `Tạo phiếu mượn (${scannedItems.length} cuốn)`}
-          </Button>
-        </View>
-      </Surface>
-
-      <Portal>
-        <View style={styles.topSnackbarWrapper}>
-          <Snackbar
-            visible={!!scanToast}
-            onDismiss={() => setScanToast('')}
-            duration={2000}
-            style={styles.topSnackbar}
-          >
-            {scanToast}
-          </Snackbar>
-        </View>
-      </Portal>
-    </SafeAreaView>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  permissionContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: colors.background },
-  permissionText: { color: colors.text, fontSize: 16, marginBottom: 16, textAlign: 'center' },
-  permissionButton: { borderRadius: 6 },
-  patronInput: { padding: 12, backgroundColor: colors.surface },
-  patronLabel: { fontSize: 13, color: colors.textSecondary, marginBottom: 6, fontWeight: '600' },
-  patronRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  patronField: { flex: 1, backgroundColor: 'transparent' },
-  inputOutline: { borderRadius: 6, borderColor: colors.border },
-  lookupButton: { borderRadius: 6, height: 44 },
-  patronStatus: { fontSize: 12, color: colors.primary, marginTop: 6, fontWeight: '600' },
-  patronReadyBanner: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4, paddingHorizontal: 6, borderRadius: 6, backgroundColor: 'rgba(74, 140, 92, 0.12)' },
-  patronReadyText: { color: colors.success, fontSize: 12, fontWeight: '600' },
-  quotaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6, gap: 8 },
-  quotaBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 12 },
-  quotaBadgeOk: { backgroundColor: 'rgba(74, 140, 92, 0.12)' },
-  quotaBadgeWarning: { backgroundColor: 'rgba(196, 154, 60, 0.15)' },
-  quotaBadgeError: { backgroundColor: 'rgba(196, 78, 78, 0.15)' },
-  quotaBadgeText: { fontSize: 12, fontWeight: '700', color: colors.text },
-  quotaBadgeTextError: { color: colors.error },
-  scannerContainer: { height: 220, position: 'relative', backgroundColor: colors.surfaceVariant },
-  camera: { flex: 1 },
-  overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  scanArea: { width: 280, height: 100, borderRadius: 8, position: 'relative' },
-  corner: { position: 'absolute', width: 28, height: 28, borderColor: colors.primary, borderWidth: 2 },
-  topLeft: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 8 },
-  topRight: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 8 },
-  bottomLeft: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 8 },
-  bottomRight: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 8 },
-  scanText: { color: colors.text, marginTop: 12, fontSize: 14, textAlign: 'center', fontWeight: '500' },
-  cameraPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 10, backgroundColor: colors.surfaceVariant },
-  cameraPlaceholderText: { color: colors.textSecondary, fontSize: 14, fontWeight: '600' },
-  listPanel: { flex: 1, backgroundColor: colors.surface, borderTopLeftRadius: 16, borderTopRightRadius: 16, marginTop: -16 },
-  listHeader: { padding: 16, paddingBottom: 8 },
-  listTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginTop: 4 },
-  list: { flex: 1, paddingHorizontal: 12 },
-  emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
-  emptyText: { color: colors.textSecondary, marginTop: 12, fontSize: 14 },
-  itemCard: { marginVertical: 4, backgroundColor: colors.surface, borderRadius: 8 },
-  itemRow: { flexDirection: 'row', alignItems: 'center', padding: 10 },
-  itemCover: { width: 44, height: 60, borderRadius: 4 },
-  itemCoverPlaceholder: { width: 44, height: 60, borderRadius: 4, backgroundColor: colors.surfaceVariant, justifyContent: 'center', alignItems: 'center' },
-  itemInfo: { flex: 1, marginLeft: 10 },
-  itemTitle: { fontSize: 14, fontWeight: '600', color: colors.text },
-  itemAuthor: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-  itemIsbn: { fontSize: 11, color: colors.primary, marginTop: 2, fontFamily: 'monospace' },
-  itemTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-  alreadyBorrowedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, backgroundColor: 'rgba(196, 78, 78, 0.15)' },
-  alreadyBorrowedText: { color: colors.error, fontSize: 10, fontWeight: '700' },
-  alreadyBorrowedNote: { color: colors.error, fontSize: 11, marginTop: 2, fontStyle: 'italic' },
-  itemCardAlreadyBorrowed: { backgroundColor: colors.surfaceVariant, borderColor: colors.error, borderWidth: 1, opacity: 0.7 },
-  removeButton: { marginLeft: 4 },
-  actionRow: { flexDirection: 'row', padding: 12, gap: 8 },
-  actionButton: { flex: 1, borderRadius: 6 },
-  topSnackbarWrapper: { position: 'absolute', top: 8, left: 0, right: 0, zIndex: 9999, paddingHorizontal: 16 },
-  topSnackbar: { width: '100%' },
-});
-</file>
-
-<file path="src/utils/errorUtils.ts">
-export function getErrorMessage(err: unknown): string {
-  if (!err) return 'Lỗi không xác định';
-  if (typeof err === 'string') return err;
-
-  const response = (err as any)?.response;
-  const detail = response?.data?.detail || response?.data?.error;
-
-  if (detail) {
-    if (typeof detail === 'string') return detail;
-    if (Array.isArray(detail)) {
-      return detail
-        .map((d: any) =>
-          typeof d === 'string' ? d : `${d.loc?.join('.')}: ${d.msg}`
-        )
-        .join('; ');
-    }
-    if (typeof detail === 'object') {
-      return detail.msg || detail.message || JSON.stringify(detail);
-    }
-  }
-
-  return (err as any)?.message || (err as any)?.msg || String(err);
-}
-</file>
-
 <file path=".agents/skills/frontend-design/LICENSE.txt">
 Apache License
                            Version 2.0, January 2004
@@ -2693,6 +2214,459 @@ const styles = StyleSheet.create({
 });
 </file>
 
+<file path="src/screens/StaffBorrowScreen.tsx">
+import React, { useState, useCallback } from 'react';
+import { View, StyleSheet, Alert, FlatList } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Text, Button, Surface, TextInput, ActivityIndicator, Card, Divider, Snackbar, Avatar, Portal } from 'react-native-paper';
+import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { borrowApi } from '../api/borrow';
+import { Book, BorrowRecord } from '../types';
+import { colors } from '../theme/colors';
+import { devError } from '../utils/logger';
+
+interface ScannedBorrowItem {
+  barcode: string;
+  book: Book;
+  alreadyBorrowed?: boolean;
+}
+
+export default function StaffBorrowScreen() {
+  const [scanned, setScanned] = useState(false);
+  const [patronCode, setPatronCode] = useState('');
+  const [patronId, setPatronId] = useState<string | null>(null);
+  const [patronName, setPatronName] = useState('');
+  const [scannedItems, setScannedItems] = useState<ScannedBorrowItem[]>([]);
+  const [isCreating, setIsCreating] = useState(false);
+  const [isLookingUp, setIsLookingUp] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
+  const [scanToast, setScanToast] = useState('');
+  const [cameraReady, setCameraReady] = useState(false);
+  const [activeCount, setActiveCount] = useState(0);
+  const [overdueCount, setOverdueCount] = useState(0);
+  const [activeRecords, setActiveRecords] = useState<BorrowRecord[]>([]);
+
+  const MAX_BORROW = 3;
+  const remaining = MAX_BORROW - activeCount;
+  const canBorrow = remaining > 0 && overdueCount === 0;
+
+  const handleBarCodeScanned = useCallback(async (result: BarcodeScanningResult) => {
+    if (scanned || !result.data) return;
+    setScanned(true);
+    const barcode = result.data;
+
+    if (scannedItems.find((item) => item.barcode === barcode)) {
+      setScanToast('Sách này đã có trong danh sách');
+      setTimeout(() => setScanned(false), 500);
+      return;
+    }
+
+    if (scannedItems.length >= remaining) {
+      setScanToast(`Chỉ được mượn tối đa ${MAX_BORROW} cuốn`);
+      setTimeout(() => setScanned(false), 500);
+      return;
+    }
+
+    const normalizeCode = (v: string) => v?.replace(/[\s-]+/g, '').replace(/\.0+$/, '') ?? '';
+    const barcodeNormalized = normalizeCode(barcode);
+    const alreadyBorrowedRecord = activeRecords.find(
+      (r) => normalizeCode(r.book?.isbn) === barcodeNormalized || normalizeCode(r.book_id) === barcodeNormalized
+    );
+
+    if (alreadyBorrowedRecord) {
+      // Thêm vào list với flag alreadyBorrowed để hiển thị inline
+      setScannedItems((prev) => [...prev, { 
+        barcode, 
+        book: {
+          id: alreadyBorrowedRecord.book_id,
+          isbn: alreadyBorrowedRecord.book?.isbn || barcode,
+          title: alreadyBorrowedRecord.book?.title || barcode,
+          author: alreadyBorrowedRecord.book?.author,
+          cover_url: alreadyBorrowedRecord.book?.cover_url,
+          shelf_location: alreadyBorrowedRecord.book?.shelf_location,
+        }, 
+        alreadyBorrowed: true 
+      }]);
+      setScanToast(`⚠️ "${alreadyBorrowedRecord.book?.title || barcode}" đã được mượn — sẽ không thêm vào phiếu`);
+      setTimeout(() => setScanned(false), 2000);
+      return;
+    }
+
+    try {
+      const localBook = await borrowApi.getBook(barcode);
+      if (localBook) {
+        setScannedItems((prev) => [...prev, { barcode, book: localBook }]);
+        setScanToast(`Đã thêm: ${localBook.title}`);
+      }
+    } catch {
+      try {
+        const bookWithStats = await borrowApi.lookupBookByIsbn(barcode);
+        if (bookWithStats) {
+          const book: Book = {
+            id: bookWithStats.id,
+            isbn: bookWithStats.isbn,
+            title: bookWithStats.title,
+            author: bookWithStats.author,
+            cover_url: bookWithStats.cover_url,
+            shelf_location: bookWithStats.shelf_location,
+          };
+          setScannedItems((prev) => [...prev, { barcode, book }]);
+          setScanToast(`Đã thêm: ${book.title}`);
+        }
+      } catch {
+        setScanToast(`Không tìm thấy sách: ${barcode}`);
+      }
+    }
+    setTimeout(() => setScanned(false), 500);
+  }, [scanned, scannedItems, remaining, activeRecords]);
+
+  const lookupPatron = async () => {
+    if (!patronCode.trim()) return;
+    setIsLookingUp(true);
+    try {
+      const data = await borrowApi.getActiveBorrowsByStudentCode(patronCode.trim());
+      if (data.patron) {
+        setPatronId(data.patron.id);
+        setPatronName(data.patron.full_name || data.patron.student_code);
+        setActiveCount(data.total ?? 0);
+        setOverdueCount(data.overdue_count ?? 0);
+        setActiveRecords(data.records ?? []);
+        setScanToast(`Đã chọn độc giả: ${data.patron.full_name || data.patron.student_code}`);
+      }
+    } catch {
+      setScanToast('Không tìm thấy độc giả với mã số này');
+      setPatronId(null);
+      setPatronName('');
+      setActiveCount(0);
+      setOverdueCount(0);
+      setActiveRecords([]);
+    } finally {
+      setIsLookingUp(false);
+    }
+  };
+
+  const removeItem = (index: number) => {
+    setScannedItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const resetState = () => {
+    setScanned(false);
+    setScannedItems([]);
+    setPatronCode('');
+    setPatronId(null);
+    setPatronName('');
+    setActiveCount(0);
+    setOverdueCount(0);
+    setActiveRecords([]);
+    setCameraReady(false);
+  };
+
+  const handleCreateSlip = async () => {
+    if (!scannedItems.length || !patronId) return;
+
+    const validItems = scannedItems.filter((item) => !item.alreadyBorrowed);
+    const alreadyBorrowedItems = scannedItems.filter((item) => item.alreadyBorrowed);
+
+    if (alreadyBorrowedItems.length > 0) {
+      const titles = alreadyBorrowedItems.map((b) => `"${b.book.title || b.barcode}"`).join(', ');
+      Alert.alert(
+        'Sách đã được mượn trước đó',
+        `${alreadyBorrowedItems.length} sách trong danh sách đang được mượn: ${titles}`,
+        [
+          { text: 'Bỏ qua', style: 'cancel' },
+          {
+            text: 'Tạo phiếu',
+            onPress: () => submitSlip(validItems),
+          },
+        ]
+      );
+      return;
+    }
+
+    if (activeCount + validItems.length > MAX_BORROW) {
+      Alert.alert('Vượt quá giới hạn', `Tổng sách mượn sẽ là ${activeCount + validItems.length} cuốn, tối đa ${MAX_BORROW} cuốn`);
+      return;
+    }
+
+    submitSlip(validItems);
+  };
+
+  const submitSlip = async (items: ScannedBorrowItem[]) => {
+    if (!items.length || !patronId) return;
+    setIsCreating(true);
+    try {
+      const apiItems = items.map((item) => ({
+        barcode: item.barcode,
+        isbn: item.book.isbn || item.barcode,
+      }));
+      const result = await borrowApi.createSlip({ patron_id: patronId, items: apiItems });
+      if (result.status === 'success') {
+        Alert.alert('Thành công', result.message, [
+          { text: 'OK', onPress: resetState },
+        ]);
+      }
+    } catch (error: any) {
+      devError('[StaffBorrow] Create slip error:', error);
+      let msg = 'Tạo phiếu mượn thất bại';
+      if (error.response?.data?.detail) msg = error.response.data.detail;
+      Alert.alert('Lỗi', msg);
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  if (!permission) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <ActivityIndicator color={colors.primary} />
+      </SafeAreaView>
+    );
+  }
+
+  if (!permission.granted) {
+    return (
+      <SafeAreaView style={styles.permissionContainer} edges={['bottom']}>
+        <Text style={styles.permissionText}>Cần quyền camera để quét mã vạch sách</Text>
+        <Button mode="contained" onPress={requestPermission} style={styles.permissionButton}>
+          Cấp quyền
+        </Button>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      <Surface style={styles.patronInput} elevation={0}>
+        <Text style={styles.patronLabel}>Mã số độc giả</Text>
+        <View style={styles.patronRow}>
+          <TextInput
+            value={patronCode}
+            onChangeText={setPatronCode}
+            placeholder="Nhập MSSV..."
+            mode="outlined"
+            style={styles.patronField}
+            outlineStyle={styles.inputOutline}
+            activeOutlineColor={colors.primary}
+          />
+          <Button mode="contained" onPress={lookupPatron} loading={isLookingUp} disabled={isLookingUp || !patronCode.trim()} style={styles.lookupButton}>
+            Tra
+          </Button>
+        </View>
+
+        {patronId ? (
+          <View style={styles.quotaRow}>
+            <View style={styles.patronReadyBanner}>
+              <MaterialCommunityIcons name="check-circle" size={15} color={colors.success} />
+              <Text style={styles.patronReadyText}>{patronName}</Text>
+            </View>
+            <View style={[styles.quotaBadge, !canBorrow && overdueCount > 0 ? styles.quotaBadgeError : !canBorrow ? styles.quotaBadgeWarning : styles.quotaBadgeOk]}>
+              <MaterialCommunityIcons
+                name={canBorrow ? 'check-circle' : 'alert-circle'}
+                size={13}
+                color={canBorrow ? colors.success : colors.error}
+              />
+              <Text style={[styles.quotaBadgeText, !canBorrow && styles.quotaBadgeTextError]}>
+                {overdueCount > 0
+                  ? `${overdueCount} quá hạn`
+                  : `${remaining} cuốn khả dụng`}
+              </Text>
+            </View>
+          </View>
+        ) : null}
+      </Surface>
+
+      <View style={styles.scannerContainer}>
+        {permission?.granted && patronId && canBorrow ? (
+          <>
+            <CameraView
+              style={styles.camera}
+              facing="back"
+              onCameraReady={() => setCameraReady(true)}
+              barcodeScannerSettings={{
+                barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
+              }}
+              onBarcodeScanned={cameraReady && !scanned ? handleBarCodeScanned : undefined}
+            />
+            <View style={styles.overlay}>
+              <View style={styles.scanArea}>
+                <View style={[styles.corner, styles.topLeft]} />
+                <View style={[styles.corner, styles.topRight]} />
+                <View style={[styles.corner, styles.bottomLeft]} />
+                <View style={[styles.corner, styles.bottomRight]} />
+              </View>
+              <Text style={styles.scanText}>Quét mã vạch sách</Text>
+            </View>
+          </>
+        ) : (
+          <View style={styles.cameraPlaceholder}>
+            <MaterialCommunityIcons
+              name={!canBorrow ? 'book-lock-outline' : 'barcode-scan'}
+              size={48}
+              color={colors.textSecondary}
+            />
+            <Text style={styles.cameraPlaceholderText}>
+              {!canBorrow
+                ? overdueCount > 0
+                  ? 'Có sách quá hạn, không thể mượn thêm'
+                  : 'Đã mượn tối đa 3 cuốn'
+                : permission?.granted
+                  ? 'Cần tra độc giả trước'
+                  : 'Cần cấp quyền camera'}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      <Surface style={styles.listPanel} elevation={2}>
+        <View style={styles.listHeader}>
+          <MaterialCommunityIcons name="book-open-variant" size={20} color={colors.primary} />
+          <Text style={styles.listTitle}>
+            Danh sách mượn ({scannedItems.length} cuốn)
+          </Text>
+        </View>
+
+        <Divider />
+
+        {scannedItems.length === 0 ? (
+          <View style={styles.emptyState}>
+            <MaterialCommunityIcons name="barcode-scan" size={48} color={colors.textSecondary} />
+            <Text style={styles.emptyText}>Quét sách để thêm vào phiếu mượn</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={scannedItems}
+            keyExtractor={(_, index) => String(index)}
+            style={styles.list}
+renderItem={({ item, index }) => (
+                <Card
+                  style={[
+                    styles.itemCard,
+                    item.alreadyBorrowed && styles.itemCardAlreadyBorrowed,
+                  ]}
+                  key={index}
+                >
+                <View style={styles.itemRow}>
+                  {item.book.cover_url ? (
+                    <Card.Cover source={{ uri: item.book.cover_url }} style={styles.itemCover} />
+                  ) : (
+                    <View style={styles.itemCoverPlaceholder}>
+                      <MaterialCommunityIcons name="book-open-variant" size={24} color={colors.textSecondary} />
+                    </View>
+                  )}
+                  <View style={styles.itemInfo}>
+                    <View style={styles.itemTitleRow}>
+                      <Text style={styles.itemTitle} numberOfLines={2}>{item.book.title}</Text>
+                      {item.alreadyBorrowed && (
+                        <View style={styles.alreadyBorrowedBadge}>
+                          <MaterialCommunityIcons name="book-lock" size={12} color={colors.error} />
+                          <Text style={styles.alreadyBorrowedText}>Đã mượn</Text>
+                        </View>
+                      )}
+                    </View>
+                    {item.book.author && <Text style={styles.itemAuthor} numberOfLines={1}>{item.book.author}</Text>}
+                    <Text style={styles.itemIsbn}>{item.barcode}</Text>
+                    {item.alreadyBorrowed && (
+                      <Text style={styles.alreadyBorrowedNote}>Sách này đang được mượn — sẽ không thêm vào phiếu</Text>
+                    )}
+                  </View>
+                  <Button mode="text" compact onPress={() => removeItem(index)} textColor={colors.error} style={styles.removeButton}>
+                    Xoá
+                  </Button>
+                </View>
+              </Card>
+            )}
+          />
+        )}
+
+        <Divider />
+
+        <View style={styles.actionRow}>
+          <Button mode="outlined" onPress={resetState} style={styles.actionButton} textColor={colors.textSecondary}>
+            Xoá tất cả
+          </Button>
+          <Button mode="contained" onPress={handleCreateSlip} loading={isCreating} disabled={isCreating || scannedItems.length === 0 || !patronId || !canBorrow} style={styles.actionButton}>
+            {isCreating ? 'Đang tạo phiếu...' : `Tạo phiếu mượn (${scannedItems.length} cuốn)`}
+          </Button>
+        </View>
+      </Surface>
+
+      <Portal>
+        <View style={styles.topSnackbarWrapper}>
+          <Snackbar
+            visible={!!scanToast}
+            onDismiss={() => setScanToast('')}
+            duration={2000}
+            style={styles.topSnackbar}
+          >
+            {scanToast}
+          </Snackbar>
+        </View>
+      </Portal>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  permissionContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: colors.background },
+  permissionText: { color: colors.text, fontSize: 16, marginBottom: 16, textAlign: 'center' },
+  permissionButton: { borderRadius: 6 },
+  patronInput: { padding: 12, backgroundColor: colors.surface },
+  patronLabel: { fontSize: 13, color: colors.textSecondary, marginBottom: 6, fontWeight: '600' },
+  patronRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  patronField: { flex: 1, backgroundColor: 'transparent' },
+  inputOutline: { borderRadius: 6, borderColor: colors.border },
+  lookupButton: { borderRadius: 6, height: 44 },
+  patronStatus: { fontSize: 12, color: colors.primary, marginTop: 6, fontWeight: '600' },
+  patronReadyBanner: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4, paddingHorizontal: 6, borderRadius: 6, backgroundColor: 'rgba(74, 140, 92, 0.12)' },
+  patronReadyText: { color: colors.success, fontSize: 12, fontWeight: '600' },
+  quotaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6, gap: 8 },
+  quotaBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 12 },
+  quotaBadgeOk: { backgroundColor: 'rgba(74, 140, 92, 0.12)' },
+  quotaBadgeWarning: { backgroundColor: 'rgba(196, 154, 60, 0.15)' },
+  quotaBadgeError: { backgroundColor: 'rgba(196, 78, 78, 0.15)' },
+  quotaBadgeText: { fontSize: 12, fontWeight: '700', color: colors.text },
+  quotaBadgeTextError: { color: colors.error },
+  scannerContainer: { height: 220, position: 'relative', backgroundColor: colors.surfaceVariant },
+  camera: { flex: 1 },
+  overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  scanArea: { width: 280, height: 100, borderRadius: 8, position: 'relative' },
+  corner: { position: 'absolute', width: 28, height: 28, borderColor: colors.primary, borderWidth: 2 },
+  topLeft: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 8 },
+  topRight: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 8 },
+  bottomLeft: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 8 },
+  bottomRight: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 8 },
+  scanText: { color: colors.text, marginTop: 12, fontSize: 14, textAlign: 'center', fontWeight: '500' },
+  cameraPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 10, backgroundColor: colors.surfaceVariant },
+  cameraPlaceholderText: { color: colors.textSecondary, fontSize: 14, fontWeight: '600' },
+  listPanel: { flex: 1, backgroundColor: colors.surface, borderTopLeftRadius: 16, borderTopRightRadius: 16, marginTop: -16 },
+  listHeader: { padding: 16, paddingBottom: 8 },
+  listTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginTop: 4 },
+  list: { flex: 1, paddingHorizontal: 12 },
+  emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
+  emptyText: { color: colors.textSecondary, marginTop: 12, fontSize: 14 },
+  itemCard: { marginVertical: 4, backgroundColor: colors.surface, borderRadius: 8 },
+  itemRow: { flexDirection: 'row', alignItems: 'center', padding: 10 },
+  itemCover: { width: 44, height: 60, borderRadius: 4 },
+  itemCoverPlaceholder: { width: 44, height: 60, borderRadius: 4, backgroundColor: colors.surfaceVariant, justifyContent: 'center', alignItems: 'center' },
+  itemInfo: { flex: 1, marginLeft: 10 },
+  itemTitle: { fontSize: 14, fontWeight: '600', color: colors.text },
+  itemAuthor: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  itemIsbn: { fontSize: 11, color: colors.primary, marginTop: 2, fontFamily: 'monospace' },
+  itemTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  alreadyBorrowedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, backgroundColor: 'rgba(196, 78, 78, 0.15)' },
+  alreadyBorrowedText: { color: colors.error, fontSize: 10, fontWeight: '700' },
+  alreadyBorrowedNote: { color: colors.error, fontSize: 11, marginTop: 2, fontStyle: 'italic' },
+  itemCardAlreadyBorrowed: { backgroundColor: colors.surfaceVariant, borderColor: colors.error, borderWidth: 1, opacity: 0.7 },
+  removeButton: { marginLeft: 4 },
+  actionRow: { flexDirection: 'row', padding: 12, gap: 8 },
+  actionButton: { flex: 1, borderRadius: 6 },
+  topSnackbarWrapper: { position: 'absolute', top: 8, left: 0, right: 0, zIndex: 9999, paddingHorizontal: 16 },
+  topSnackbar: { width: '100%' },
+});
+</file>
+
 <file path="src/theme/colors.ts">
 export const colors = {
   primary: '#D4A853',
@@ -2810,6 +2784,32 @@ export const getDaysUntil = (dateString: string): number => {
 export const isOverdue = (dueDate: string): boolean => {
   return getDaysUntil(dueDate) < 0;
 };
+</file>
+
+<file path="src/utils/errorUtils.ts">
+export function getErrorMessage(err: unknown): string {
+  if (!err) return 'Lỗi không xác định';
+  if (typeof err === 'string') return err;
+
+  const response = (err as any)?.response;
+  const detail = response?.data?.detail || response?.data?.error;
+
+  if (detail) {
+    if (typeof detail === 'string') return detail;
+    if (Array.isArray(detail)) {
+      return detail
+        .map((d: any) =>
+          typeof d === 'string' ? d : `${d.loc?.join('.')}: ${d.msg}`
+        )
+        .join('; ');
+    }
+    if (typeof detail === 'object') {
+      return detail.msg || detail.message || JSON.stringify(detail);
+    }
+  }
+
+  return (err as any)?.message || (err as any)?.msg || String(err);
+}
 </file>
 
 <file path="src/utils/logger.ts">
@@ -5119,433 +5119,6 @@ function createStyles(theme: AppTheme) {
 }
 </file>
 
-<file path="src/screens/ScheduleScreen.tsx">
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { useFocusEffect } from '@react-navigation/native';
-import React, { useCallback, useMemo, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { ActivityIndicator, Button, Card, Snackbar, Text, useTheme } from 'react-native-paper';
-import { scheduleApi } from '../api/schedule';
-import { AppTheme } from '../theme/DarkTheme';
-import { StaffScheduleAssignment } from '../types';
-
-type AssignmentTimeState = 'now' | 'today' | 'upcoming' | 'past';
-
-function toDateInput(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function startOfWeek(date = new Date()) {
-  const value = new Date(date);
-  const day = value.getDay() || 7;
-  value.setDate(value.getDate() - day + 1);
-  value.setHours(0, 0, 0, 0);
-  return value;
-}
-
-function normalizeTime(value?: string) {
-  return (value || '').slice(0, 5);
-}
-
-function getErrorMessage(err: any, fallback: string) {
-  return err?.response?.data?.detail || err?.response?.data?.error || err?.message || fallback;
-}
-
-function getAssignmentTimeState(item: StaffScheduleAssignment): AssignmentTimeState {
-  const now = new Date();
-  const today = toDateInput(now);
-
-  if (item.workDate < today) return 'past';
-  if (item.workDate > today) return 'upcoming';
-
-  const startTime = normalizeTime(item.shift?.startTime);
-  const endTime = normalizeTime(item.shift?.endTime);
-  if (startTime && endTime) {
-    const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    if (currentTime >= startTime && currentTime <= endTime) return 'now';
-  }
-
-  return 'today';
-}
-
-function getStateLabel(state: AssignmentTimeState) {
-  return {
-    now: 'Đang trực',
-    today: 'Hôm nay',
-    upcoming: 'Sắp tới',
-    past: 'Đã qua',
-  }[state];
-}
-
-function displayZoneName(item: StaffScheduleAssignment) {
-  if (!item.zone) return item.zoneId;
-  const zoneName = item.zone.zoneName || '';
-  const compact = zoneName.match(/^(Tang|Tầng)\s*(\d+)/i);
-  return compact ? `Tầng ${compact[2]}` : zoneName || `Tầng ${item.zone.floor ?? '-'}`;
-}
-
-export default function ScheduleScreen() {
-  const theme = useTheme() as AppTheme;
-  const styles = useMemo(() => createStyles(theme), [theme]);
-  const [assignments, setAssignments] = useState<StaffScheduleAssignment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
-  const [snackbar, setSnackbar] = useState('');
-
-  const weekRange = useMemo(() => {
-    const start = startOfWeek();
-    const end = new Date(start);
-    end.setDate(start.getDate() + 6);
-    return { from: toDateInput(start), to: toDateInput(end) };
-  }, []);
-
-  const today = toDateInput(new Date());
-  const todayAssignments = assignments.filter((item) => item.workDate === today);
-
-  const loadSchedules = async () => {
-    setError(null);
-    try {
-      const result = await scheduleApi.getMySchedules(weekRange.from, weekRange.to);
-      setAssignments(result.items);
-    } catch (err: any) {
-      setError(getErrorMessage(err, 'Không thể tải lịch trực'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useFocusEffect(
-    useCallback(() => {
-      loadSchedules();
-    }, [weekRange.from, weekRange.to]),
-  );
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await loadSchedules();
-    setRefreshing(false);
-  };
-
-  const runAttendanceAction = async (item: StaffScheduleAssignment, action: 'check-in' | 'check-out') => {
-    setActionLoadingId(`${item.id}:${action}`);
-    setError(null);
-    try {
-      if (action === 'check-in') {
-        await scheduleApi.checkIn(item.id);
-        setSnackbar('Đã check-in ca trực');
-      } else {
-        await scheduleApi.checkOut(item.id);
-        setSnackbar('Đã check-out ca trực');
-      }
-      await loadSchedules();
-    } catch (err: any) {
-      setError(getErrorMessage(err, action === 'check-in' ? 'Không thể check-in' : 'Không thể check-out'));
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
-  const renderAssignment = (item: StaffScheduleAssignment) => {
-    const state = getAssignmentTimeState(item);
-    const canCheckIn = item.workDate === today && !item.attendance?.checkInAt;
-    const canCheckOut = item.workDate === today && !!item.attendance?.checkInAt && !item.attendance?.checkOutAt;
-
-    return (
-      <Card key={item.id} mode="outlined" style={styles.assignmentCard}>
-        <Card.Content style={styles.assignmentContent}>
-          <View style={styles.assignmentHeader}>
-            <View style={styles.assignmentIcon}>
-              <MaterialCommunityIcons name="calendar-clock" size={22} color={theme.colors.onPrimary} />
-            </View>
-            <View style={styles.assignmentTitleWrap}>
-              <Text variant="titleMedium" style={styles.cardTitle}>
-                {item.shift?.name || item.shiftId}
-              </Text>
-              <Text style={styles.mutedText}>
-                {normalizeTime(item.shift?.startTime)}-{normalizeTime(item.shift?.endTime)} - {displayZoneName(item)}
-              </Text>
-            </View>
-            <Text style={styles.stateLabel}>{getStateLabel(state)}</Text>
-          </View>
-
-          <View style={styles.detailGrid}>
-            <View style={styles.detailItem}>
-              <Text style={styles.detailLabel}>Ngày</Text>
-              <Text style={styles.detailValue}>{item.workDate}</Text>
-            </View>
-            <View style={styles.detailItem}>
-              <Text style={styles.detailLabel}>Tầng</Text>
-              <Text style={styles.detailValue}>{item.zone?.floor ?? '-'}</Text>
-            </View>
-            <View style={styles.detailItem}>
-              <Text style={styles.detailLabel}>Check-in</Text>
-              <Text style={styles.detailValue}>{item.attendance?.checkInAt ? 'Đã ghi nhận' : 'Chưa có'}</Text>
-            </View>
-          </View>
-
-          {(canCheckIn || canCheckOut) ? (
-            <View style={styles.actionRow}>
-              {canCheckIn ? (
-                <Button
-                  mode="contained"
-                  icon="login"
-                  loading={actionLoadingId === `${item.id}:check-in`}
-                  onPress={() => runAttendanceAction(item, 'check-in')}
-                  style={styles.actionButton}
-                >
-                  Check-in
-                </Button>
-              ) : null}
-              {canCheckOut ? (
-                <Button
-                  mode="outlined"
-                  icon="logout"
-                  loading={actionLoadingId === `${item.id}:check-out`}
-                  onPress={() => runAttendanceAction(item, 'check-out')}
-                  style={styles.actionButton}
-                >
-                  Check-out
-                </Button>
-              ) : null}
-            </View>
-          ) : null}
-        </Card.Content>
-      </Card>
-    );
-  };
-
-  return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
-      <ScrollView
-        style={styles.flex}
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
-      >
-        <Card mode="contained" style={styles.header}>
-          <Card.Content style={styles.headerContent}>
-            <View style={styles.headerIcon}>
-              <MaterialCommunityIcons name="calendar-clock" size={28} color={theme.colors.onPrimary} />
-            </View>
-            <View style={styles.headerText}>
-              <Text variant="headlineSmall" style={styles.headerTitle}>Lịch trực</Text>
-              <Text style={styles.mutedText}>{weekRange.from} - {weekRange.to}</Text>
-            </View>
-          </Card.Content>
-        </Card>
-
-        {error ? (
-          <Card mode="outlined" style={styles.errorCard}>
-            <Card.Content style={styles.errorContent}>
-              <MaterialCommunityIcons name="alert-circle-outline" size={22} color={theme.colors.error} />
-              <Text style={styles.errorText} selectable>{error}</Text>
-            </Card.Content>
-          </Card>
-        ) : null}
-
-        {loading ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator color={theme.colors.primary} />
-          </View>
-        ) : (
-          <>
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <MaterialCommunityIcons name="clock-check-outline" size={19} color={theme.colors.primary} />
-                <Text style={styles.sectionTitle}>Ca hôm nay</Text>
-              </View>
-              {todayAssignments.length ? todayAssignments.map(renderAssignment) : (
-                <Card mode="outlined" style={styles.emptyCard}>
-                  <Card.Content style={styles.emptyContent}>
-                    <MaterialCommunityIcons name="calendar-blank" size={34} color={theme.colors.onSurfaceVariant} />
-                    <Text style={styles.mutedCenterText}>Hôm nay bạn không có ca trực.</Text>
-                  </Card.Content>
-                </Card>
-              )}
-            </View>
-
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <MaterialCommunityIcons name="calendar-week" size={19} color={theme.colors.primary} />
-                <Text style={styles.sectionTitle}>Lịch tuần</Text>
-              </View>
-              {assignments.length ? assignments.map(renderAssignment) : (
-                <Card mode="outlined" style={styles.emptyCard}>
-                  <Card.Content style={styles.emptyContent}>
-                    <MaterialCommunityIcons name="calendar-remove" size={34} color={theme.colors.onSurfaceVariant} />
-                    <Text style={styles.mutedCenterText}>Chưa có lịch trong tuần này.</Text>
-                  </Card.Content>
-                </Card>
-              )}
-            </View>
-          </>
-        )}
-      </ScrollView>
-
-      <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={3000}>
-        {snackbar}
-      </Snackbar>
-    </SafeAreaView>
-  );
-}
-
-function createStyles(theme: AppTheme) {
-  return StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: theme.colors.background,
-    },
-    flex: {
-      flex: 1,
-    },
-    content: {
-      padding: 16,
-      paddingBottom: 28,
-      gap: 16,
-    },
-    header: {
-      backgroundColor: theme.colors.surface,
-      borderRadius: 18,
-    },
-    headerContent: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 14,
-    },
-    headerIcon: {
-      width: 54,
-      height: 54,
-      borderRadius: 16,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: theme.colors.primary,
-    },
-    headerText: {
-      flex: 1,
-    },
-    headerTitle: {
-      color: theme.colors.onSurface,
-      fontWeight: '800',
-    },
-    mutedText: {
-      color: theme.colors.onSurfaceVariant,
-    },
-    mutedCenterText: {
-      color: theme.colors.onSurfaceVariant,
-      textAlign: 'center',
-    },
-    errorCard: {
-      backgroundColor: theme.colors.errorContainer,
-      borderColor: theme.colors.error,
-    },
-    errorContent: {
-      flexDirection: 'row',
-      gap: 10,
-      alignItems: 'flex-start',
-    },
-    errorText: {
-      color: theme.colors.error,
-      flex: 1,
-    },
-    loadingBox: {
-      padding: 40,
-    },
-    section: {
-      gap: 10,
-    },
-    sectionHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-    },
-    sectionTitle: {
-      color: theme.colors.onBackground,
-      fontSize: 17,
-      fontWeight: '800',
-    },
-    assignmentCard: {
-      backgroundColor: theme.colors.surface,
-      borderRadius: 14,
-      borderColor: theme.colors.outlineVariant,
-    },
-    assignmentContent: {
-      gap: 12,
-    },
-    assignmentHeader: {
-      flexDirection: 'row',
-      gap: 12,
-      alignItems: 'center',
-    },
-    assignmentIcon: {
-      width: 42,
-      height: 42,
-      borderRadius: 12,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: theme.colors.primary,
-    },
-    assignmentTitleWrap: {
-      flex: 1,
-    },
-    cardTitle: {
-      color: theme.colors.onSurface,
-      fontWeight: '800',
-    },
-    stateLabel: {
-      color: theme.colors.primary,
-      fontWeight: '800',
-      fontSize: 12,
-    },
-    detailGrid: {
-      flexDirection: 'row',
-      gap: 8,
-      flexWrap: 'wrap',
-    },
-    detailItem: {
-      flexGrow: 1,
-      flexBasis: '30%',
-      padding: 10,
-      borderRadius: 10,
-      backgroundColor: theme.colors.surfaceVariant,
-    },
-    detailLabel: {
-      color: theme.colors.onSurfaceVariant,
-      fontSize: 11,
-      fontWeight: '700',
-      textTransform: 'uppercase',
-    },
-    detailValue: {
-      color: theme.colors.onSurface,
-      marginTop: 3,
-      fontWeight: '700',
-    },
-    actionRow: {
-      flexDirection: 'row',
-      gap: 10,
-    },
-    actionButton: {
-      flex: 1,
-      borderRadius: 8,
-    },
-    emptyCard: {
-      backgroundColor: theme.colors.surface,
-      borderColor: theme.colors.outlineVariant,
-      borderRadius: 14,
-    },
-    emptyContent: {
-      alignItems: 'center',
-      gap: 8,
-      paddingVertical: 18,
-    },
-  });
-}
-</file>
-
 <file path="src/components/AutoFaceCapture.tsx">
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
@@ -5838,6 +5411,1171 @@ const styles = StyleSheet.create({
   submitBtnDisabled: { opacity: 0.4 },
   submitBtnLabel: { fontSize: 16, fontWeight: '700' },
 });
+</file>
+
+<file path="src/screens/ProfileScreen.tsx">
+import React, { useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  Avatar,
+  Button,
+  Card,
+  Dialog,
+  Divider,
+  List,
+  Portal,
+  Switch,
+  Text,
+  useTheme,
+} from 'react-native-paper';
+import { useAuth } from '../context/AuthContext';
+import { useMobileTheme } from '../context/ThemeContext';
+import { AppTheme } from '../theme/DarkTheme';
+
+interface ProfileScreenProps {
+  navigation: any;
+}
+
+export default function ProfileScreen({ navigation }: ProfileScreenProps) {
+  const theme = useTheme() as AppTheme;
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const { user, patron, logout } = useAuth();
+  const { mode, toggleTheme } = useMobileTheme();
+  const [logoutVisible, setLogoutVisible] = useState(false);
+
+  const roleLabel =
+    user?.role === 'admin'
+      ? 'Quản trị viên'
+      : user?.role === 'staff'
+        ? 'Nhân viên'
+        : 'Độc giả';
+
+  const displayName = user?.full_name || 'Người dùng';
+
+  const handleLogout = async () => {
+    setLogoutVisible(false);
+    await logout();
+  };
+
+  return (
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
+        <Card mode="contained" style={styles.header}>
+          <Card.Content style={styles.headerContent}>
+            <Avatar.Text
+              size={74}
+              label={(displayName || user?.email || 'U').slice(0, 1).toUpperCase()}
+              color={theme.colors.onPrimary}
+              style={styles.avatar}
+            />
+            <Text variant="headlineSmall" style={styles.name} numberOfLines={2}>
+              {displayName}
+            </Text>
+            <Text variant="bodyMedium" style={styles.email} selectable>
+              {user?.email}
+            </Text>
+            {patron?.student_code ? (
+              <Text variant="bodySmall" style={styles.studentCode} selectable>
+                MSSV: {patron.student_code}
+              </Text>
+            ) : null}
+            <View style={styles.roleBadge}>
+              <Text variant="labelMedium" style={styles.role}>{roleLabel}</Text>
+            </View>
+          </Card.Content>
+        </Card>
+
+        <Card mode="outlined" style={styles.section}>
+          <List.Section>
+            <List.Subheader style={styles.subheader}>Tài khoản</List.Subheader>
+            <List.Item
+              title="Họ và tên"
+              description={user?.full_name || 'Chưa cập nhật'}
+              titleStyle={styles.itemTitle}
+              descriptionStyle={styles.itemDescription}
+              left={(props) => <List.Icon {...props} icon="account" color={theme.colors.primary} />}
+            />
+            <Divider />
+            <List.Item
+              title="Email"
+              description={user?.email || 'Chưa cập nhật'}
+              titleStyle={styles.itemTitle}
+              descriptionStyle={styles.itemDescription}
+              left={(props) => <List.Icon {...props} icon="email" color={theme.colors.primary} />}
+            />
+            <Divider />
+            {patron?.student_code ? (
+              <>
+                <List.Item
+                  title="MSSV"
+                  description={patron.student_code}
+                  titleStyle={styles.itemTitle}
+                  descriptionStyle={styles.itemDescription}
+                  left={(props) => <List.Icon {...props} icon="card-account-details" color={theme.colors.primary} />}
+                />
+                <Divider />
+              </>
+            ) : null}
+            <List.Item
+              title="Vai trò"
+              description={roleLabel}
+              titleStyle={styles.itemTitle}
+              descriptionStyle={styles.itemDescription}
+              left={(props) => <List.Icon {...props} icon="shield-account" color={theme.colors.primary} />}
+            />
+          </List.Section>
+        </Card>
+
+        <Card mode="outlined" style={styles.section}>
+          <List.Section>
+            <List.Subheader style={styles.subheader}>Giao diện</List.Subheader>
+            <List.Item
+              title="Chế độ sáng/tối"
+              description={mode === 'dark' ? 'Đang dùng giao diện tối' : 'Đang dùng giao diện sáng'}
+              titleStyle={styles.itemTitle}
+              descriptionStyle={styles.itemDescription}
+              left={(props) => <List.Icon {...props} icon={mode === 'dark' ? 'weather-night' : 'white-balance-sunny'} color={theme.colors.primary} />}
+              right={() => <Switch value={mode === 'dark'} onValueChange={toggleTheme} />}
+            />
+          </List.Section>
+        </Card>
+
+        <Card mode="outlined" style={styles.section}>
+          <List.Section>
+            <List.Subheader style={styles.subheader}>Bảo mật</List.Subheader>
+            <List.Item
+              title="Đổi mật khẩu"
+              description="Thay đổi mật khẩu đăng nhập"
+              titleStyle={styles.itemTitle}
+              descriptionStyle={styles.itemDescription}
+              left={(props) => <List.Icon {...props} icon="lock-reset" color={theme.colors.primary} />}
+              right={(props) => <List.Icon {...props} icon="chevron-right" color={theme.colors.onSurfaceVariant} />}
+              onPress={() => navigation.navigate('ChangePassword')}
+            />
+          </List.Section>
+        </Card>
+
+        <Card mode="outlined" style={styles.section}>
+          <List.Section>
+            <List.Subheader style={styles.subheader}>Khuôn mặt</List.Subheader>
+            <List.Item
+              title="Cập nhật khuôn mặt"
+              description="Chụp lại khuôn mặt để đăng nhập nhanh"
+              titleStyle={styles.itemTitle}
+              descriptionStyle={styles.itemDescription}
+              left={(props) => <List.Icon {...props} icon="face-recognition" color={theme.colors.primary} />}
+              right={(props) => <List.Icon {...props} icon="chevron-right" color={theme.colors.onSurfaceVariant} />}
+              onPress={() => navigation.navigate('FaceCamera')}
+            />
+          </List.Section>
+        </Card>
+
+        <Button
+          mode="outlined"
+          onPress={() => setLogoutVisible(true)}
+          style={styles.logoutButton}
+          textColor={theme.colors.error}
+          icon="logout"
+        >
+          Đăng xuất
+        </Button>
+
+        <View style={styles.versionRow}>
+          <Text variant="bodySmall" style={styles.version}>Thư Viện App</Text>
+          <Text variant="bodySmall" style={styles.version}>v1.0.0</Text>
+        </View>
+      </ScrollView>
+
+      <Portal>
+        <Dialog visible={logoutVisible} onDismiss={() => setLogoutVisible(false)}>
+          <Dialog.Title>Đăng xuất</Dialog.Title>
+          <Dialog.Content>
+            <Text>Bạn có chắc muốn đăng xuất?</Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setLogoutVisible(false)}>Hủy</Button>
+            <Button onPress={handleLogout} textColor={theme.colors.error}>Đăng xuất</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
+    </SafeAreaView>
+  );
+}
+
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    flex: {
+      flex: 1,
+    },
+    content: {
+      padding: 16,
+      paddingBottom: 28,
+      gap: 14,
+    },
+    header: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: 18,
+    },
+    headerContent: {
+      alignItems: 'center',
+      gap: 6,
+      paddingVertical: 18,
+    },
+    avatar: {
+      backgroundColor: theme.colors.primary,
+      marginBottom: 8,
+    },
+    name: {
+      color: theme.colors.onSurface,
+      fontWeight: '800',
+      textAlign: 'center',
+    },
+    email: {
+      color: theme.colors.onSurfaceVariant,
+      textAlign: 'center',
+    },
+    studentCode: {
+      color: theme.colors.secondary,
+      fontWeight: '700',
+    },
+    roleBadge: {
+      marginTop: 8,
+      paddingHorizontal: 14,
+      paddingVertical: 5,
+      borderRadius: 999,
+      backgroundColor: theme.colors.primaryContainer,
+    },
+    role: {
+      color: theme.dark ? theme.colors.primary : theme.colors.onSurface,
+      fontWeight: '800',
+      textTransform: 'uppercase',
+    },
+    section: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.outlineVariant,
+      borderRadius: 14,
+      overflow: 'hidden',
+    },
+    subheader: {
+      color: theme.colors.primary,
+      fontWeight: '800',
+      fontSize: 13,
+    },
+    itemTitle: {
+      color: theme.colors.onSurface,
+      fontSize: 14,
+      fontWeight: '700',
+    },
+    itemDescription: {
+      color: theme.colors.onSurfaceVariant,
+      fontSize: 13,
+    },
+    logoutButton: {
+      borderColor: theme.colors.error,
+      borderRadius: 10,
+    },
+    versionRow: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: 4,
+    },
+    version: {
+      color: theme.colors.onSurfaceVariant,
+    },
+  });
+}
+</file>
+
+<file path="src/screens/ScheduleScreen.tsx">
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { useFocusEffect } from '@react-navigation/native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Dimensions, FlatList, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityIndicator, Button, Card, Chip, Divider, Snackbar, Text, useTheme } from 'react-native-paper';
+import { scheduleApi } from '../api/schedule';
+import { AppTheme } from '../theme/DarkTheme';
+import { StaffScheduleAssignment } from '../types';
+
+type AssignmentTimeState = 'now' | 'today' | 'upcoming' | 'past';
+type TabFilter = 'all' | AssignmentTimeState;
+
+const TABS: { key: TabFilter; label: string }[] = [
+  { key: 'all', label: 'Tất cả' },
+  { key: 'now', label: 'Đang trực' },
+  { key: 'today', label: 'Hôm nay' },
+  { key: 'upcoming', label: 'Sắp tới' },
+  { key: 'past', label: 'Đã qua' },
+];
+
+function toDateInput(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function startOfWeek(date = new Date()) {
+  const value = new Date(date);
+  const day = value.getDay() || 7;
+  value.setDate(value.getDate() - day + 1);
+  value.setHours(0, 0, 0, 0);
+  return value;
+}
+
+function normalizeTime(value?: string) {
+  return (value || '').slice(0, 5);
+}
+
+function getErrorMessage(err: any, fallback: string) {
+  return err?.response?.data?.detail || err?.response?.data?.error || err?.message || fallback;
+}
+
+function getAssignmentTimeState(item: StaffScheduleAssignment): AssignmentTimeState {
+  const now = new Date();
+  const today = toDateInput(now);
+
+  if (item.workDate < today) return 'past';
+  if (item.workDate > today) return 'upcoming';
+
+  const startTime = normalizeTime(item.shift?.startTime);
+  const endTime = normalizeTime(item.shift?.endTime);
+  if (startTime && endTime) {
+    const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    if (currentTime >= startTime && currentTime <= endTime) return 'now';
+  }
+
+  return 'today';
+}
+
+function displayZoneName(item: StaffScheduleAssignment) {
+  if (!item.zone) return item.zoneId;
+  const zoneName = item.zone.zoneName || '';
+  const compact = zoneName.match(/^(Tang|Tầng)\s*(\d+)/i);
+  return compact ? `Tầng ${compact[2]}` : zoneName || `Tầng ${item.zone.floor ?? '-'}`;
+}
+
+function DayColumn({
+  item,
+  onCheckIn,
+  onCheckOut,
+  actionLoadingId,
+  styles,
+  theme,
+}: {
+  item: StaffScheduleAssignment;
+  onCheckIn: (id: string) => void;
+  onCheckOut: (id: string) => void;
+  actionLoadingId: string | null;
+  styles: ReturnType<typeof createStyles>;
+  theme: AppTheme;
+}) {
+  const state = getAssignmentTimeState(item);
+  const today = toDateInput(new Date());
+  const isToday = item.workDate === today;
+  const canCheckIn = isToday && !item.attendance?.checkInAt;
+  const canCheckOut = isToday && !!item.attendance?.checkInAt && !item.attendance?.checkOutAt;
+  const isNow = state === 'now';
+  const isPast = state === 'past';
+
+  const stateColors = {
+    now: theme.colors.primary,
+    today: theme.colors.tertiary,
+    upcoming: theme.colors.secondary,
+    past: theme.colors.outline,
+  };
+
+  return (
+    <Card
+      mode="outlined"
+      style={[
+        styles.assignmentCard,
+        isNow && { borderColor: theme.colors.primary, borderWidth: 1.5 },
+        isPast && { opacity: 0.65 },
+      ]}
+    >
+      <Card.Content style={styles.cardContent}>
+        <View style={styles.cardTopRow}>
+          <View style={[styles.stateDot, { backgroundColor: stateColors[state] }]} />
+          <Text style={[styles.stateText, { color: stateColors[state] }]}>
+            {isNow ? 'Đang trực' : isPast ? 'Đã qua' : isToday ? 'Hôm nay' : 'Sắp tới'}
+          </Text>
+          {isNow && (
+            <View style={[styles.liveBadge, { backgroundColor: theme.colors.primary }]}>
+              <MaterialCommunityIcons name="access-point" size={10} color="#fff" />
+            </View>
+          )}
+        </View>
+
+        <Text variant="titleMedium" style={styles.shiftName}>
+          {item.shift?.name || item.shiftId}
+        </Text>
+        <Text style={styles.timeRange}>
+          {normalizeTime(item.shift?.startTime)} - {normalizeTime(item.shift?.endTime)}
+        </Text>
+
+        <Divider style={styles.divider} />
+
+        <View style={styles.detailRow}>
+          <MaterialCommunityIcons name="map-marker-outline" size={14} color={theme.colors.onSurfaceVariant} />
+          <Text style={styles.detailText}>{displayZoneName(item)}</Text>
+        </View>
+        <View style={styles.detailRow}>
+          <MaterialCommunityIcons name="calendar-outline" size={14} color={theme.colors.onSurfaceVariant} />
+          <Text style={styles.detailText}>{item.workDate}</Text>
+        </View>
+        <View style={styles.detailRow}>
+          <MaterialCommunityIcons name="login-variant" size={14} color={theme.colors.onSurfaceVariant} />
+          <Text style={styles.detailText}>
+            {item.attendance?.checkInAt
+              ? `Vào lúc ${item.attendance.checkInAt.slice(11, 16)}`
+              : 'Chưa check-in'}
+          </Text>
+        </View>
+        {item.attendance?.checkOutAt && (
+          <View style={styles.detailRow}>
+            <MaterialCommunityIcons name="logout-variant" size={14} color={theme.colors.onSurfaceVariant} />
+            <Text style={styles.detailText}>Ra lúc {item.attendance.checkOutAt.slice(11, 16)}</Text>
+          </View>
+        )}
+
+        {(canCheckIn || canCheckOut) && (
+          <View style={styles.actionRow}>
+            {canCheckIn ? (
+              <Button
+                mode="contained"
+                icon="login"
+                compact
+                loading={actionLoadingId === `${item.id}:check-in`}
+                onPress={() => onCheckIn(item.id)}
+                style={styles.actionBtn}
+              >
+                Check-in
+              </Button>
+            ) : null}
+            {canCheckOut ? (
+              <Button
+                mode="outlined"
+                icon="logout"
+                compact
+                loading={actionLoadingId === `${item.id}:check-out`}
+                onPress={() => onCheckOut(item.id)}
+                style={styles.actionBtn}
+              >
+                Check-out
+              </Button>
+            ) : null}
+          </View>
+        )}
+      </Card.Content>
+    </Card>
+  );
+}
+
+function DayHeader({
+  dateStr,
+  styles,
+  theme,
+}: {
+  dateStr: string;
+  styles: ReturnType<typeof createStyles>;
+  theme: AppTheme;
+}) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const dayName = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][d.getDay()];
+  const dayNum = String(d.getDate()).padStart(2, '0');
+  const monthStr = String(d.getMonth() + 1).padStart(2, '0');
+  const today = toDateInput(new Date());
+  const isToday = dateStr === today;
+
+  return (
+    <View style={[styles.dayHeader, isToday && { backgroundColor: theme.colors.primaryContainer }]}>
+      <Text style={[styles.dayName, isToday && { color: theme.colors.primary }]}>{dayName}</Text>
+      <Text style={[styles.dayNum, isToday && { color: theme.colors.primary }]}>{dayNum}</Text>
+      <Text style={[styles.monthStr, isToday && { color: theme.colors.primary }]}>{monthStr}</Text>
+    </View>
+  );
+}
+
+export default function ScheduleScreen() {
+  const theme = useTheme() as AppTheme;
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const [assignments, setAssignments] = useState<StaffScheduleAssignment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [snackbar, setSnackbar] = useState('');
+  const [activeTab, setActiveTab] = useState<TabFilter>('all');
+
+  const weekDays = useMemo(() => {
+    const start = startOfWeek();
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      return toDateInput(d);
+    });
+  }, []);
+
+  const weekRange = useMemo(() => ({
+    from: weekDays[0],
+    to: weekDays[6],
+  }), [weekDays]);
+
+  const loadSchedules = async () => {
+    setError(null);
+    try {
+      const result = await scheduleApi.getMySchedules(weekRange.from, weekRange.to);
+      setAssignments(result.items);
+    } catch (err: any) {
+      setError(getErrorMessage(err, 'Không thể tải lịch trực'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      loadSchedules();
+    }, [weekRange.from, weekRange.to]),
+  );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadSchedules();
+    setRefreshing(false);
+  };
+
+  const runAttendanceAction = async (id: string, action: 'check-in' | 'check-out') => {
+    setActionLoadingId(`${id}:${action}`);
+    setError(null);
+    try {
+      if (action === 'check-in') {
+        await scheduleApi.checkIn(id);
+        setSnackbar('Đã check-in thành công');
+      } else {
+        await scheduleApi.checkOut(id);
+        setSnackbar('Đã check-out thành công');
+      }
+      await loadSchedules();
+    } catch (err: any) {
+      setError(getErrorMessage(err, action === 'check-in' ? 'Check-in thất bại' : 'Check-out thất bại'));
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const filteredAssignments = useMemo(() => {
+    if (activeTab === 'all') return assignments;
+    return assignments.filter((item) => {
+      const state = getAssignmentTimeState(item);
+      return state === activeTab;
+    });
+  }, [assignments, activeTab]);
+
+  const groupedByDate = useMemo(() => {
+    const map = new Map<string, StaffScheduleAssignment[]>();
+    for (const day of weekDays) {
+      map.set(day, []);
+    }
+    for (const item of filteredAssignments) {
+      const list = map.get(item.workDate);
+      if (list) list.push(item);
+    }
+    return map;
+  }, [filteredAssignments, weekDays]);
+
+  const counts = useMemo(() => {
+    const c: Record<TabFilter, number> = { all: assignments.length, now: 0, today: 0, upcoming: 0, past: 0 };
+    for (const item of assignments) {
+      const state = getAssignmentTimeState(item);
+      c[state]++;
+    }
+    return c;
+  }, [assignments]);
+
+  const renderDayColumn = ({ item: dateStr }: { item: string }) => {
+    const dayAssignments = groupedByDate.get(dateStr) ?? [];
+    return (
+      <View style={styles.dayColumn}>
+        <DayHeader dateStr={dateStr} styles={styles} theme={theme} />
+        <ScrollView
+          style={styles.dayAssignments}
+          contentContainerStyle={styles.dayAssignmentsContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {dayAssignments.length === 0 ? (
+            <View style={styles.emptyColumn}>
+              <MaterialCommunityIcons name="calendar-blank-outline" size={26} color={theme.colors.outlineVariant} />
+              <Text style={styles.emptyColumnText}>Không có ca</Text>
+            </View>
+          ) : (
+            dayAssignments.map((item) => (
+              <DayColumn
+                key={item.id}
+                item={item}
+                onCheckIn={(id) => runAttendanceAction(id, 'check-in')}
+                onCheckOut={(id) => runAttendanceAction(id, 'check-out')}
+                actionLoadingId={actionLoadingId}
+                styles={styles}
+                theme={theme}
+              />
+            ))
+          )}
+        </ScrollView>
+      </View>
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <MaterialCommunityIcons name="calendar-clock" size={24} color={theme.colors.onPrimary} />
+          <Text style={styles.headerTitle}>Lịch trực</Text>
+        </View>
+        <Text style={styles.headerRange}>{weekRange.from} - {weekRange.to}</Text>
+      </View>
+
+      <View style={styles.tabBar}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabContent}>
+          {TABS.map((tab) => {
+            const count = counts[tab.key];
+            const isActive = activeTab === tab.key;
+            return (
+              <Chip
+                key={tab.key}
+                selected={isActive}
+                onPress={() => setActiveTab(tab.key)}
+                mode={isActive ? 'flat' : 'outlined'}
+                style={[styles.tabChip, isActive && { backgroundColor: theme.colors.primaryContainer }]}
+                textStyle={[styles.tabChipText, isActive && { color: theme.colors.primary }]}
+                compact
+              >
+                {tab.label} {count > 0 ? `(${count})` : ''}
+              </Chip>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      {error ? (
+        <Card mode="outlined" style={styles.errorCard}>
+          <Card.Content style={styles.errorContent}>
+            <MaterialCommunityIcons name="alert-circle-outline" size={22} color={theme.colors.error} />
+            <Text style={styles.errorText} selectable>{error}</Text>
+          </Card.Content>
+        </Card>
+      ) : null}
+
+      {loading ? (
+        <View style={styles.loadingBox}>
+          <ActivityIndicator color={theme.colors.primary} />
+        </View>
+      ) : (
+        <FlatList
+          data={weekDays}
+          horizontal
+          pagingEnabled={false}
+          showsHorizontalScrollIndicator={false}
+          renderItem={renderDayColumn}
+          keyExtractor={(item) => item}
+          contentContainerStyle={styles.weekList}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={theme.colors.primary}
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyWeek}>
+              <MaterialCommunityIcons name="calendar-remove-outline" size={48} color={theme.colors.outlineVariant} />
+              <Text style={styles.emptyWeekText}>Không có lịch trực trong tuần này.</Text>
+            </View>
+          }
+        />
+      )}
+
+      <Snackbar
+        visible={!!snackbar}
+        onDismiss={() => setSnackbar('')}
+        duration={3000}
+        style={styles.snackbar}
+      >
+        {snackbar}
+      </Snackbar>
+    </SafeAreaView>
+  );
+}
+
+function createStyles(theme: AppTheme) {
+  const { width: SCREEN_WIDTH } = Dimensions.get('window');
+  const DAY_COLUMN_WIDTH = Math.max(SCREEN_WIDTH * 0.62, 210);
+
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      backgroundColor: theme.colors.surface,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.outlineVariant,
+    },
+    headerLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    headerTitle: {
+      color: theme.colors.onSurface,
+      fontWeight: '900',
+      fontSize: 18,
+    },
+    headerRange: {
+      color: theme.colors.onSurfaceVariant,
+      fontSize: 12,
+    },
+    tabBar: {
+      backgroundColor: theme.colors.surface,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.outlineVariant,
+    },
+    tabContent: {
+      flexDirection: 'row',
+      gap: 8,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+    },
+    tabChip: {
+      borderRadius: 20,
+    },
+    tabChipText: {
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    errorCard: {
+      margin: 16,
+      backgroundColor: theme.colors.errorContainer,
+      borderColor: theme.colors.error,
+    },
+    errorContent: {
+      flexDirection: 'row',
+      gap: 10,
+      alignItems: 'flex-start',
+    },
+    errorText: {
+      color: theme.colors.error,
+      flex: 1,
+    },
+    loadingBox: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    weekList: {
+      paddingHorizontal: 12,
+      paddingVertical: 12,
+    },
+    dayColumn: {
+      width: DAY_COLUMN_WIDTH,
+      marginHorizontal: 6,
+    },
+    dayHeader: {
+      alignItems: 'center',
+      paddingVertical: 10,
+      borderRadius: 12,
+      marginBottom: 8,
+      backgroundColor: theme.colors.surfaceVariant,
+    },
+    dayName: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: theme.colors.onSurfaceVariant,
+      textTransform: 'uppercase',
+    },
+    dayNum: {
+      fontSize: 22,
+      fontWeight: '900',
+      color: theme.colors.onSurface,
+    },
+    monthStr: {
+      fontSize: 11,
+      color: theme.colors.onSurfaceVariant,
+    },
+    dayAssignments: {
+      flex: 1,
+    },
+    dayAssignmentsContent: {
+      gap: 10,
+      paddingBottom: 16,
+    },
+    emptyColumn: {
+      alignItems: 'center',
+      paddingVertical: 28,
+      gap: 6,
+    },
+    emptyColumnText: {
+      color: theme.colors.outlineVariant,
+      fontSize: 12,
+    },
+    emptyWeek: {
+      width: SCREEN_WIDTH - 32,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 60,
+      gap: 12,
+    },
+    emptyWeekText: {
+      color: theme.colors.onSurfaceVariant,
+      fontSize: 15,
+      textAlign: 'center',
+    },
+    assignmentCard: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: 14,
+      borderColor: theme.colors.outlineVariant,
+    },
+    cardContent: {
+      gap: 6,
+    },
+    cardTopRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 2,
+    },
+    stateDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+    },
+    stateText: {
+      fontSize: 11,
+      fontWeight: '800',
+      flex: 1,
+    },
+    liveBadge: {
+      width: 16,
+      height: 16,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    shiftName: {
+      color: theme.colors.onSurface,
+      fontWeight: '900',
+    },
+    timeRange: {
+      color: theme.colors.onSurfaceVariant,
+      fontSize: 13,
+    },
+    divider: {
+      marginVertical: 4,
+    },
+    detailRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    detailText: {
+      color: theme.colors.onSurfaceVariant,
+      fontSize: 12,
+    },
+    actionRow: {
+      flexDirection: 'row',
+      gap: 8,
+      marginTop: 6,
+    },
+    actionBtn: {
+      flex: 1,
+      borderRadius: 8,
+    },
+    snackbar: {
+      top: 60,
+    },
+  });
+}
+</file>
+
+<file path="src/api/auth.ts">
+import api from './client';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AuthTokens, User } from '../types';
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface PatronLoginRequest {
+  student_code: string;
+  password: string;
+}
+
+export interface PatronRegisterRequest {
+  student_code: string;
+  password: string;
+  full_name: string;
+  email: string;
+  class_name?: string;
+}
+
+export interface LoginResponse {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  user?: any;
+}
+
+export interface PatronLoginResponse {
+  access_token: string;
+  refresh_token?: string;
+  token_type: string;
+  user: any;
+}
+
+export interface FaceLoginResponse {
+  access_token: string;
+  refresh_token?: string;
+  token_type: string;
+}
+
+export const authApi = {
+  login: async (data: LoginRequest): Promise<LoginResponse> => {
+    const response = await api.post<LoginResponse>('/auth/login', data);
+    const tokens: AuthTokens = {
+      access_token: response.data.access_token,
+      refresh_token: response.data.refresh_token,
+      token_type: response.data.token_type,
+    };
+    await AsyncStorage.setItem('accessToken', tokens.access_token);
+    await AsyncStorage.setItem('refreshToken', tokens.refresh_token);
+    if (response.data.user) {
+      await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
+      await AsyncStorage.removeItem('patronData');
+    }
+    return response.data;
+  },
+
+  patronLogin: async (data: PatronLoginRequest): Promise<PatronLoginResponse> => {
+    const response = await api.post<PatronLoginResponse>('/patrons/login', data);
+    await AsyncStorage.setItem('accessToken', response.data.access_token);
+    if (response.data.refresh_token) {
+      await AsyncStorage.setItem('refreshToken', response.data.refresh_token);
+    }
+    await AsyncStorage.setItem('patronData', JSON.stringify(response.data.user));
+    return response.data;
+  },
+
+  patronRegister: async (data: PatronRegisterRequest): Promise<PatronLoginResponse> => {
+    const response = await api.post<PatronLoginResponse>('/patrons/register', data);
+    if (!response.data.user) {
+      throw new Error('Invalid response: missing user data');
+    }
+    await AsyncStorage.setItem('accessToken', response.data.access_token);
+    await AsyncStorage.setItem('patronData', JSON.stringify(response.data.user));
+    return response.data;
+  },
+
+  faceLogin: async (imageUri: string): Promise<FaceLoginResponse> => {
+    const formData = new FormData();
+    formData.append('file', {
+      uri: imageUri,
+      type: 'image/jpeg',
+      name: 'face.jpg',
+    } as any);
+    const response = await api.post<FaceLoginResponse>('/auth/face-login', formData);
+    if (response.data.access_token) {
+      await AsyncStorage.setItem('accessToken', response.data.access_token);
+    }
+    if (response.data.refresh_token) {
+      await AsyncStorage.setItem('refreshToken', response.data.refresh_token);
+    }
+    return response.data;
+  },
+
+  refreshToken: async (refreshToken: string): Promise<{ access_token: string }> => {
+    const response = await api.post('/auth/refresh', { refresh_token: refreshToken });
+    return response.data;
+  },
+
+  logout: async (): Promise<void> => {
+    await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'patronData', 'userData']);
+  },
+
+  getCurrentUser: async (): Promise<User> => {
+    const response = await api.get<User>('/users/me');
+    return response.data;
+  },
+
+  getCurrentPatron: async (): Promise<any> => {
+    const response = await api.get<any>('/patrons/me');
+    return response.data;
+  },
+
+  changePassword: async (patronId: string, newPassword: string): Promise<void> => {
+    await api.put(`/patrons/${patronId}/password`, {
+      new_password: newPassword,
+    });
+  },
+};
+</file>
+
+<file path="src/context/AuthContext.tsx">
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { User } from '../types';
+import { authApi } from '../api/auth';
+import { devError } from '../utils/logger';
+
+interface AuthContextType {
+  user: User | null;
+  patron: any | null;
+  isLoading: boolean;
+  isAuthenticated: boolean;
+  staffLogin: (email: string, password: string) => Promise<void>;
+  patronLogin: (studentCode: string, password: string) => Promise<void>;
+  faceLogin: (imageUri: string) => Promise<void>;
+  logout: () => Promise<void>;
+  checkAuth: () => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+function getFullName(data: any): string {
+  return data?.fullName || data?.full_name || '';
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [patron, setPatron] = useState<any | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const checkAuth = async () => {
+    try {
+      const token = await AsyncStorage.getItem('accessToken');
+      const patronDataStr = await AsyncStorage.getItem('patronData');
+      const userDataStr = await AsyncStorage.getItem('userData');
+      if (token && patronDataStr) {
+        const patronData = JSON.parse(patronDataStr);
+        setPatron(patronData);
+        setUser({ id: patronData.id, email: patronData.email || '', full_name: getFullName(patronData), role: 'patron' });
+      } else if (token && userDataStr) {
+        const userData = JSON.parse(userDataStr);
+        setPatron(null);
+        setUser({
+          id: userData.id,
+          email: userData.email || '',
+          full_name: getFullName(userData),
+          role: userData.role,
+        });
+      }
+    } catch (error) {
+      devError('Auth check failed:', error);
+      await authApi.logout();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  const patronLogin = async (studentCode: string, password: string) => {
+    setIsLoading(true);
+    try {
+      const response = await authApi.patronLogin({ student_code: studentCode, password });
+      setPatron(response.user);
+      setUser({ id: response.user.id, email: response.user.email || '', full_name: getFullName(response.user), role: 'patron' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const staffLogin = async (email: string, password: string) => {
+    setIsLoading(true);
+    try {
+      const response = await authApi.login({ email, password });
+      const userData = response.user;
+      if (!userData || !['admin', 'staff'].includes(userData.role)) {
+        await authApi.logout();
+        throw new Error('Tài khoản này không có quyền dùng máy quét trả sách');
+      }
+      setPatron(null);
+      setUser({
+        id: userData.id,
+        email: userData.email || email,
+        full_name: getFullName(userData),
+        role: userData.role,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const faceLogin = async (imageUri: string) => {
+    setIsLoading(true);
+    try {
+      await authApi.faceLogin(imageUri);
+      const patronData = await authApi.getCurrentPatron();
+      await AsyncStorage.setItem('patronData', JSON.stringify(patronData));
+      setPatron(patronData);
+      setUser({ id: patronData.id, email: patronData.email || '', full_name: getFullName(patronData), role: 'patron' });
+    } catch (error) {
+      await authApi.logout();
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const logout = async () => {
+    await authApi.logout();
+    setUser(null);
+    setPatron(null);
+  };
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        patron,
+        isLoading,
+        isAuthenticated: !!user,
+        staffLogin,
+        patronLogin,
+        faceLogin,
+        logout,
+        checkAuth,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+}
 </file>
 
 <file path="src/screens/BorrowScreen.tsx">
@@ -6304,553 +7042,6 @@ const styles = StyleSheet.create({
 });
 </file>
 
-<file path="src/screens/ProfileScreen.tsx">
-import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import {
-  Avatar,
-  Button,
-  Card,
-  Dialog,
-  Divider,
-  List,
-  Portal,
-  Switch,
-  Text,
-  useTheme,
-} from 'react-native-paper';
-import { useAuth } from '../context/AuthContext';
-import { useMobileTheme } from '../context/ThemeContext';
-import { AppTheme } from '../theme/DarkTheme';
-
-interface ProfileScreenProps {
-  navigation: any;
-}
-
-export default function ProfileScreen({ navigation }: ProfileScreenProps) {
-  const theme = useTheme() as AppTheme;
-  const styles = useMemo(() => createStyles(theme), [theme]);
-  const { user, patron, logout } = useAuth();
-  const { mode, toggleTheme } = useMobileTheme();
-  const [logoutVisible, setLogoutVisible] = useState(false);
-
-  const roleLabel =
-    user?.role === 'admin'
-      ? 'Quản trị viên'
-      : user?.role === 'staff'
-        ? 'Nhân viên'
-        : 'Độc giả';
-
-  const displayName = user?.full_name || 'Người dùng';
-
-  const handleLogout = async () => {
-    setLogoutVisible(false);
-    await logout();
-  };
-
-  return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
-      <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
-        <Card mode="contained" style={styles.header}>
-          <Card.Content style={styles.headerContent}>
-            <Avatar.Text
-              size={74}
-              label={(displayName || user?.email || 'U').slice(0, 1).toUpperCase()}
-              color={theme.colors.onPrimary}
-              style={styles.avatar}
-            />
-            <Text variant="headlineSmall" style={styles.name} numberOfLines={2}>
-              {displayName}
-            </Text>
-            <Text variant="bodyMedium" style={styles.email} selectable>
-              {user?.email}
-            </Text>
-            {patron?.student_code ? (
-              <Text variant="bodySmall" style={styles.studentCode} selectable>
-                MSSV: {patron.student_code}
-              </Text>
-            ) : null}
-            <View style={styles.roleBadge}>
-              <Text variant="labelMedium" style={styles.role}>{roleLabel}</Text>
-            </View>
-          </Card.Content>
-        </Card>
-
-        <Card mode="outlined" style={styles.section}>
-          <List.Section>
-            <List.Subheader style={styles.subheader}>Tài khoản</List.Subheader>
-            <List.Item
-              title="Họ và tên"
-              description={user?.full_name || 'Chưa cập nhật'}
-              titleStyle={styles.itemTitle}
-              descriptionStyle={styles.itemDescription}
-              left={(props) => <List.Icon {...props} icon="account" color={theme.colors.primary} />}
-            />
-            <Divider />
-            <List.Item
-              title="Email"
-              description={user?.email || 'Chưa cập nhật'}
-              titleStyle={styles.itemTitle}
-              descriptionStyle={styles.itemDescription}
-              left={(props) => <List.Icon {...props} icon="email" color={theme.colors.primary} />}
-            />
-            <Divider />
-            {patron?.student_code ? (
-              <>
-                <List.Item
-                  title="MSSV"
-                  description={patron.student_code}
-                  titleStyle={styles.itemTitle}
-                  descriptionStyle={styles.itemDescription}
-                  left={(props) => <List.Icon {...props} icon="card-account-details" color={theme.colors.primary} />}
-                />
-                <Divider />
-              </>
-            ) : null}
-            <List.Item
-              title="Vai trò"
-              description={roleLabel}
-              titleStyle={styles.itemTitle}
-              descriptionStyle={styles.itemDescription}
-              left={(props) => <List.Icon {...props} icon="shield-account" color={theme.colors.primary} />}
-            />
-          </List.Section>
-        </Card>
-
-        <Card mode="outlined" style={styles.section}>
-          <List.Section>
-            <List.Subheader style={styles.subheader}>Giao diện</List.Subheader>
-            <List.Item
-              title="Chế độ sáng/tối"
-              description={mode === 'dark' ? 'Đang dùng giao diện tối' : 'Đang dùng giao diện sáng'}
-              titleStyle={styles.itemTitle}
-              descriptionStyle={styles.itemDescription}
-              left={(props) => <List.Icon {...props} icon={mode === 'dark' ? 'weather-night' : 'white-balance-sunny'} color={theme.colors.primary} />}
-              right={() => <Switch value={mode === 'dark'} onValueChange={toggleTheme} />}
-            />
-          </List.Section>
-        </Card>
-
-        <Card mode="outlined" style={styles.section}>
-          <List.Section>
-            <List.Subheader style={styles.subheader}>Bảo mật</List.Subheader>
-            <List.Item
-              title="Đổi mật khẩu"
-              description="Thay đổi mật khẩu đăng nhập"
-              titleStyle={styles.itemTitle}
-              descriptionStyle={styles.itemDescription}
-              left={(props) => <List.Icon {...props} icon="lock-reset" color={theme.colors.primary} />}
-              right={(props) => <List.Icon {...props} icon="chevron-right" color={theme.colors.onSurfaceVariant} />}
-              onPress={() => navigation.navigate('ChangePassword')}
-            />
-          </List.Section>
-        </Card>
-
-        <Card mode="outlined" style={styles.section}>
-          <List.Section>
-            <List.Subheader style={styles.subheader}>Khuôn mặt</List.Subheader>
-            <List.Item
-              title="Cập nhật khuôn mặt"
-              description="Chụp lại khuôn mặt để đăng nhập nhanh"
-              titleStyle={styles.itemTitle}
-              descriptionStyle={styles.itemDescription}
-              left={(props) => <List.Icon {...props} icon="face-recognition" color={theme.colors.primary} />}
-              right={(props) => <List.Icon {...props} icon="chevron-right" color={theme.colors.onSurfaceVariant} />}
-              onPress={() => navigation.navigate('FaceCamera')}
-            />
-          </List.Section>
-        </Card>
-
-        <Button
-          mode="outlined"
-          onPress={() => setLogoutVisible(true)}
-          style={styles.logoutButton}
-          textColor={theme.colors.error}
-          icon="logout"
-        >
-          Đăng xuất
-        </Button>
-
-        <View style={styles.versionRow}>
-          <Text variant="bodySmall" style={styles.version}>Thư Viện App</Text>
-          <Text variant="bodySmall" style={styles.version}>v1.0.0</Text>
-        </View>
-      </ScrollView>
-
-      <Portal>
-        <Dialog visible={logoutVisible} onDismiss={() => setLogoutVisible(false)}>
-          <Dialog.Title>Đăng xuất</Dialog.Title>
-          <Dialog.Content>
-            <Text>Bạn có chắc muốn đăng xuất?</Text>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setLogoutVisible(false)}>Hủy</Button>
-            <Button onPress={handleLogout} textColor={theme.colors.error}>Đăng xuất</Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
-    </SafeAreaView>
-  );
-}
-
-function createStyles(theme: AppTheme) {
-  return StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: theme.colors.background,
-    },
-    flex: {
-      flex: 1,
-    },
-    content: {
-      padding: 16,
-      paddingBottom: 28,
-      gap: 14,
-    },
-    header: {
-      backgroundColor: theme.colors.surface,
-      borderRadius: 18,
-    },
-    headerContent: {
-      alignItems: 'center',
-      gap: 6,
-      paddingVertical: 18,
-    },
-    avatar: {
-      backgroundColor: theme.colors.primary,
-      marginBottom: 8,
-    },
-    name: {
-      color: theme.colors.onSurface,
-      fontWeight: '800',
-      textAlign: 'center',
-    },
-    email: {
-      color: theme.colors.onSurfaceVariant,
-      textAlign: 'center',
-    },
-    studentCode: {
-      color: theme.colors.secondary,
-      fontWeight: '700',
-    },
-    roleBadge: {
-      marginTop: 8,
-      paddingHorizontal: 14,
-      paddingVertical: 5,
-      borderRadius: 999,
-      backgroundColor: theme.colors.primaryContainer,
-    },
-    role: {
-      color: theme.dark ? theme.colors.primary : theme.colors.onSurface,
-      fontWeight: '800',
-      textTransform: 'uppercase',
-    },
-    section: {
-      backgroundColor: theme.colors.surface,
-      borderColor: theme.colors.outlineVariant,
-      borderRadius: 14,
-      overflow: 'hidden',
-    },
-    subheader: {
-      color: theme.colors.primary,
-      fontWeight: '800',
-      fontSize: 13,
-    },
-    itemTitle: {
-      color: theme.colors.onSurface,
-      fontSize: 14,
-      fontWeight: '700',
-    },
-    itemDescription: {
-      color: theme.colors.onSurfaceVariant,
-      fontSize: 13,
-    },
-    logoutButton: {
-      borderColor: theme.colors.error,
-      borderRadius: 10,
-    },
-    versionRow: {
-      flexDirection: 'row',
-      justifyContent: 'center',
-      alignItems: 'center',
-      gap: 8,
-      marginTop: 4,
-    },
-    version: {
-      color: theme.colors.onSurfaceVariant,
-    },
-  });
-}
-</file>
-
-<file path="src/api/auth.ts">
-import api from './client';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AuthTokens, User } from '../types';
-
-export interface LoginRequest {
-  email: string;
-  password: string;
-}
-
-export interface PatronLoginRequest {
-  student_code: string;
-  password: string;
-}
-
-export interface PatronRegisterRequest {
-  student_code: string;
-  password: string;
-  full_name: string;
-  email: string;
-  class_name?: string;
-}
-
-export interface LoginResponse {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
-  user?: any;
-}
-
-export interface PatronLoginResponse {
-  access_token: string;
-  refresh_token?: string;
-  token_type: string;
-  user: any;
-}
-
-export interface FaceLoginResponse {
-  access_token: string;
-  refresh_token?: string;
-  token_type: string;
-}
-
-export const authApi = {
-  login: async (data: LoginRequest): Promise<LoginResponse> => {
-    const response = await api.post<LoginResponse>('/auth/login', data);
-    const tokens: AuthTokens = {
-      access_token: response.data.access_token,
-      refresh_token: response.data.refresh_token,
-      token_type: response.data.token_type,
-    };
-    await AsyncStorage.setItem('accessToken', tokens.access_token);
-    await AsyncStorage.setItem('refreshToken', tokens.refresh_token);
-    if (response.data.user) {
-      await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
-      await AsyncStorage.removeItem('patronData');
-    }
-    return response.data;
-  },
-
-  patronLogin: async (data: PatronLoginRequest): Promise<PatronLoginResponse> => {
-    const response = await api.post<PatronLoginResponse>('/patrons/login', data);
-    await AsyncStorage.setItem('accessToken', response.data.access_token);
-    if (response.data.refresh_token) {
-      await AsyncStorage.setItem('refreshToken', response.data.refresh_token);
-    }
-    await AsyncStorage.setItem('patronData', JSON.stringify(response.data.user));
-    return response.data;
-  },
-
-  patronRegister: async (data: PatronRegisterRequest): Promise<PatronLoginResponse> => {
-    const response = await api.post<PatronLoginResponse>('/patrons/register', data);
-    if (!response.data.user) {
-      throw new Error('Invalid response: missing user data');
-    }
-    await AsyncStorage.setItem('accessToken', response.data.access_token);
-    await AsyncStorage.setItem('patronData', JSON.stringify(response.data.user));
-    return response.data;
-  },
-
-  faceLogin: async (imageUri: string): Promise<FaceLoginResponse> => {
-    const formData = new FormData();
-    formData.append('file', {
-      uri: imageUri,
-      type: 'image/jpeg',
-      name: 'face.jpg',
-    } as any);
-    const response = await api.post<FaceLoginResponse>('/auth/face-login', formData);
-    if (response.data.access_token) {
-      await AsyncStorage.setItem('accessToken', response.data.access_token);
-    }
-    if (response.data.refresh_token) {
-      await AsyncStorage.setItem('refreshToken', response.data.refresh_token);
-    }
-    return response.data;
-  },
-
-  refreshToken: async (refreshToken: string): Promise<{ access_token: string }> => {
-    const response = await api.post('/auth/refresh', { refresh_token: refreshToken });
-    return response.data;
-  },
-
-  logout: async (): Promise<void> => {
-    await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'patronData', 'userData']);
-  },
-
-  getCurrentUser: async (): Promise<User> => {
-    const response = await api.get<User>('/users/me');
-    return response.data;
-  },
-
-  getCurrentPatron: async (): Promise<any> => {
-    const response = await api.get<any>('/patrons/me');
-    return response.data;
-  },
-
-  changePassword: async (patronId: string, newPassword: string): Promise<void> => {
-    await api.put(`/patrons/${patronId}/password`, {
-      new_password: newPassword,
-    });
-  },
-};
-</file>
-
-<file path="src/context/AuthContext.tsx">
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { User } from '../types';
-import { authApi } from '../api/auth';
-import { devError } from '../utils/logger';
-
-interface AuthContextType {
-  user: User | null;
-  patron: any | null;
-  isLoading: boolean;
-  isAuthenticated: boolean;
-  staffLogin: (email: string, password: string) => Promise<void>;
-  patronLogin: (studentCode: string, password: string) => Promise<void>;
-  faceLogin: (imageUri: string) => Promise<void>;
-  logout: () => Promise<void>;
-  checkAuth: () => Promise<void>;
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-function getFullName(data: any): string {
-  return data?.fullName || data?.full_name || '';
-}
-
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [patron, setPatron] = useState<any | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const checkAuth = async () => {
-    try {
-      const token = await AsyncStorage.getItem('accessToken');
-      const patronDataStr = await AsyncStorage.getItem('patronData');
-      const userDataStr = await AsyncStorage.getItem('userData');
-      if (token && patronDataStr) {
-        const patronData = JSON.parse(patronDataStr);
-        setPatron(patronData);
-        setUser({ id: patronData.id, email: patronData.email || '', full_name: getFullName(patronData), role: 'patron' });
-      } else if (token && userDataStr) {
-        const userData = JSON.parse(userDataStr);
-        setPatron(null);
-        setUser({
-          id: userData.id,
-          email: userData.email || '',
-          full_name: getFullName(userData),
-          role: userData.role,
-        });
-      }
-    } catch (error) {
-      devError('Auth check failed:', error);
-      await authApi.logout();
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    checkAuth();
-  }, []);
-
-  const patronLogin = async (studentCode: string, password: string) => {
-    setIsLoading(true);
-    try {
-      const response = await authApi.patronLogin({ student_code: studentCode, password });
-      setPatron(response.user);
-      setUser({ id: response.user.id, email: response.user.email || '', full_name: getFullName(response.user), role: 'patron' });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const staffLogin = async (email: string, password: string) => {
-    setIsLoading(true);
-    try {
-      const response = await authApi.login({ email, password });
-      const userData = response.user;
-      if (!userData || !['admin', 'staff'].includes(userData.role)) {
-        await authApi.logout();
-        throw new Error('Tài khoản này không có quyền dùng máy quét trả sách');
-      }
-      setPatron(null);
-      setUser({
-        id: userData.id,
-        email: userData.email || email,
-        full_name: getFullName(userData),
-        role: userData.role,
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const faceLogin = async (imageUri: string) => {
-    setIsLoading(true);
-    try {
-      await authApi.faceLogin(imageUri);
-      const patronData = await authApi.getCurrentPatron();
-      await AsyncStorage.setItem('patronData', JSON.stringify(patronData));
-      setPatron(patronData);
-      setUser({ id: patronData.id, email: patronData.email || '', full_name: getFullName(patronData), role: 'patron' });
-    } catch (error) {
-      await authApi.logout();
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const logout = async () => {
-    await authApi.logout();
-    setUser(null);
-    setPatron(null);
-  };
-
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        patron,
-        isLoading,
-        isAuthenticated: !!user,
-        staffLogin,
-        patronLogin,
-        faceLogin,
-        logout,
-        checkAuth,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-}
-</file>
-
 <file path="src/navigation/types.ts">
 import { NavigatorScreenParams } from '@react-navigation/native';
 
@@ -6886,6 +7077,416 @@ declare global {
   namespace ReactNavigation {
     interface RootParamList extends RootStackParamList {}
   }
+}
+</file>
+
+<file path="src/screens/HomeScreen.tsx">
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { useFocusEffect } from '@react-navigation/native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Image, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Avatar, Button, Card, Chip, Text, useTheme } from 'react-native-paper';
+import { borrowApi } from '../api/borrow';
+import { useAuth } from '../context/AuthContext';
+import { AppTheme } from '../theme/DarkTheme';
+import { BorrowRecord } from '../types';
+import { formatDate, getDaysUntil, isOverdue } from '../utils/dateUtils';
+
+interface HomeScreenProps {
+  navigation: any;
+}
+
+type StaffAction = {
+  title: string;
+  description: string;
+  icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+  route: string;
+};
+
+export default function HomeScreen({ navigation }: HomeScreenProps) {
+  const theme = useTheme() as AppTheme;
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const { user, patron } = useAuth();
+  const isStaffScanner = user?.role === 'admin' || user?.role === 'staff';
+  const [borrows, setBorrows] = useState<BorrowRecord[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const loadBorrows = async () => {
+    if (isStaffScanner) {
+      setLoadError(null);
+      setBorrows([]);
+      return;
+    }
+
+    try {
+      setLoadError(null);
+      const history = await borrowApi.getHistory('borrowed');
+      setBorrows(history);
+    } catch (error: any) {
+      const message = error?.response?.data?.detail || error?.message || 'Không thể tải danh sách sách đang mượn';
+      setLoadError(message);
+      setBorrows([]);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      loadBorrows();
+    }, [isStaffScanner]),
+  );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadBorrows();
+    setRefreshing(false);
+  };
+
+  const activeBorrows = borrows.filter((item) => item.status === 'borrowed');
+  const overdueCount = activeBorrows.filter((item) => isOverdue(item.due_at)).length;
+  const displayName = user?.full_name || user?.email || 'Người dùng';
+  const roleLabel = user?.role === 'admin' ? 'Quản trị viên' : user?.role === 'staff' ? 'Nhân viên' : 'Độc giả';
+
+  const staffActions: StaffAction[] = [
+    {
+      title: 'Trả sách',
+      description: 'Nhập MSSV, xem sách đang mượn và xác nhận trả bằng ISBN.',
+      icon: 'barcode-scan',
+      route: 'Borrow',
+    },
+    {
+      title: 'Nhập sách',
+      description: 'Quét ISBN và nhập sách mới vào thư viện.',
+      icon: 'package-variant-closed',
+      route: 'ImportBooks',
+    },
+    {
+      title: 'Lịch trực',
+      description: 'Xem ca hôm nay và lịch làm việc trong tuần.',
+      icon: 'calendar-clock',
+      route: 'Schedule',
+    },
+    {
+      title: 'Hồ sơ',
+      description: 'Cài đặt tài khoản, bảo mật và giao diện.',
+      icon: 'account-cog',
+      route: 'Profile',
+    },
+  ];
+
+  return (
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
+      >
+        <Card mode="contained" style={styles.heroCard}>
+          <Card.Content style={styles.heroContent}>
+            <Avatar.Text
+              size={58}
+              label={displayName.slice(0, 1).toUpperCase()}
+              color={theme.colors.onPrimary}
+              style={styles.avatar}
+            />
+            <View style={styles.heroText}>
+              <Text variant="labelLarge" style={styles.kicker}>Xin chào</Text>
+              <Text variant="headlineSmall" style={styles.userName} numberOfLines={2}>
+                {displayName}
+              </Text>
+              <Chip compact icon={isStaffScanner ? 'shield-account' : 'account'} style={styles.roleChip} textStyle={styles.roleChipText}>
+                {roleLabel}
+              </Chip>
+            </View>
+          </Card.Content>
+        </Card>
+
+        {patron?.password_auto_generated ? (
+          <Card mode="outlined" style={styles.warningCard}>
+            <Card.Content style={styles.warningContent}>
+              <MaterialCommunityIcons name="shield-alert" size={24} color={theme.colors.tertiary} />
+              <View style={styles.warningText}>
+                <Text variant="titleSmall" style={styles.cardTitle}>Mật khẩu mặc định</Text>
+                <Text variant="bodySmall" style={styles.mutedText}>Đổi mật khẩu để bảo mật tài khoản.</Text>
+              </View>
+              <Button mode="contained-tonal" compact onPress={() => navigation.navigate('ChangePassword')}>
+                Đổi
+              </Button>
+            </Card.Content>
+          </Card>
+        ) : null}
+
+        {isStaffScanner ? (
+          <View style={styles.section}>
+            <Text variant="titleMedium" style={styles.sectionTitle}>Công việc nhanh</Text>
+            {staffActions.map((action) => (
+              <Card key={action.route} mode="outlined" style={styles.actionCard} onPress={() => navigation.navigate(action.route)}>
+                <Card.Content style={styles.actionContent}>
+                  <View style={styles.actionIcon}>
+                    <MaterialCommunityIcons name={action.icon} size={24} color={theme.colors.onPrimary} />
+                  </View>
+                  <View style={styles.actionText}>
+                    <Text variant="titleMedium" style={styles.cardTitle}>{action.title}</Text>
+                    <Text variant="bodySmall" style={styles.mutedText}>{action.description}</Text>
+                  </View>
+                  <MaterialCommunityIcons name="chevron-right" size={24} color={theme.colors.onSurfaceVariant} />
+                </Card.Content>
+              </Card>
+            ))}
+          </View>
+        ) : (
+          <>
+            <View style={styles.statsRow}>
+              <Card mode="contained" style={styles.statCard}>
+                <Card.Content>
+                  <Text variant="headlineMedium" style={styles.statNumber}>{activeBorrows.length}</Text>
+                  <Text variant="bodySmall" style={styles.mutedText}>Đang mượn</Text>
+                </Card.Content>
+              </Card>
+              <Card mode="contained" style={[styles.statCard, overdueCount > 0 && styles.overdueCard]}>
+                <Card.Content>
+                  <Text variant="headlineMedium" style={[styles.statNumber, overdueCount > 0 && styles.overdueText]}>{overdueCount}</Text>
+                  <Text variant="bodySmall" style={styles.mutedText}>Quá hạn</Text>
+                </Card.Content>
+              </Card>
+            </View>
+
+            <View style={styles.section}>
+              <Text variant="titleMedium" style={styles.sectionTitle}>Sách đang mượn</Text>
+              {loadError ? (
+                <Card mode="outlined" style={styles.stateCard}>
+                  <Card.Content style={styles.stateContent}>
+                    <MaterialCommunityIcons name="cloud-off-outline" size={38} color={theme.colors.onSurfaceVariant} />
+                    <Text variant="titleSmall" style={styles.cardTitle}>Không thể kết nối server</Text>
+                    <Text variant="bodySmall" style={styles.stateDescription} selectable>{loadError}</Text>
+                    <Button mode="outlined" icon="refresh" onPress={loadBorrows}>Thử lại</Button>
+                  </Card.Content>
+                </Card>
+              ) : activeBorrows.length === 0 ? (
+                <Card mode="outlined" style={styles.stateCard}>
+                  <Card.Content style={styles.stateContent}>
+                    <MaterialCommunityIcons name="bookshelf" size={38} color={theme.colors.onSurfaceVariant} />
+                    <Text variant="titleSmall" style={styles.cardTitle}>Bạn chưa mượn cuốn sách nào</Text>
+                    <Button mode="contained" onPress={() => navigation.navigate('Borrow')}>Mượn sách ngay</Button>
+                  </Card.Content>
+                </Card>
+              ) : (
+                activeBorrows.map((record) => {
+                  const daysLeft = getDaysUntil(record.due_at);
+                  const overdue = daysLeft < 0;
+                  return (
+                    <Card key={record.id} mode="outlined" style={styles.borrowCard}>
+                      <Card.Content style={styles.borrowContent}>
+                        {record.book?.cover_url ? (
+                          <Image source={{ uri: record.book.cover_url }} style={styles.bookCover} />
+                        ) : (
+                          <View style={styles.bookCoverPlaceholder}>
+                            <MaterialCommunityIcons name="book-variant" size={24} color={theme.colors.onSurfaceVariant} />
+                          </View>
+                        )}
+                        <View style={styles.borrowInfo}>
+                          <View style={styles.borrowHeader}>
+                            <Text variant="titleSmall" style={styles.cardTitle} numberOfLines={2}>
+                              {record.book?.title || record.book_id}
+                            </Text>
+                            <Chip compact style={overdue ? styles.errorChip : styles.successChip} textStyle={overdue ? styles.errorChipText : styles.successChipText}>
+                              {overdue ? 'Quá hạn' : `Còn ${daysLeft} ngày`}
+                            </Chip>
+                          </View>
+                          {record.book?.author ? (
+                            <Text variant="bodySmall" style={styles.mutedText} numberOfLines={1}>{record.book.author}</Text>
+                          ) : null}
+                          <Text variant="bodySmall" style={styles.mutedText}>Hạn trả: {formatDate(record.due_at)}</Text>
+                        </View>
+                      </Card.Content>
+                    </Card>
+                  );
+                })
+              )}
+            </View>
+          </>
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function createStyles(theme: AppTheme) {
+  const success = theme.dark ? '#4A8C5C' : '#067647';
+
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    flex: {
+      flex: 1,
+    },
+    content: {
+      padding: 16,
+      paddingBottom: 28,
+      gap: 14,
+    },
+    heroCard: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: 18,
+    },
+    heroContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+    },
+    avatar: {
+      backgroundColor: theme.colors.primary,
+    },
+    heroText: {
+      flex: 1,
+      gap: 4,
+    },
+    kicker: {
+      color: theme.colors.primary,
+      fontWeight: '800',
+    },
+    userName: {
+      color: theme.colors.onSurface,
+      fontWeight: '800',
+    },
+    roleChip: {
+      alignSelf: 'flex-start',
+      backgroundColor: theme.colors.primaryContainer,
+    },
+    roleChipText: {
+      color: theme.dark ? theme.colors.primary : theme.colors.onSurface,
+      fontWeight: '800',
+    },
+    warningCard: {
+      borderColor: theme.colors.tertiary,
+      backgroundColor: theme.colors.surface,
+    },
+    warningContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    warningText: {
+      flex: 1,
+    },
+    section: {
+      gap: 10,
+    },
+    sectionTitle: {
+      color: theme.colors.onBackground,
+      fontWeight: '800',
+    },
+    actionCard: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.outlineVariant,
+      borderRadius: 14,
+    },
+    actionContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    actionIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 12,
+      backgroundColor: theme.colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    actionText: {
+      flex: 1,
+      gap: 2,
+    },
+    cardTitle: {
+      color: theme.colors.onSurface,
+      fontWeight: '800',
+    },
+    mutedText: {
+      color: theme.colors.onSurfaceVariant,
+    },
+    statsRow: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    statCard: {
+      flex: 1,
+      backgroundColor: theme.colors.surface,
+    },
+    statNumber: {
+      color: theme.colors.primary,
+      fontWeight: '900',
+      fontVariant: ['tabular-nums'],
+    },
+    overdueCard: {
+      backgroundColor: theme.colors.errorContainer,
+    },
+    overdueText: {
+      color: theme.colors.error,
+    },
+    stateCard: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.outlineVariant,
+      borderRadius: 14,
+    },
+    stateContent: {
+      alignItems: 'center',
+      gap: 10,
+      paddingVertical: 18,
+    },
+    stateDescription: {
+      color: theme.colors.onSurfaceVariant,
+      textAlign: 'center',
+    },
+    borrowCard: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.outlineVariant,
+      borderRadius: 14,
+    },
+    borrowContent: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    bookCover: {
+      width: 58,
+      height: 82,
+      borderRadius: 8,
+    },
+    bookCoverPlaceholder: {
+      width: 58,
+      height: 82,
+      borderRadius: 8,
+      backgroundColor: theme.colors.surfaceVariant,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    borrowInfo: {
+      flex: 1,
+      gap: 5,
+    },
+    borrowHeader: {
+      gap: 8,
+    },
+    successChip: {
+      alignSelf: 'flex-start',
+      backgroundColor: `${success}22`,
+    },
+    successChipText: {
+      color: success,
+      fontWeight: '800',
+    },
+    errorChip: {
+      alignSelf: 'flex-start',
+      backgroundColor: theme.colors.errorContainer,
+    },
+    errorChipText: {
+      color: theme.colors.error,
+      fontWeight: '800',
+    },
+  });
 }
 </file>
 
@@ -7883,416 +8484,6 @@ export const borrowApi = {
     return response.data;
   },
 };
-</file>
-
-<file path="src/screens/HomeScreen.tsx">
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { useFocusEffect } from '@react-navigation/native';
-import React, { useCallback, useMemo, useState } from 'react';
-import { Image, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Avatar, Button, Card, Chip, Text, useTheme } from 'react-native-paper';
-import { borrowApi } from '../api/borrow';
-import { useAuth } from '../context/AuthContext';
-import { AppTheme } from '../theme/DarkTheme';
-import { BorrowRecord } from '../types';
-import { formatDate, getDaysUntil, isOverdue } from '../utils/dateUtils';
-
-interface HomeScreenProps {
-  navigation: any;
-}
-
-type StaffAction = {
-  title: string;
-  description: string;
-  icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
-  route: string;
-};
-
-export default function HomeScreen({ navigation }: HomeScreenProps) {
-  const theme = useTheme() as AppTheme;
-  const styles = useMemo(() => createStyles(theme), [theme]);
-  const { user, patron } = useAuth();
-  const isStaffScanner = user?.role === 'admin' || user?.role === 'staff';
-  const [borrows, setBorrows] = useState<BorrowRecord[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  const loadBorrows = async () => {
-    if (isStaffScanner) {
-      setLoadError(null);
-      setBorrows([]);
-      return;
-    }
-
-    try {
-      setLoadError(null);
-      const history = await borrowApi.getHistory('borrowed');
-      setBorrows(history);
-    } catch (error: any) {
-      const message = error?.response?.data?.detail || error?.message || 'Không thể tải danh sách sách đang mượn';
-      setLoadError(message);
-      setBorrows([]);
-    }
-  };
-
-  useFocusEffect(
-    useCallback(() => {
-      loadBorrows();
-    }, [isStaffScanner]),
-  );
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await loadBorrows();
-    setRefreshing(false);
-  };
-
-  const activeBorrows = borrows.filter((item) => item.status === 'borrowed');
-  const overdueCount = activeBorrows.filter((item) => isOverdue(item.due_at)).length;
-  const displayName = user?.full_name || user?.email || 'Người dùng';
-  const roleLabel = user?.role === 'admin' ? 'Quản trị viên' : user?.role === 'staff' ? 'Nhân viên' : 'Độc giả';
-
-  const staffActions: StaffAction[] = [
-    {
-      title: 'Trả sách',
-      description: 'Nhập MSSV, xem sách đang mượn và xác nhận trả bằng ISBN.',
-      icon: 'barcode-scan',
-      route: 'Borrow',
-    },
-    {
-      title: 'Nhập sách',
-      description: 'Quét ISBN và nhập sách mới vào thư viện.',
-      icon: 'package-variant-closed',
-      route: 'ImportBooks',
-    },
-    {
-      title: 'Lịch trực',
-      description: 'Xem ca hôm nay và lịch làm việc trong tuần.',
-      icon: 'calendar-clock',
-      route: 'Schedule',
-    },
-    {
-      title: 'Hồ sơ',
-      description: 'Cài đặt tài khoản, bảo mật và giao diện.',
-      icon: 'account-cog',
-      route: 'Profile',
-    },
-  ];
-
-  return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
-      <ScrollView
-        style={styles.flex}
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
-      >
-        <Card mode="contained" style={styles.heroCard}>
-          <Card.Content style={styles.heroContent}>
-            <Avatar.Text
-              size={58}
-              label={displayName.slice(0, 1).toUpperCase()}
-              color={theme.colors.onPrimary}
-              style={styles.avatar}
-            />
-            <View style={styles.heroText}>
-              <Text variant="labelLarge" style={styles.kicker}>Xin chào</Text>
-              <Text variant="headlineSmall" style={styles.userName} numberOfLines={2}>
-                {displayName}
-              </Text>
-              <Chip compact icon={isStaffScanner ? 'shield-account' : 'account'} style={styles.roleChip} textStyle={styles.roleChipText}>
-                {roleLabel}
-              </Chip>
-            </View>
-          </Card.Content>
-        </Card>
-
-        {patron?.password_auto_generated ? (
-          <Card mode="outlined" style={styles.warningCard}>
-            <Card.Content style={styles.warningContent}>
-              <MaterialCommunityIcons name="shield-alert" size={24} color={theme.colors.tertiary} />
-              <View style={styles.warningText}>
-                <Text variant="titleSmall" style={styles.cardTitle}>Mật khẩu mặc định</Text>
-                <Text variant="bodySmall" style={styles.mutedText}>Đổi mật khẩu để bảo mật tài khoản.</Text>
-              </View>
-              <Button mode="contained-tonal" compact onPress={() => navigation.navigate('ChangePassword')}>
-                Đổi
-              </Button>
-            </Card.Content>
-          </Card>
-        ) : null}
-
-        {isStaffScanner ? (
-          <View style={styles.section}>
-            <Text variant="titleMedium" style={styles.sectionTitle}>Công việc nhanh</Text>
-            {staffActions.map((action) => (
-              <Card key={action.route} mode="outlined" style={styles.actionCard} onPress={() => navigation.navigate(action.route)}>
-                <Card.Content style={styles.actionContent}>
-                  <View style={styles.actionIcon}>
-                    <MaterialCommunityIcons name={action.icon} size={24} color={theme.colors.onPrimary} />
-                  </View>
-                  <View style={styles.actionText}>
-                    <Text variant="titleMedium" style={styles.cardTitle}>{action.title}</Text>
-                    <Text variant="bodySmall" style={styles.mutedText}>{action.description}</Text>
-                  </View>
-                  <MaterialCommunityIcons name="chevron-right" size={24} color={theme.colors.onSurfaceVariant} />
-                </Card.Content>
-              </Card>
-            ))}
-          </View>
-        ) : (
-          <>
-            <View style={styles.statsRow}>
-              <Card mode="contained" style={styles.statCard}>
-                <Card.Content>
-                  <Text variant="headlineMedium" style={styles.statNumber}>{activeBorrows.length}</Text>
-                  <Text variant="bodySmall" style={styles.mutedText}>Đang mượn</Text>
-                </Card.Content>
-              </Card>
-              <Card mode="contained" style={[styles.statCard, overdueCount > 0 && styles.overdueCard]}>
-                <Card.Content>
-                  <Text variant="headlineMedium" style={[styles.statNumber, overdueCount > 0 && styles.overdueText]}>{overdueCount}</Text>
-                  <Text variant="bodySmall" style={styles.mutedText}>Quá hạn</Text>
-                </Card.Content>
-              </Card>
-            </View>
-
-            <View style={styles.section}>
-              <Text variant="titleMedium" style={styles.sectionTitle}>Sách đang mượn</Text>
-              {loadError ? (
-                <Card mode="outlined" style={styles.stateCard}>
-                  <Card.Content style={styles.stateContent}>
-                    <MaterialCommunityIcons name="cloud-off-outline" size={38} color={theme.colors.onSurfaceVariant} />
-                    <Text variant="titleSmall" style={styles.cardTitle}>Không thể kết nối server</Text>
-                    <Text variant="bodySmall" style={styles.stateDescription} selectable>{loadError}</Text>
-                    <Button mode="outlined" icon="refresh" onPress={loadBorrows}>Thử lại</Button>
-                  </Card.Content>
-                </Card>
-              ) : activeBorrows.length === 0 ? (
-                <Card mode="outlined" style={styles.stateCard}>
-                  <Card.Content style={styles.stateContent}>
-                    <MaterialCommunityIcons name="bookshelf" size={38} color={theme.colors.onSurfaceVariant} />
-                    <Text variant="titleSmall" style={styles.cardTitle}>Bạn chưa mượn cuốn sách nào</Text>
-                    <Button mode="contained" onPress={() => navigation.navigate('Borrow')}>Mượn sách ngay</Button>
-                  </Card.Content>
-                </Card>
-              ) : (
-                activeBorrows.map((record) => {
-                  const daysLeft = getDaysUntil(record.due_at);
-                  const overdue = daysLeft < 0;
-                  return (
-                    <Card key={record.id} mode="outlined" style={styles.borrowCard}>
-                      <Card.Content style={styles.borrowContent}>
-                        {record.book?.cover_url ? (
-                          <Image source={{ uri: record.book.cover_url }} style={styles.bookCover} />
-                        ) : (
-                          <View style={styles.bookCoverPlaceholder}>
-                            <MaterialCommunityIcons name="book-variant" size={24} color={theme.colors.onSurfaceVariant} />
-                          </View>
-                        )}
-                        <View style={styles.borrowInfo}>
-                          <View style={styles.borrowHeader}>
-                            <Text variant="titleSmall" style={styles.cardTitle} numberOfLines={2}>
-                              {record.book?.title || record.book_id}
-                            </Text>
-                            <Chip compact style={overdue ? styles.errorChip : styles.successChip} textStyle={overdue ? styles.errorChipText : styles.successChipText}>
-                              {overdue ? 'Quá hạn' : `Còn ${daysLeft} ngày`}
-                            </Chip>
-                          </View>
-                          {record.book?.author ? (
-                            <Text variant="bodySmall" style={styles.mutedText} numberOfLines={1}>{record.book.author}</Text>
-                          ) : null}
-                          <Text variant="bodySmall" style={styles.mutedText}>Hạn trả: {formatDate(record.due_at)}</Text>
-                        </View>
-                      </Card.Content>
-                    </Card>
-                  );
-                })
-              )}
-            </View>
-          </>
-        )}
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
-
-function createStyles(theme: AppTheme) {
-  const success = theme.dark ? '#4A8C5C' : '#067647';
-
-  return StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: theme.colors.background,
-    },
-    flex: {
-      flex: 1,
-    },
-    content: {
-      padding: 16,
-      paddingBottom: 28,
-      gap: 14,
-    },
-    heroCard: {
-      backgroundColor: theme.colors.surface,
-      borderRadius: 18,
-    },
-    heroContent: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 14,
-    },
-    avatar: {
-      backgroundColor: theme.colors.primary,
-    },
-    heroText: {
-      flex: 1,
-      gap: 4,
-    },
-    kicker: {
-      color: theme.colors.primary,
-      fontWeight: '800',
-    },
-    userName: {
-      color: theme.colors.onSurface,
-      fontWeight: '800',
-    },
-    roleChip: {
-      alignSelf: 'flex-start',
-      backgroundColor: theme.colors.primaryContainer,
-    },
-    roleChipText: {
-      color: theme.dark ? theme.colors.primary : theme.colors.onSurface,
-      fontWeight: '800',
-    },
-    warningCard: {
-      borderColor: theme.colors.tertiary,
-      backgroundColor: theme.colors.surface,
-    },
-    warningContent: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-    },
-    warningText: {
-      flex: 1,
-    },
-    section: {
-      gap: 10,
-    },
-    sectionTitle: {
-      color: theme.colors.onBackground,
-      fontWeight: '800',
-    },
-    actionCard: {
-      backgroundColor: theme.colors.surface,
-      borderColor: theme.colors.outlineVariant,
-      borderRadius: 14,
-    },
-    actionContent: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-    },
-    actionIcon: {
-      width: 44,
-      height: 44,
-      borderRadius: 12,
-      backgroundColor: theme.colors.primary,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    actionText: {
-      flex: 1,
-      gap: 2,
-    },
-    cardTitle: {
-      color: theme.colors.onSurface,
-      fontWeight: '800',
-    },
-    mutedText: {
-      color: theme.colors.onSurfaceVariant,
-    },
-    statsRow: {
-      flexDirection: 'row',
-      gap: 12,
-    },
-    statCard: {
-      flex: 1,
-      backgroundColor: theme.colors.surface,
-    },
-    statNumber: {
-      color: theme.colors.primary,
-      fontWeight: '900',
-      fontVariant: ['tabular-nums'],
-    },
-    overdueCard: {
-      backgroundColor: theme.colors.errorContainer,
-    },
-    overdueText: {
-      color: theme.colors.error,
-    },
-    stateCard: {
-      backgroundColor: theme.colors.surface,
-      borderColor: theme.colors.outlineVariant,
-      borderRadius: 14,
-    },
-    stateContent: {
-      alignItems: 'center',
-      gap: 10,
-      paddingVertical: 18,
-    },
-    stateDescription: {
-      color: theme.colors.onSurfaceVariant,
-      textAlign: 'center',
-    },
-    borrowCard: {
-      backgroundColor: theme.colors.surface,
-      borderColor: theme.colors.outlineVariant,
-      borderRadius: 14,
-    },
-    borrowContent: {
-      flexDirection: 'row',
-      gap: 12,
-    },
-    bookCover: {
-      width: 58,
-      height: 82,
-      borderRadius: 8,
-    },
-    bookCoverPlaceholder: {
-      width: 58,
-      height: 82,
-      borderRadius: 8,
-      backgroundColor: theme.colors.surfaceVariant,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    borrowInfo: {
-      flex: 1,
-      gap: 5,
-    },
-    borrowHeader: {
-      gap: 8,
-    },
-    successChip: {
-      alignSelf: 'flex-start',
-      backgroundColor: `${success}22`,
-    },
-    successChipText: {
-      color: success,
-      fontWeight: '800',
-    },
-    errorChip: {
-      alignSelf: 'flex-start',
-      backgroundColor: theme.colors.errorContainer,
-    },
-    errorChipText: {
-      color: theme.colors.error,
-      fontWeight: '800',
-    },
-  });
-}
 </file>
 
 <file path="src/types/index.ts">
