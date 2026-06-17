@@ -68,6 +68,13 @@ export interface Patron {
   status: string;
   current_status?: string;
   has_face: boolean;
+  course?: string;
+  permanent_address?: string;
+  class_name?: string;
+  date_of_birth?: string;
+  faculty?: string;
+  identity_number?: string;
+  issue_date?: string;
 }
 
 export interface StaffPatronSummary {

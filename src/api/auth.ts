@@ -18,6 +18,8 @@ export interface PatronRegisterRequest {
   full_name: string;
   email: string;
   class_name?: string;
+  course?: string;
+  permanent_address?: string;
 }
 
 export interface LoginResponse {

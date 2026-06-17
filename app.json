@@ -23,7 +23,8 @@
       "package": "com.library.app",
       "usesCleartextTraffic": true,
       "permissions": [
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -39,8 +40,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "library-mobile-app"
+        "projectId": "7fbf891b-c0a3-414d-ad06-f813882df4a3"
       }
-    }
+    },
+    "owner": "22664321a"
   }
 }
