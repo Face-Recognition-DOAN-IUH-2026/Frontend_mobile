@@ -60,6 +60,7 @@ e2e/flows/face-login-flow.yaml
 e2e/flows/login-flow.yaml
 e2e/flows/return-flow.yaml
 e2e/maestro.yaml
+eas.json
 index.ts
 jest.config.js
 jest.setup.js
@@ -70,10 +71,12 @@ src/api/accessRealtime.ts
 src/api/auth.ts
 src/api/borrow.ts
 src/api/client.ts
+src/api/googlebooks.ts
 src/api/index.ts
 src/api/openlibrary.ts
 src/api/schedule.ts
 src/components/AutoFaceCapture.tsx
+src/components/StudentCardScanner.tsx
 src/context/AuthContext.tsx
 src/context/ThemeContext.tsx
 src/i18n/vi.json
@@ -105,6 +108,74 @@ tsconfig.json
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path="src/api/googlebooks.ts">
+import axios from 'axios';
+import { devError } from '../utils/logger';
+
+const GOOGLE_BOOKS_API = 'https://www.googleapis.com/books/v1/volumes';
+
+export interface GoogleBooksMeta {
+  title: string;
+  subtitle?: string | null;
+  author?: string | null;
+  publisher?: string | null;
+  publishedDate?: string | null;
+  description?: string | null;
+  pageCount?: number | null;
+  categories?: string | null;
+  averageRating?: number | null;
+  language?: string | null;
+  coverUrl?: string | null;
+  isbn10?: string | null;
+  isbn13?: string | null;
+}
+
+export const googleBooksApi = {
+  getBookByIsbn: async (isbn: string): Promise<GoogleBooksMeta | null> => {
+    try {
+      const cleanIsbn = isbn.replace(/[-\s]/g, '');
+      const response = await axios.get(GOOGLE_BOOKS_API, {
+        params: { q: `isbn:${cleanIsbn}`, maxResults: 1 },
+        timeout: 10000,
+      });
+
+      const data = response.data;
+      if (!data.items || data.items.length === 0) return null;
+
+      const info = data.items[0].volumeInfo;
+      if (!info) return null;
+
+      const isbn10 = info.industryIdentifiers?.find((id: any) => id.type === 'ISBN_10')?.identifier || null;
+      const isbn13 = info.industryIdentifiers?.find((id: any) => id.type === 'ISBN_13')?.identifier || null;
+
+      const thumbnail = info.imageLinks?.thumbnail || info.imageLinks?.smallThumbnail || null;
+
+      const authors = Array.isArray(info.authors) ? info.authors.join(', ') : null;
+      const categories = Array.isArray(info.categories) ? info.categories.join(', ') : null;
+
+      return {
+        title: info.title || `ISBN ${isbn}`,
+        subtitle: info.subtitle || null,
+        author: authors,
+        publisher: info.publisher || null,
+        publishedDate: info.publishedDate || null,
+        description: info.description || null,
+        pageCount: info.pageCount || null,
+        categories,
+        averageRating: info.averageRating || null,
+        language: info.language || null,
+        coverUrl: thumbnail,
+        isbn10,
+        isbn13,
+      };
+    } catch (error) {
+      devError('Google Books API error:', error);
+      return null;
+    }
+  },
+};
+</file>
 
 <file path=".agents/skills/frontend-design/LICENSE.txt">
 Apache License
@@ -1071,6 +1142,30 @@ environment:
   apiTimeout: 30000
 </file>
 
+<file path="eas.json">
+{
+  "cli": {
+    "version": ">= 18.13.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal"
+    },
+    "production": {
+      "autoIncrement": true
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
+</file>
+
 <file path="index.ts">
 import { registerRootComponent } from 'expo';
 
@@ -1248,6 +1343,619 @@ export const scheduleApi = {
     return response.data;
   },
 };
+</file>
+
+<file path="src/components/StudentCardScanner.tsx">
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { View, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
+import { Text, Button, ActivityIndicator } from 'react-native-paper';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as FileSystem from 'expo-file-system/legacy';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import TextRecognition from '@react-native-ml-kit/text-recognition';
+import { colors } from '../theme/colors';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const CARD_WIDTH = SCREEN_WIDTH * 0.85;
+const CARD_HEIGHT = CARD_WIDTH * 0.62;
+
+export interface ScannedCardData {
+  studentCode: string;
+  fullName: string;
+  className: string | null;
+  dateOfBirth: string | null;
+  course: string | null;
+  permanentAddress: string | null;
+  faculty: string | null;
+  rawText: string;
+}
+
+interface StudentCardScannerProps {
+  onScanned: (data: ScannedCardData) => void;
+  onError?: (error: string) => void;
+  onSkip?: () => void;
+}
+
+const SURNAMES = [
+  'nguyễn', 'trần', 'lê', 'phạm', 'huỳnh', 'hoàng', 'phan',
+  'vũ', 'võ', 'đặng', 'bùi', 'đỗ', 'hồ', 'ngô', 'dương', 'lý',
+  'cao', 'đinh', 'tạ', 'châu', 'mai', 'tô', 'hà', 'vương',
+];
+
+const HEADER_KEYWORDS = [
+  'bộ công thương', 'trường đại học công nghiệp', 'thẻ sinh viên',
+  'trường đại học', 'đại học công nghiệp', 'thành phố hồ chí minh',
+  'student card', 'student id', 'the sinh vien', 'cong thuong',
+  'sinh viên', 'ngày sinh', 'khóa học', 'hktt',
+  'hộ khẩu', 'khoa', 'lớp', 'ngành', 'msv', 'mssv',
+];
+
+function parseCardText(text: string): Partial<ScannedCardData> {
+  const result: Partial<ScannedCardData> = { rawText: text };
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+
+  const studentCodeRegex = /(?:MSSV|Mã SV|Mã Số SV|Student Code|Mã số sinh viên|MSV)[:\s]*(\S{4,})/i;
+  const fullNameRegex = /(?:Họ\s*và\s*tên|Full Name|Họ tên|HỌ TÊN|HỌ VÀ TÊN)[:\s]*([A-ZÀ-ỸĂÂĐÊÔƠƯ][A-ZÀ-ỸĂÂĐÊÔƠƯa-zà-ỹăâđêôơưừếệấ]+(?:\s+[A-ZÀ-ỸĂÂĐÊÔƠƯ][A-ZÀ-ỸĂÂĐÊÔƠƯa-zà-ỹăâđêôơưừếệấ]+)+)/i;
+  const classNameRegex = /(?:Lớp|Class|LỚP)[:\s]*(\S+)/i;
+  const dobRegex = /(?:Ngày sinh|DOB|Birth|Ngày tháng năm sinh|NGÀY SINH|Sinh)[:\s]*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/i;
+  const courseRegex = /(?:Khóa\s*h[oọô]c|Course|Khóa|KHÓA)[:\s]*(.+)/i;
+  const addressRegex = /(?:HKTT|Hộ khẩu|Địa chỉ|Address|Hộ khẩu thường trú)[:\s]*(.+)/i;
+  const facultyRegex = /(?:Khoa|Faculty|Department|KHOA)[:\s]*(.+)/i;
+
+  for (const line of lines) {
+    if (!result.studentCode) {
+      const m = line.match(studentCodeRegex);
+      if (m) result.studentCode = m[1].replace(/[^A-Za-z0-9]/g, '');
+    }
+    if (!result.fullName) {
+      const m = line.match(fullNameRegex);
+      if (m) result.fullName = m[1].trim();
+    }
+    if (!result.className) {
+      const m = line.match(classNameRegex);
+      if (m) result.className = m[1].trim();
+    }
+    if (!result.dateOfBirth) {
+      const m = line.match(dobRegex);
+      if (m) result.dateOfBirth = m[1].trim();
+    }
+    if (!result.course) {
+      const m = line.match(courseRegex);
+      if (m) result.course = m[1].trim();
+    }
+    if (!result.permanentAddress) {
+      const m = line.match(addressRegex);
+      if (m) result.permanentAddress = m[1].trim();
+    }
+    if (!result.faculty) {
+      const m = line.match(facultyRegex);
+      if (m) result.faculty = m[1].trim();
+    }
+  }
+
+  if (!result.studentCode) {
+    const strictMatch = text.match(/\b(\d{8})\b/);
+    if (strictMatch) {
+      result.studentCode = strictMatch[1];
+    } else {
+      const looseMatch = text.match(/\b(\d{7,13})\b/);
+      if (looseMatch) result.studentCode = looseMatch[1];
+    }
+  }
+
+  if (!result.fullName) {
+    const candidateLines = lines.filter((line) => {
+      const lower = line.toLowerCase();
+      if (HEADER_KEYWORDS.some((k) => lower.includes(k))) return false;
+      if (/^\d+$/.test(line.trim())) return false;
+      if (line.trim().length < 5) return false;
+      if (/^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/.test(line.trim())) return false;
+      return true;
+    });
+
+    const nameBySurname = candidateLines.find((l) => {
+      const lower = l.toLowerCase().trim();
+      return SURNAMES.some(
+        (s) => lower.startsWith(s) || lower.startsWith(`${s} `),
+      );
+    });
+    if (nameBySurname) {
+      result.fullName = nameBySurname.replace(/^[\d:\s]+/, '').trim();
+    }
+
+    if (!result.fullName) {
+      const nameByCase = candidateLines.find((l) => {
+        const words = l.trim().split(/\s+/);
+        if (words.length < 2 || words.length > 6) return false;
+        if (!/^[A-ZÀ-ỸĂÂĐÊÔƠƯ]/.test(l.trim())) return false;
+        if (/^[A-Z0-9]{4,}$/.test(words[0])) return false;
+        return true;
+      });
+      if (nameByCase) {
+        result.fullName = nameByCase.replace(/^[\d:\s]+/, '').trim();
+      }
+    }
+  }
+
+  if (!result.course) {
+    const yearMatch = text.match(/\b(20\d{2}\s*[-–]\s*20\d{2})\b/);
+    if (yearMatch) result.course = yearMatch[1];
+  }
+
+  if (!result.course) {
+    const khoaMatch = text.match(/Khóa\s+(\d{4}(?:\s*[-–]\s*\d{4})?)/i);
+    if (khoaMatch) result.course = khoaMatch[1];
+  }
+
+  if (!result.className) {
+    const classMatch = text.match(/\b(DH[A-Z]{2,}\d{2,}[A-Z]?)\b/i);
+    if (classMatch) result.className = classMatch[1].toUpperCase();
+  }
+
+  return result;
+}
+
+export default function StudentCardScanner({ onScanned, onError, onSkip }: StudentCardScannerProps) {
+  const [permission, requestPermission] = useCameraPermissions();
+  const cameraRef = useRef<CameraView>(null);
+  const [phase, setPhase] = useState<'detecting' | 'capturing' | 'processing' | 'confirm'>('detecting');
+  const isMounted = useRef(true);
+  const phaseRef = useRef(phase);
+  const detectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [ocrResult, setOcrResult] = useState<Partial<ScannedCardData> | null>(null);
+
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
+
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+      if (detectTimerRef.current) clearTimeout(detectTimerRef.current);
+    };
+  }, []);
+
+  const runOcrAndParse = useCallback(async (photoUri: string): Promise<Partial<ScannedCardData> | null> => {
+    try {
+      const result = await TextRecognition.recognize(photoUri);
+      if (!result?.text) return null;
+      return parseCardText(result.text);
+    } catch (err: any) {
+      onError?.('Lỗi nhận dạng văn bản: ' + (err.message || ''));
+      return null;
+    }
+  }, [onError]);
+
+  const attemptAutoDetect = useCallback(async () => {
+    if (!cameraRef.current || !isMounted.current || phaseRef.current !== 'detecting') return;
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        base64: true, quality: 0.3, skipProcessing: true,
+      });
+      if (!photo?.uri || !isMounted.current) return;
+
+      const tempPath = `${FileSystem.cacheDirectory}card_detect_${Date.now()}.jpg`;
+      await FileSystem.moveAsync({ from: photo.uri, to: tempPath });
+
+      const result = await TextRecognition.recognize(tempPath);
+      await FileSystem.deleteAsync(tempPath, { idempotent: true });
+
+      if (!isMounted.current) return;
+
+      if (result?.text && result.text.length > 30) {
+        setPhase('capturing');
+        await new Promise((r) => setTimeout(r, 600));
+        if (!isMounted.current) return;
+
+        const finalPhoto = await cameraRef.current.takePictureAsync({
+          base64: true, quality: 0.9, skipProcessing: true,
+        });
+        if (!finalPhoto?.uri) return;
+        setPhase('processing');
+
+        const finalPath = `${FileSystem.cacheDirectory}card_final_${Date.now()}.jpg`;
+        await FileSystem.moveAsync({ from: finalPhoto.uri, to: finalPath });
+
+        const parsed = await runOcrAndParse(finalPath);
+        await FileSystem.deleteAsync(finalPath, { idempotent: true });
+
+        if (parsed && isMounted.current) {
+          setOcrResult(parsed);
+          setPhase('confirm');
+          return;
+        }
+      }
+    } catch {
+      // Auto-detect attempt failed, will retry
+    }
+    if (isMounted.current && phaseRef.current === 'detecting') {
+      detectTimerRef.current = setTimeout(attemptAutoDetect, 2500);
+    }
+  }, [runOcrAndParse]);
+
+  const startDetection = useCallback(() => {
+    if (detectTimerRef.current) clearTimeout(detectTimerRef.current);
+    detectTimerRef.current = setTimeout(attemptAutoDetect, 1000);
+  }, [attemptAutoDetect]);
+
+  useEffect(() => {
+    if (permission?.granted) {
+      startDetection();
+    }
+    return () => {
+      if (detectTimerRef.current) clearTimeout(detectTimerRef.current);
+    };
+  }, [permission?.granted, startDetection]);
+
+  const handleManualCapture = async () => {
+    if (!cameraRef.current) return;
+    if (detectTimerRef.current) clearTimeout(detectTimerRef.current);
+    setPhase('capturing');
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        base64: true, quality: 0.9, skipProcessing: true,
+      });
+      if (!photo?.uri) return;
+      setPhase('processing');
+      const parsed = await runOcrAndParse(photo.uri);
+      if (parsed && isMounted.current) {
+        setOcrResult(parsed);
+        setPhase('confirm');
+      } else {
+        onError?.('Không thể đọc thông tin từ ảnh, vui lòng thử lại');
+        setPhase('detecting');
+        startDetection();
+      }
+    } catch {
+      setPhase('detecting');
+      startDetection();
+    }
+  };
+
+  const handleConfirm = () => {
+    if (!ocrResult?.studentCode || !ocrResult?.fullName) {
+      onError?.('Thiếu thông tin bắt buộc (MSSV, Họ tên). Vui lòng thử lại.');
+      return;
+    }
+    onScanned({
+      studentCode: ocrResult.studentCode!,
+      fullName: ocrResult.fullName!,
+      className: ocrResult.className || null,
+      dateOfBirth: ocrResult.dateOfBirth || null,
+      course: ocrResult.course || null,
+      permanentAddress: ocrResult.permanentAddress || null,
+      faculty: ocrResult.faculty || null,
+      rawText: ocrResult.rawText || '',
+    });
+  };
+
+  const handleRetake = () => {
+    setOcrResult(null);
+    setPhase('detecting');
+    startDetection();
+  };
+
+  if (!permission) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.msgText}>Đang tải camera...</Text>
+      </View>
+    );
+  }
+
+  if (!permission.granted) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.permissionBox}>
+          <MaterialCommunityIcons name="camera-off" size={48} color={colors.textSecondary} />
+          <Text style={styles.msgText}>Cần quyền camera để quét thẻ</Text>
+          <Button mode="contained" onPress={requestPermission} style={styles.permissionBtn}>
+            Cấp quyền
+          </Button>
+          {onSkip && (
+            <Button mode="text" onPress={onSkip}>
+              Nhập thủ công
+            </Button>
+          )}
+        </View>
+      </View>
+    );
+  }
+
+  if (phase === 'confirm' && ocrResult) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.confirmBox}>
+          <View style={styles.checkIconWrap}>
+            <MaterialCommunityIcons name="check-circle" size={56} color={colors.success} />
+          </View>
+          <Text style={styles.confirmTitle}>Đọc thẻ thành công</Text>
+          <Text style={styles.confirmSubtitle}>Vui lòng kiểm tra lại thông tin</Text>
+
+          <View style={styles.fieldList}>
+            <View style={styles.fieldRow}>
+              <Text style={styles.fieldLabel}>MSSV</Text>
+              <Text style={styles.fieldValue}>{ocrResult.studentCode || '-'}</Text>
+            </View>
+            <View style={styles.fieldRow}>
+              <Text style={styles.fieldLabel}>Họ tên</Text>
+              <Text style={styles.fieldValue}>{ocrResult.fullName || '-'}</Text>
+            </View>
+            {ocrResult.className ? (
+              <View style={styles.fieldRow}>
+                <Text style={styles.fieldLabel}>Lớp</Text>
+                <Text style={styles.fieldValue}>{ocrResult.className}</Text>
+              </View>
+            ) : null}
+            {ocrResult.course ? (
+              <View style={styles.fieldRow}>
+                <Text style={styles.fieldLabel}>Khóa học</Text>
+                <Text style={styles.fieldValue}>{ocrResult.course}</Text>
+              </View>
+            ) : null}
+            {ocrResult.permanentAddress ? (
+              <View style={styles.fieldRow}>
+                <Text style={styles.fieldLabel}>HKTT</Text>
+                <Text style={styles.fieldValue}>{ocrResult.permanentAddress}</Text>
+              </View>
+            ) : null}
+            {ocrResult.dateOfBirth ? (
+              <View style={styles.fieldRow}>
+                <Text style={styles.fieldLabel}>Ngày sinh</Text>
+                <Text style={styles.fieldValue}>{ocrResult.dateOfBirth}</Text>
+              </View>
+            ) : null}
+          </View>
+
+          <View style={styles.confirmActions}>
+            <Button mode="contained" onPress={handleConfirm} style={styles.confirmBtn}>
+              Xác nhận
+            </Button>
+            <Button mode="outlined" onPress={handleRetake} style={styles.retakeBtn}>
+              Chụp lại
+            </Button>
+            {onSkip && (
+              <Button mode="text" onPress={onSkip}>
+                Nhập thủ công
+              </Button>
+            )}
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <CameraView ref={cameraRef} style={styles.camera} facing="back" />
+
+      <View style={styles.overlay}>
+        <View style={styles.cardFrame}>
+          <View style={[styles.corner, styles.cornerTL]} />
+          <View style={[styles.corner, styles.cornerTR]} />
+          <View style={[styles.corner, styles.cornerBL]} />
+          <View style={[styles.corner, styles.cornerBR]} />
+        </View>
+
+        {phase === 'detecting' && (
+          <View style={styles.statusBadge}>
+            <ActivityIndicator size={20} color={colors.primary} />
+            <Text style={styles.statusText}>Đang phát hiện thẻ...</Text>
+          </View>
+        )}
+        {phase === 'capturing' && (
+          <View style={styles.statusBadge}>
+            <MaterialCommunityIcons name="camera" size={20} color={colors.warning} />
+            <Text style={styles.statusText}>Đang chụp...</Text>
+          </View>
+        )}
+        {phase === 'processing' && (
+          <View style={styles.statusBadge}>
+            <ActivityIndicator size={20} color={colors.primary} />
+            <Text style={styles.statusText}>Đang xử lý ảnh...</Text>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.bottomBar}>
+        <Text style={styles.hintText}>Đặt thẻ sinh viên vào khung hình</Text>
+        <TouchableOpacity style={styles.captureBtn} onPress={handleManualCapture} activeOpacity={0.7}>
+          <MaterialCommunityIcons name="camera" size={28} color={colors.background} />
+        </TouchableOpacity>
+        {onSkip && (
+          <Button mode="text" onPress={onSkip} compact>
+            Nhập thủ công
+          </Button>
+        )}
+      </View>
+    </View>
+  );
+}
+
+const CORNER_SIZE = 28;
+const CORNER_WIDTH = 3;
+const FRAME_BORDER_RADIUS = 12;
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  camera: {
+    flex: 1,
+  },
+  msgText: {
+    color: colors.text,
+    fontSize: 16,
+    textAlign: 'center',
+    marginTop: 24,
+  },
+  permissionBox: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    gap: 16,
+  },
+  permissionBtn: {
+    marginTop: 8,
+  },
+
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardFrame: {
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT,
+    borderRadius: FRAME_BORDER_RADIUS,
+    position: 'relative',
+  },
+  corner: {
+    position: 'absolute',
+    width: CORNER_SIZE,
+    height: CORNER_SIZE,
+    borderColor: colors.primary,
+  },
+  cornerTL: {
+    top: -CORNER_WIDTH,
+    left: -CORNER_WIDTH,
+    borderTopWidth: CORNER_WIDTH,
+    borderLeftWidth: CORNER_WIDTH,
+    borderTopLeftRadius: FRAME_BORDER_RADIUS + 4,
+  },
+  cornerTR: {
+    top: -CORNER_WIDTH,
+    right: -CORNER_WIDTH,
+    borderTopWidth: CORNER_WIDTH,
+    borderRightWidth: CORNER_WIDTH,
+    borderTopRightRadius: FRAME_BORDER_RADIUS + 4,
+  },
+  cornerBL: {
+    bottom: -CORNER_WIDTH,
+    left: -CORNER_WIDTH,
+    borderBottomWidth: CORNER_WIDTH,
+    borderLeftWidth: CORNER_WIDTH,
+    borderBottomLeftRadius: FRAME_BORDER_RADIUS + 4,
+  },
+  cornerBR: {
+    bottom: -CORNER_WIDTH,
+    right: -CORNER_WIDTH,
+    borderBottomWidth: CORNER_WIDTH,
+    borderRightWidth: CORNER_WIDTH,
+    borderBottomRightRadius: FRAME_BORDER_RADIUS + 4,
+  },
+
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(13, 17, 23, 0.85)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    position: 'absolute',
+    top: '40%',
+  },
+  statusText: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 80,
+    backgroundColor: colors.surface,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingHorizontal: 20,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  hintText: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    flex: 1,
+    textAlign: 'center',
+  },
+  captureBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  confirmBox: {
+    flex: 1,
+    padding: 20,
+    justifyContent: 'center',
+  },
+  checkIconWrap: {
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  confirmTitle: {
+    color: colors.text,
+    fontSize: 20,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  confirmSubtitle: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  fieldList: {
+    backgroundColor: colors.surfaceVariant,
+    borderRadius: 12,
+    padding: 16,
+    gap: 10,
+    marginBottom: 20,
+  },
+  fieldRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  fieldLabel: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '600',
+    width: 80,
+  },
+  fieldValue: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '500',
+    flex: 1,
+    textAlign: 'right',
+  },
+  confirmActions: {
+    gap: 10,
+  },
+  confirmBtn: {
+    borderRadius: 10,
+    backgroundColor: colors.success,
+    paddingVertical: 4,
+  },
+  retakeBtn: {
+    borderRadius: 10,
+    borderColor: colors.border,
+  },
+});
 </file>
 
 <file path="src/context/ThemeContext.tsx">
@@ -2215,15 +2923,15 @@ const styles = StyleSheet.create({
 </file>
 
 <file path="src/screens/StaffBorrowScreen.tsx">
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { View, StyleSheet, Alert, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, Button, Surface, TextInput, ActivityIndicator, Card, Divider, Snackbar, Avatar, Portal } from 'react-native-paper';
+import { Text, Button, Surface, TextInput, ActivityIndicator, Card, Divider, Snackbar, Avatar, Portal, useTheme } from 'react-native-paper';
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { borrowApi } from '../api/borrow';
 import { Book, BorrowRecord } from '../types';
-import { colors } from '../theme/colors';
+import { AppTheme } from '../theme/DarkTheme';
 import { devError } from '../utils/logger';
 
 interface ScannedBorrowItem {
@@ -2233,6 +2941,9 @@ interface ScannedBorrowItem {
 }
 
 export default function StaffBorrowScreen() {
+  const theme = useTheme() as AppTheme;
+  const c = theme.colors;
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [scanned, setScanned] = useState(false);
   const [patronCode, setPatronCode] = useState('');
   const [patronId, setPatronId] = useState<string | null>(null);
@@ -2419,7 +3130,7 @@ export default function StaffBorrowScreen() {
   if (!permission) {
     return (
       <SafeAreaView style={styles.container}>
-        <ActivityIndicator color={colors.primary} />
+        <ActivityIndicator color={c.primary} />
       </SafeAreaView>
     );
   }
@@ -2447,7 +3158,7 @@ export default function StaffBorrowScreen() {
             mode="outlined"
             style={styles.patronField}
             outlineStyle={styles.inputOutline}
-            activeOutlineColor={colors.primary}
+            activeOutlineColor={c.primary}
           />
           <Button mode="contained" onPress={lookupPatron} loading={isLookingUp} disabled={isLookingUp || !patronCode.trim()} style={styles.lookupButton}>
             Tra
@@ -2457,14 +3168,14 @@ export default function StaffBorrowScreen() {
         {patronId ? (
           <View style={styles.quotaRow}>
             <View style={styles.patronReadyBanner}>
-              <MaterialCommunityIcons name="check-circle" size={15} color={colors.success} />
+              <MaterialCommunityIcons name="check-circle" size={15} color={theme.dark ? '#4A8C5C' : '#067647'} />
               <Text style={styles.patronReadyText}>{patronName}</Text>
             </View>
             <View style={[styles.quotaBadge, !canBorrow && overdueCount > 0 ? styles.quotaBadgeError : !canBorrow ? styles.quotaBadgeWarning : styles.quotaBadgeOk]}>
               <MaterialCommunityIcons
                 name={canBorrow ? 'check-circle' : 'alert-circle'}
                 size={13}
-                color={canBorrow ? colors.success : colors.error}
+                color={canBorrow ? (theme.dark ? '#4A8C5C' : '#067647') : c.error}
               />
               <Text style={[styles.quotaBadgeText, !canBorrow && styles.quotaBadgeTextError]}>
                 {overdueCount > 0
@@ -2503,7 +3214,7 @@ export default function StaffBorrowScreen() {
             <MaterialCommunityIcons
               name={!canBorrow ? 'book-lock-outline' : 'barcode-scan'}
               size={48}
-              color={colors.textSecondary}
+              color={c.onSurfaceVariant}
             />
             <Text style={styles.cameraPlaceholderText}>
               {!canBorrow
@@ -2520,7 +3231,7 @@ export default function StaffBorrowScreen() {
 
       <Surface style={styles.listPanel} elevation={2}>
         <View style={styles.listHeader}>
-          <MaterialCommunityIcons name="book-open-variant" size={20} color={colors.primary} />
+          <MaterialCommunityIcons name="book-open-variant" size={20} color={c.primary} />
           <Text style={styles.listTitle}>
             Danh sách mượn ({scannedItems.length} cuốn)
           </Text>
@@ -2530,7 +3241,7 @@ export default function StaffBorrowScreen() {
 
         {scannedItems.length === 0 ? (
           <View style={styles.emptyState}>
-            <MaterialCommunityIcons name="barcode-scan" size={48} color={colors.textSecondary} />
+            <MaterialCommunityIcons name="barcode-scan" size={48} color={c.onSurfaceVariant} />
             <Text style={styles.emptyText}>Quét sách để thêm vào phiếu mượn</Text>
           </View>
         ) : (
@@ -2551,7 +3262,7 @@ renderItem={({ item, index }) => (
                     <Card.Cover source={{ uri: item.book.cover_url }} style={styles.itemCover} />
                   ) : (
                     <View style={styles.itemCoverPlaceholder}>
-                      <MaterialCommunityIcons name="book-open-variant" size={24} color={colors.textSecondary} />
+                      <MaterialCommunityIcons name="book-open-variant" size={24} color={c.onSurfaceVariant} />
                     </View>
                   )}
                   <View style={styles.itemInfo}>
@@ -2559,7 +3270,7 @@ renderItem={({ item, index }) => (
                       <Text style={styles.itemTitle} numberOfLines={2}>{item.book.title}</Text>
                       {item.alreadyBorrowed && (
                         <View style={styles.alreadyBorrowedBadge}>
-                          <MaterialCommunityIcons name="book-lock" size={12} color={colors.error} />
+                          <MaterialCommunityIcons name="book-lock" size={12} color={c.error} />
                           <Text style={styles.alreadyBorrowedText}>Đã mượn</Text>
                         </View>
                       )}
@@ -2570,7 +3281,7 @@ renderItem={({ item, index }) => (
                       <Text style={styles.alreadyBorrowedNote}>Sách này đang được mượn — sẽ không thêm vào phiếu</Text>
                     )}
                   </View>
-                  <Button mode="text" compact onPress={() => removeItem(index)} textColor={colors.error} style={styles.removeButton}>
+                  <Button mode="text" compact onPress={() => removeItem(index)} textColor={c.error} style={styles.removeButton}>
                     Xoá
                   </Button>
                 </View>
@@ -2582,7 +3293,7 @@ renderItem={({ item, index }) => (
         <Divider />
 
         <View style={styles.actionRow}>
-          <Button mode="outlined" onPress={resetState} style={styles.actionButton} textColor={colors.textSecondary}>
+          <Button mode="outlined" onPress={resetState} style={styles.actionButton} textColor={c.onSurfaceVariant}>
             Xoá tất cả
           </Button>
           <Button mode="contained" onPress={handleCreateSlip} loading={isCreating} disabled={isCreating || scannedItems.length === 0 || !patronId || !canBorrow} style={styles.actionButton}>
@@ -2607,64 +3318,67 @@ renderItem={({ item, index }) => (
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  permissionContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: colors.background },
-  permissionText: { color: colors.text, fontSize: 16, marginBottom: 16, textAlign: 'center' },
-  permissionButton: { borderRadius: 6 },
-  patronInput: { padding: 12, backgroundColor: colors.surface },
-  patronLabel: { fontSize: 13, color: colors.textSecondary, marginBottom: 6, fontWeight: '600' },
-  patronRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  patronField: { flex: 1, backgroundColor: 'transparent' },
-  inputOutline: { borderRadius: 6, borderColor: colors.border },
-  lookupButton: { borderRadius: 6, height: 44 },
-  patronStatus: { fontSize: 12, color: colors.primary, marginTop: 6, fontWeight: '600' },
-  patronReadyBanner: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4, paddingHorizontal: 6, borderRadius: 6, backgroundColor: 'rgba(74, 140, 92, 0.12)' },
-  patronReadyText: { color: colors.success, fontSize: 12, fontWeight: '600' },
-  quotaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6, gap: 8 },
-  quotaBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 12 },
-  quotaBadgeOk: { backgroundColor: 'rgba(74, 140, 92, 0.12)' },
-  quotaBadgeWarning: { backgroundColor: 'rgba(196, 154, 60, 0.15)' },
-  quotaBadgeError: { backgroundColor: 'rgba(196, 78, 78, 0.15)' },
-  quotaBadgeText: { fontSize: 12, fontWeight: '700', color: colors.text },
-  quotaBadgeTextError: { color: colors.error },
-  scannerContainer: { height: 220, position: 'relative', backgroundColor: colors.surfaceVariant },
-  camera: { flex: 1 },
-  overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  scanArea: { width: 280, height: 100, borderRadius: 8, position: 'relative' },
-  corner: { position: 'absolute', width: 28, height: 28, borderColor: colors.primary, borderWidth: 2 },
-  topLeft: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 8 },
-  topRight: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 8 },
-  bottomLeft: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 8 },
-  bottomRight: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 8 },
-  scanText: { color: colors.text, marginTop: 12, fontSize: 14, textAlign: 'center', fontWeight: '500' },
-  cameraPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 10, backgroundColor: colors.surfaceVariant },
-  cameraPlaceholderText: { color: colors.textSecondary, fontSize: 14, fontWeight: '600' },
-  listPanel: { flex: 1, backgroundColor: colors.surface, borderTopLeftRadius: 16, borderTopRightRadius: 16, marginTop: -16 },
-  listHeader: { padding: 16, paddingBottom: 8 },
-  listTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginTop: 4 },
-  list: { flex: 1, paddingHorizontal: 12 },
-  emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
-  emptyText: { color: colors.textSecondary, marginTop: 12, fontSize: 14 },
-  itemCard: { marginVertical: 4, backgroundColor: colors.surface, borderRadius: 8 },
-  itemRow: { flexDirection: 'row', alignItems: 'center', padding: 10 },
-  itemCover: { width: 44, height: 60, borderRadius: 4 },
-  itemCoverPlaceholder: { width: 44, height: 60, borderRadius: 4, backgroundColor: colors.surfaceVariant, justifyContent: 'center', alignItems: 'center' },
-  itemInfo: { flex: 1, marginLeft: 10 },
-  itemTitle: { fontSize: 14, fontWeight: '600', color: colors.text },
-  itemAuthor: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-  itemIsbn: { fontSize: 11, color: colors.primary, marginTop: 2, fontFamily: 'monospace' },
-  itemTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-  alreadyBorrowedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, backgroundColor: 'rgba(196, 78, 78, 0.15)' },
-  alreadyBorrowedText: { color: colors.error, fontSize: 10, fontWeight: '700' },
-  alreadyBorrowedNote: { color: colors.error, fontSize: 11, marginTop: 2, fontStyle: 'italic' },
-  itemCardAlreadyBorrowed: { backgroundColor: colors.surfaceVariant, borderColor: colors.error, borderWidth: 1, opacity: 0.7 },
-  removeButton: { marginLeft: 4 },
-  actionRow: { flexDirection: 'row', padding: 12, gap: 8 },
-  actionButton: { flex: 1, borderRadius: 6 },
-  topSnackbarWrapper: { position: 'absolute', top: 8, left: 0, right: 0, zIndex: 9999, paddingHorizontal: 16 },
-  topSnackbar: { width: '100%' },
-});
+function createStyles(theme: AppTheme) {
+  const c = theme.colors;
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: c.background },
+    permissionContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: c.background },
+    permissionText: { color: c.onSurface, fontSize: 16, marginBottom: 16, textAlign: 'center' },
+    permissionButton: { borderRadius: 6 },
+    patronInput: { padding: 12, backgroundColor: c.surface },
+    patronLabel: { fontSize: 13, color: c.onSurfaceVariant, marginBottom: 6, fontWeight: '600' },
+    patronRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+    patronField: { flex: 1, backgroundColor: 'transparent' },
+    inputOutline: { borderRadius: 6, borderColor: c.outlineVariant },
+    lookupButton: { borderRadius: 6, height: 44 },
+    patronStatus: { fontSize: 12, color: c.primary, marginTop: 6, fontWeight: '600' },
+    patronReadyBanner: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4, paddingHorizontal: 6, borderRadius: 6, backgroundColor: theme.dark ? 'rgba(74, 140, 92, 0.12)' : 'rgba(6, 118, 71, 0.08)' },
+    patronReadyText: { color: theme.dark ? '#4A8C5C' : '#067647', fontSize: 12, fontWeight: '600' },
+    quotaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6, gap: 8 },
+    quotaBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 12 },
+    quotaBadgeOk: { backgroundColor: theme.dark ? 'rgba(74, 140, 92, 0.12)' : 'rgba(6, 118, 71, 0.08)' },
+    quotaBadgeWarning: { backgroundColor: theme.dark ? 'rgba(196, 154, 60, 0.15)' : 'rgba(181, 71, 8, 0.08)' },
+    quotaBadgeError: { backgroundColor: 'rgba(196, 78, 78, 0.15)' },
+    quotaBadgeText: { fontSize: 12, fontWeight: '700', color: c.onSurface },
+    quotaBadgeTextError: { color: c.error },
+    scannerContainer: { height: 220, position: 'relative', backgroundColor: c.surfaceVariant },
+    camera: { flex: 1 },
+    overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+    scanArea: { width: 280, height: 100, borderRadius: 8, position: 'relative' },
+    corner: { position: 'absolute', width: 28, height: 28, borderColor: c.primary, borderWidth: 2 },
+    topLeft: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 8 },
+    topRight: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 8 },
+    bottomLeft: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 8 },
+    bottomRight: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 8 },
+    scanText: { color: c.onSurface, marginTop: 12, fontSize: 14, textAlign: 'center', fontWeight: '500' },
+    cameraPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 10, backgroundColor: c.surfaceVariant },
+    cameraPlaceholderText: { color: c.onSurfaceVariant, fontSize: 14, fontWeight: '600' },
+    listPanel: { flex: 1, backgroundColor: c.surface, borderTopLeftRadius: 16, borderTopRightRadius: 16, marginTop: -16 },
+    listHeader: { padding: 16, paddingBottom: 8 },
+    listTitle: { fontSize: 16, fontWeight: '700', color: c.onSurface, marginTop: 4 },
+    list: { flex: 1, paddingHorizontal: 12 },
+    emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
+    emptyText: { color: c.onSurfaceVariant, marginTop: 12, fontSize: 14 },
+    itemCard: { marginVertical: 4, backgroundColor: c.surface, borderRadius: 8 },
+    itemRow: { flexDirection: 'row', alignItems: 'center', padding: 10 },
+    itemCover: { width: 44, height: 60, borderRadius: 4 },
+    itemCoverPlaceholder: { width: 44, height: 60, borderRadius: 4, backgroundColor: c.surfaceVariant, justifyContent: 'center', alignItems: 'center' },
+    itemInfo: { flex: 1, marginLeft: 10 },
+    itemTitle: { fontSize: 14, fontWeight: '600', color: c.onSurface },
+    itemAuthor: { fontSize: 12, color: c.onSurfaceVariant, marginTop: 2 },
+    itemIsbn: { fontSize: 11, color: c.primary, marginTop: 2, fontFamily: 'monospace' },
+    itemTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+    alreadyBorrowedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, backgroundColor: 'rgba(196, 78, 78, 0.15)' },
+    alreadyBorrowedText: { color: c.error, fontSize: 10, fontWeight: '700' },
+    alreadyBorrowedNote: { color: c.error, fontSize: 11, marginTop: 2, fontStyle: 'italic' },
+    itemCardAlreadyBorrowed: { backgroundColor: c.surfaceVariant, borderColor: c.error, borderWidth: 1, opacity: 0.7 },
+    removeButton: { marginLeft: 4 },
+    actionRow: { flexDirection: 'row', padding: 12, gap: 8 },
+    actionButton: { flex: 1, borderRadius: 6 },
+    topSnackbarWrapper: { position: 'absolute', top: 8, left: 0, right: 0, zIndex: 9999, paddingHorizontal: 16 },
+    topSnackbar: { width: '100%' },
+  });
+}
 </file>
 
 <file path="src/theme/colors.ts">
@@ -3244,7 +3958,7 @@ describe('Mobile App Tests', () => {
 export { default as api } from './client';
 export { authApi } from './auth';
 export { borrowApi } from './borrow';
-export { openLibraryApi } from './openlibrary';
+export { googleBooksApi } from './googlebooks';
 export { scheduleApi } from './schedule';
 </file>
 
@@ -3636,55 +4350,6 @@ repomix-output.xml
 /android
 </file>
 
-<file path="app.json">
-{
-  "expo": {
-    "name": "Thư Viện",
-    "slug": "LibraryMobileApp",
-    "version": "1.0.0",
-    "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.library.app",
-      "infoPlist": {
-        "NSCameraUsageDescription": "Ứng dụng cần quyền camera để đăng nhập bằng khuôn mặt và quét mã vạch sách"
-      }
-    },
-    "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#121212",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
-      },
-      "package": "com.library.app",
-      "usesCleartextTraffic": true,
-      "permissions": [
-        "android.permission.CAMERA"
-      ]
-    },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    },
-    "plugins": [
-      [
-        "expo-camera",
-        {
-          "cameraPermission": "Ứng dụng cần quyền camera để đăng nhập bằng khuôn mặt và quét mã vạch sách"
-        }
-      ]
-    ],
-    "extra": {
-      "eas": {
-        "projectId": "library-mobile-app"
-      }
-    }
-  }
-}
-</file>
-
 <file path="App.tsx">
 import 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
@@ -4006,339 +4671,6 @@ function createStyles(theme: AppTheme) {
 }
 </file>
 
-<file path="src/screens/HistoryScreen.tsx">
-import React, { useState, useCallback } from 'react';
-import { View, Image, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, Surface, Button } from 'react-native-paper';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { useFocusEffect } from '@react-navigation/native';
-import { borrowApi } from '../api/borrow';
-import { BorrowRecord } from '../types';
-import { colors } from '../theme/colors';
-import { formatDate, getDaysUntil } from '../utils/dateUtils';
-import { devError } from '../utils/logger';
-
-interface HistoryScreenProps {
-  navigation: any;
-}
-
-type FilterTab = 'all' | 'borrowed' | 'returned';
-
-const FILTERS: { key: FilterTab; label: string }[] = [
-  { key: 'all', label: 'Tất cả' },
-  { key: 'borrowed', label: 'Đang mượn' },
-  { key: 'returned', label: 'Đã trả' },
-];
-
-export default function HistoryScreen({ navigation }: HistoryScreenProps) {
-  const [records, setRecords] = useState<BorrowRecord[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  const loadHistory = async () => {
-    try {
-      setLoadError(null);
-      const data = await borrowApi.getHistory();
-      setRecords(data);
-    } catch (error: any) {
-      devError('Failed to load history:', error);
-      setLoadError(error?.response?.data?.detail || error?.message || 'Không thể tải lịch sử');
-    }
-  };
-
-  useFocusEffect(
-    useCallback(() => {
-      loadHistory();
-    }, [])
-  );
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await loadHistory();
-    setRefreshing(false);
-  };
-
-  const filtered = records.filter((r) => {
-    if (activeFilter === 'all') return true;
-    return r.status === activeFilter;
-  });
-
-  return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
-      <ScrollView
-        style={styles.flex}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-      >
-        <View style={styles.header}>
-          <View style={styles.headerSpine} />
-          <Text style={styles.headerTitle}>Lịch sử mượn sách</Text>
-        </View>
-
-        <View style={styles.filterRow}>
-          {FILTERS.map((f) => (
-            <TouchableOpacity
-              key={f.key}
-              activeOpacity={0.7}
-              onPress={() => setActiveFilter(f.key)}
-            >
-              <Surface style={[styles.filterChip, activeFilter === f.key && styles.filterChipActive]} elevation={0}>
-                <Text style={[styles.filterText, activeFilter === f.key && styles.filterTextActive]}>
-                  {f.label}
-                </Text>
-              </Surface>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {loadError ? (
-          <Surface style={styles.stateCard} elevation={0}>
-            <MaterialCommunityIcons name="cloud-off-outline" size={36} color={colors.textSecondary} />
-            <Text variant="bodyMedium" style={styles.stateText}>
-              {loadError}
-            </Text>
-            <Button mode="outlined" onPress={loadHistory} style={styles.stateButton} labelStyle={styles.stateButtonLabel} icon="refresh">
-              Thử lại
-            </Button>
-          </Surface>
-        ) : filtered.length === 0 ? (
-          <Surface style={styles.stateCard} elevation={0}>
-            <MaterialCommunityIcons name="bookshelf" size={36} color={colors.textSecondary} />
-            <Text variant="bodyMedium" style={styles.stateText}>
-              {activeFilter === 'all' ? 'Chưa có lịch sử mượn sách' :
-               activeFilter === 'borrowed' ? 'Không có sách đang mượn' :
-               'Không có sách đã trả'}
-            </Text>
-          </Surface>
-        ) : (
-          filtered.map((record) => {
-            const isReturned = record.status === 'returned';
-            const overdue = !isReturned && getDaysUntil(record.due_at) < 0;
-            return (
-              <Surface key={record.id} style={styles.recordCard} elevation={0}>
-                <View style={[styles.recordSpine, isReturned ? styles.recordSpineReturned : overdue ? styles.recordSpineOverdue : styles.recordSpineActive]} />
-                {record.book?.cover_url ? (
-                  <Image source={{ uri: record.book.cover_url }} style={styles.bookCover} />
-                ) : (
-                  <View style={styles.bookCoverPlaceholder}>
-                    <MaterialCommunityIcons name="book-variant" size={24} color={colors.textSecondary} />
-                  </View>
-                )}
-                <View style={styles.recordContent}>
-                  <Text style={styles.bookTitle} numberOfLines={2}>
-                    {record.book?.title || record.book_id}
-                  </Text>
-                  {record.book?.author ? (
-                    <Text style={styles.bookAuthor} numberOfLines={1}>
-                      {record.book.author}
-                    </Text>
-                  ) : null}
-                  <View style={styles.recordMeta}>
-                    <Text style={styles.metaText}>
-                      Mượn: {formatDate(record.borrow_at)}
-                    </Text>
-                    {isReturned ? (
-                      <Text style={styles.metaText}>
-                        Trả: {formatDate(record.return_at!)}
-                      </Text>
-                    ) : (
-                      <Text style={styles.metaText}>
-                        Hạn trả: {formatDate(record.due_at)}
-                      </Text>
-                    )}
-                    {record.note ? (
-                      <Text style={styles.noteText}>
-                        Tình trạng: {record.note}
-                      </Text>
-                    ) : null}
-                  </View>
-                  <View style={[styles.statusBadge, isReturned ? styles.statusReturned : overdue ? styles.statusOverdue : styles.statusActive]}>
-                    <Text style={styles.statusText}>
-                      {isReturned ? 'Đã trả' : overdue ? 'Quá hạn' : 'Đang mượn'}
-                    </Text>
-                  </View>
-                </View>
-              </Surface>
-            );
-          })
-        )}
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  flex: {
-    flex: 1,
-  },
-
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 20,
-    paddingBottom: 4,
-    gap: 10,
-  },
-  headerSpine: {
-    width: 3,
-    height: 20,
-    backgroundColor: colors.primary,
-    borderRadius: 2,
-  },
-  headerTitle: {
-    color: colors.text,
-    fontSize: 20,
-    fontWeight: '700',
-  },
-
-  filterRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 6,
-    gap: 8,
-  },
-  filterChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: colors.surface,
-    borderWidth: 0.5,
-    borderColor: colors.border,
-  },
-  filterChipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  filterText: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  filterTextActive: {
-    color: colors.background,
-  },
-
-  stateCard: {
-    marginHorizontal: 16,
-    marginTop: 24,
-    padding: 32,
-    borderRadius: 10,
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderWidth: 0.5,
-    borderColor: colors.border,
-  },
-  stateText: {
-    color: colors.text,
-    marginTop: 12,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  stateButton: {
-    borderRadius: 6,
-  },
-  stateButtonLabel: {
-    fontSize: 14,
-  },
-
-  recordCard: {
-    marginHorizontal: 16,
-    marginTop: 10,
-    backgroundColor: colors.surface,
-    borderRadius: 10,
-    flexDirection: 'row',
-    overflow: 'hidden',
-    borderWidth: 0.5,
-    borderColor: colors.border,
-  },
-  recordSpine: {
-    width: 4,
-  },
-  recordSpineActive: {
-    backgroundColor: colors.primary,
-  },
-  recordSpineOverdue: {
-    backgroundColor: colors.error,
-  },
-  recordSpineReturned: {
-    backgroundColor: colors.textDisabled,
-  },
-  bookCover: {
-    width: 48,
-    height: 66,
-    borderRadius: 4,
-    margin: 10,
-    marginRight: 0,
-  },
-  bookCoverPlaceholder: {
-    width: 48,
-    height: 66,
-    borderRadius: 4,
-    margin: 10,
-    marginRight: 0,
-    backgroundColor: colors.surfaceVariant,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  recordContent: {
-    flex: 1,
-    padding: 10,
-  },
-  bookTitle: {
-    color: colors.text,
-    fontWeight: '600',
-    fontSize: 14,
-    lineHeight: 18,
-  },
-  bookAuthor: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    marginTop: 1,
-  },
-  recordMeta: {
-    marginTop: 6,
-    gap: 1,
-  },
-  metaText: {
-    color: colors.textDisabled,
-    fontSize: 11,
-  },
-  noteText: {
-    color: colors.primary,
-    fontSize: 11,
-    marginTop: 1,
-  },
-  statusBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginTop: 6,
-  },
-  statusActive: {
-    backgroundColor: colors.success,
-  },
-  statusOverdue: {
-    backgroundColor: colors.error,
-  },
-  statusReturned: {
-    backgroundColor: colors.textDisabled,
-  },
-  statusText: {
-    color: colors.background,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-});
-</file>
-
 <file path="src/screens/LoginScreen.tsx">
 import React, { useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
@@ -4584,48 +4916,54 @@ function createStyles(theme: AppTheme) {
 }
 </file>
 
-<file path="package.json">
+<file path="app.json">
 {
-  "name": "librarymobileapp",
-  "version": "1.0.0",
-  "main": "index.ts",
-  "dependencies": {
-    "@expo/vector-icons": "^15.1.1",
-    "@react-native-async-storage/async-storage": "2.2.0",
-    "@react-navigation/bottom-tabs": "^7.18.0",
-    "@react-navigation/native": "^7.3.1",
-    "@react-navigation/stack": "^7.10.3",
-    "axios": "^1.17.0",
-    "expo": "~56.0.11",
-    "expo-camera": "^56.0.8",
-    "expo-file-system": "~56.0.8",
-    "expo-status-bar": "~56.0.4",
-    "react": "19.2.3",
-    "react-native": "0.85.3",
-    "react-native-gesture-handler": "~2.31.1",
-    "react-native-paper": "^5.15.3",
-    "react-native-safe-area-context": "~5.7.0",
-    "react-native-screens": "^4.25.2",
-    "react-native-vector-icons": "^10.3.0"
-  },
-  "devDependencies": {
-    "@react-native/jest-preset": "^0.85.3",
-    "@testing-library/react-native": "^14.0.0",
-    "@types/jest": "29.5.14",
-    "@types/react": "~19.2.2",
-    "@types/react-native-vector-icons": "^6.4.18",
-    "jest": "~29.7.0",
-    "ts-jest": "^29.4.11",
-    "typescript": "~6.0.3"
-  },
-  "scripts": {
-    "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web",
-    "test": "jest"
-  },
-  "private": true
+  "expo": {
+    "name": "Thư Viện",
+    "slug": "LibraryMobileApp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.library.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Ứng dụng cần quyền camera để đăng nhập bằng khuôn mặt và quét mã vạch sách"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#121212",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "com.library.app",
+      "usesCleartextTraffic": true,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Ứng dụng cần quyền camera để đăng nhập bằng khuôn mặt và quét mã vạch sách"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "7fbf891b-c0a3-414d-ad06-f813882df4a3"
+      }
+    },
+    "owner": "22664321a"
+  }
 }
 </file>
 
@@ -4719,403 +5057,311 @@ export default function FaceCameraScreen({ navigation }: FaceCameraScreenProps) 
 }
 </file>
 
-<file path="src/screens/RegisterScreen.tsx">
-import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+<file path="src/screens/HistoryScreen.tsx">
+import React, { useState, useCallback, useMemo } from 'react';
+import { View, Image, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ActivityIndicator, Button, Card, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
-import api from '../api/client';
-import { authApi } from '../api/auth';
-import AutoFaceCapture from '../components/AutoFaceCapture';
+import { Text, Surface, Button, useTheme } from 'react-native-paper';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { useFocusEffect } from '@react-navigation/native';
+import { borrowApi } from '../api/borrow';
+import { BorrowRecord } from '../types';
 import { AppTheme } from '../theme/DarkTheme';
+import { formatDate, getDaysUntil } from '../utils/dateUtils';
+import { devError } from '../utils/logger';
 
-interface RegisterScreenProps {
+interface HistoryScreenProps {
   navigation: any;
 }
 
-export default function RegisterScreen({ navigation }: RegisterScreenProps) {
+type FilterTab = 'all' | 'borrowed' | 'returned';
+
+const FILTERS: { key: FilterTab; label: string }[] = [
+  { key: 'all', label: 'Tất cả' },
+  { key: 'borrowed', label: 'Đang mượn' },
+  { key: 'returned', label: 'Đã trả' },
+];
+
+export default function HistoryScreen({ navigation }: HistoryScreenProps) {
   const theme = useTheme() as AppTheme;
+  const c = theme.colors;
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const [step, setStep] = useState<'form' | 'choice' | 'face'>('form');
-  const [studentCode, setStudentCode] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [className, setClassName] = useState('');
-  const [registeredUser, setRegisteredUser] = useState<any>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [snackbar, setSnackbar] = useState('');
+  const [records, setRecords] = useState<BorrowRecord[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const showError = (message: string) => setSnackbar(message);
-
-  const validateForm = () => {
-    if (!studentCode.trim()) {
-      showError('Vui lòng nhập mã sinh viên');
-      return false;
-    }
-    if (studentCode.length < 4) {
-      showError('Mã sinh viên phải có ít nhất 4 ký tự');
-      return false;
-    }
-    if (!fullName.trim()) {
-      showError('Vui lòng nhập họ tên');
-      return false;
-    }
-    if (!email.trim()) {
-      showError('Vui lòng nhập email');
-      return false;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      showError('Email không hợp lệ');
-      return false;
-    }
-    if (!password) {
-      showError('Vui lòng nhập mật khẩu');
-      return false;
-    }
-    if (password.length < 6) {
-      showError('Mật khẩu phải có ít nhất 6 ký tự');
-      return false;
-    }
-    if (password !== confirmPassword) {
-      showError('Mật khẩu xác nhận không khớp');
-      return false;
-    }
-    return true;
-  };
-
-  const handleRegisterClick = async () => {
-    if (!validateForm()) return;
-
-    setIsUploading(true);
+  const loadHistory = async () => {
     try {
-      const response = await authApi.patronRegister({
-        student_code: studentCode.trim(),
-        password,
-        full_name: fullName.trim(),
-        email: email.trim(),
-        class_name: className.trim() || undefined,
-      });
-      setRegisteredUser(response.user);
-      setStep('choice');
+      setLoadError(null);
+      const data = await borrowApi.getHistory();
+      setRecords(data);
     } catch (error: any) {
-      const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || 'Đăng ký thất bại';
-      showError(message);
-    } finally {
-      setIsUploading(false);
+      devError('Failed to load history:', error);
+      setLoadError(error?.response?.data?.detail || error?.message || 'Không thể tải lịch sử');
     }
   };
 
-  const handleFaceEnroll = async (images: string[]) => {
-    if (!registeredUser?.id || images.length !== 4) return;
+  useFocusEffect(
+    useCallback(() => {
+      loadHistory();
+    }, [])
+  );
 
-    setIsUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append('frontal', {
-        uri: `data:image/jpeg;base64,${images[0]}`,
-        type: 'image/jpeg',
-        name: 'face_frontal.jpg',
-      } as any);
-      formData.append('right', {
-        uri: `data:image/jpeg;base64,${images[1]}`,
-        type: 'image/jpeg',
-        name: 'face_right.jpg',
-      } as any);
-      formData.append('left', {
-        uri: `data:image/jpeg;base64,${images[2]}`,
-        type: 'image/jpeg',
-        name: 'face_left.jpg',
-      } as any);
-      formData.append('down', {
-        uri: `data:image/jpeg;base64,${images[3]}`,
-        type: 'image/jpeg',
-        name: 'face_down.jpg',
-      } as any);
-      formData.append('consent_given', 'true');
-
-      await api.post(`/patrons/${registeredUser.id}/enroll-batch`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 130000,
-      });
-
-      setSnackbar('Đăng ký tài khoản và khuôn mặt thành công');
-      navigation.replace('Login');
-    } catch (error: any) {
-      const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || 'Đăng ký khuôn mặt thất bại';
-      showError(message);
-    } finally {
-      setIsUploading(false);
-    }
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadHistory();
+    setRefreshing(false);
   };
 
-  if (step === 'choice') {
-    return (
-      <SafeAreaView style={styles.container} edges={['bottom']}>
-        <View style={styles.choiceContainer}>
-          <Card mode="outlined" style={styles.choiceCard}>
-            <Card.Content style={styles.choiceContent}>
-              <View style={styles.checkCircle}>
-                <Text style={styles.checkIcon}>✓</Text>
-              </View>
-              <Text variant="headlineSmall" style={styles.choiceTitle}>Đăng ký tài khoản thành công</Text>
-              <Text style={styles.choiceSubtitle}>
-                Bạn có muốn đăng ký khuôn mặt để đăng nhập nhanh tại cổng thư viện không?
-              </Text>
-              <Button mode="contained" onPress={() => setStep('face')} contentStyle={styles.largeButton}>
-                Đăng ký khuôn mặt
-              </Button>
-              <Button mode="text" onPress={() => navigation.replace('Login')}>
-                Bỏ qua
-              </Button>
-            </Card.Content>
-          </Card>
-        </View>
-        <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
-          {snackbar}
-        </Snackbar>
-      </SafeAreaView>
-    );
-  }
-
-  if (step === 'face') {
-    return (
-      <SafeAreaView style={styles.container} edges={['bottom']}>
-        <Card mode="contained" style={styles.faceHeader}>
-          <Card.Content>
-            <Text variant="titleLarge" style={styles.cardTitle}>Đăng ký khuôn mặt</Text>
-            <Text style={styles.mutedText}>Chụp khuôn mặt từ 4 góc để đăng nhập nhanh sau này.</Text>
-          </Card.Content>
-        </Card>
-
-        <View style={styles.captureContainer}>
-          <AutoFaceCapture onFilesReady={handleFaceEnroll} onError={showError} />
-        </View>
-
-        {!isUploading ? (
-          <Card mode="contained" style={styles.faceActions}>
-            <Card.Content>
-              <Button mode="text" onPress={() => navigation.replace('Login')}>
-                Bỏ qua
-              </Button>
-            </Card.Content>
-          </Card>
-        ) : null}
-
-        {isUploading ? (
-          <View style={styles.loadingOverlay}>
-            <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={styles.loadingText}>Đang đăng ký khuôn mặt...</Text>
-          </View>
-        ) : null}
-
-        <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
-          {snackbar}
-        </Snackbar>
-      </SafeAreaView>
-    );
-  }
+  const filtered = records.filter((r) => {
+    if (activeFilter === 'all') return true;
+    return r.status === activeFilter;
+  });
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.flex} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <Card mode="outlined" style={styles.formContainer}>
-          <Card.Content style={styles.formContent}>
-            <View>
-              <Text variant="headlineSmall" style={styles.formTitle}>Đăng ký tài khoản</Text>
-              <Text style={styles.formSubtitle}>Nhập thông tin để tạo tài khoản độc giả mới.</Text>
-            </View>
+    <SafeAreaView style={[styles.container, { backgroundColor: c.background }]} edges={['bottom']}>
+      <ScrollView
+        style={styles.flex}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
+      >
+        <View style={styles.header}>
+          <View style={[styles.headerSpine, { backgroundColor: c.primary }]} />
+          <Text style={[styles.headerTitle, { color: c.onSurface }]}>Lịch sử mượn sách</Text>
+        </View>
 
-            <TextInput
-              label="Mã sinh viên"
-              value={studentCode}
-              onChangeText={setStudentCode}
-              mode="outlined"
-              autoCapitalize="none"
-              left={<TextInput.Icon icon="account" color={theme.colors.onSurfaceVariant} />}
-            />
-
-            <TextInput
-              label="Họ và tên"
-              value={fullName}
-              onChangeText={setFullName}
-              mode="outlined"
-              left={<TextInput.Icon icon="account-outline" color={theme.colors.onSurfaceVariant} />}
-            />
-
-            <TextInput
-              label="Lớp (không bắt buộc)"
-              value={className}
-              onChangeText={setClassName}
-              mode="outlined"
-              left={<TextInput.Icon icon="school" color={theme.colors.onSurfaceVariant} />}
-            />
-
-            <TextInput
-              label="Email"
-              value={email}
-              onChangeText={setEmail}
-              mode="outlined"
-              autoCapitalize="none"
-              keyboardType="email-address"
-              left={<TextInput.Icon icon="email" color={theme.colors.onSurfaceVariant} />}
-            />
-
-            <TextInput
-              label="Mật khẩu"
-              value={password}
-              onChangeText={setPassword}
-              mode="outlined"
-              secureTextEntry
-              left={<TextInput.Icon icon="lock" color={theme.colors.onSurfaceVariant} />}
-            />
-
-            <TextInput
-              label="Xác nhận mật khẩu"
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              mode="outlined"
-              secureTextEntry
-              left={<TextInput.Icon icon="lock-check" color={theme.colors.onSurfaceVariant} />}
-            />
-
-            <Button
-              mode="contained"
-              onPress={handleRegisterClick}
-              loading={isUploading}
-              disabled={isUploading}
-              contentStyle={styles.largeButton}
+        <View style={styles.filterRow}>
+          {FILTERS.map((f) => (
+            <TouchableOpacity
+              key={f.key}
+              activeOpacity={0.7}
+              onPress={() => setActiveFilter(f.key)}
             >
-              Đăng ký
-            </Button>
+              <Surface style={[
+                styles.filterChip,
+                { backgroundColor: c.surface, borderColor: c.outline },
+                activeFilter === f.key && { backgroundColor: c.primary, borderColor: c.primary },
+              ]} elevation={0}>
+                <Text style={[
+                  styles.filterText,
+                  { color: c.onSurfaceVariant },
+                  activeFilter === f.key && { color: c.background },
+                ]}>
+                  {f.label}
+                </Text>
+              </Surface>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-            <Button mode="text" onPress={() => navigation.goBack()}>
-              Đã có tài khoản? Đăng nhập
+        {loadError ? (
+          <Surface style={[styles.stateCard, { backgroundColor: c.surface, borderColor: c.outline }]} elevation={0}>
+            <MaterialCommunityIcons name="cloud-off-outline" size={36} color={c.onSurfaceVariant} />
+            <Text variant="bodyMedium" style={[styles.stateText, { color: c.onSurface }]}>
+              {loadError}
+            </Text>
+            <Button mode="outlined" onPress={loadHistory} style={styles.stateButton} labelStyle={styles.stateButtonLabel} icon="refresh">
+              Thử lại
             </Button>
-          </Card.Content>
-        </Card>
+          </Surface>
+        ) : filtered.length === 0 ? (
+          <Surface style={[styles.stateCard, { backgroundColor: c.surface, borderColor: c.outline }]} elevation={0}>
+            <MaterialCommunityIcons name="bookshelf" size={36} color={c.onSurfaceVariant} />
+            <Text variant="bodyMedium" style={[styles.stateText, { color: c.onSurface }]}>
+              {activeFilter === 'all' ? 'Chưa có lịch sử mượn sách' :
+               activeFilter === 'borrowed' ? 'Không có sách đang mượn' :
+               'Không có sách đã trả'}
+            </Text>
+          </Surface>
+        ) : (
+          filtered.map((record) => {
+            const isReturned = record.status === 'returned';
+            const overdue = !isReturned && getDaysUntil(record.due_at) < 0;
+            return (
+              <Surface key={record.id} style={[styles.recordCard, { backgroundColor: c.surface, borderColor: c.outline }]} elevation={0}>
+                <View style={[
+                  styles.recordSpine,
+                  isReturned ? { backgroundColor: c.custom.textDisabled } : overdue ? { backgroundColor: c.error } : { backgroundColor: c.primary },
+                ]} />
+                {record.book?.cover_url ? (
+                  <Image source={{ uri: record.book.cover_url }} style={styles.bookCover} />
+                ) : (
+                  <View style={[styles.bookCoverPlaceholder, { backgroundColor: c.surfaceVariant }]}>
+                    <MaterialCommunityIcons name="book-variant" size={24} color={c.onSurfaceVariant} />
+                  </View>
+                )}
+                <View style={styles.recordContent}>
+                  <Text style={[styles.bookTitle, { color: c.onSurface }]} numberOfLines={2}>
+                    {record.book?.title || record.book_id}
+                  </Text>
+                  {record.book?.author ? (
+                    <Text style={[styles.bookAuthor, { color: c.onSurfaceVariant }]} numberOfLines={1}>
+                      {record.book.author}
+                    </Text>
+                  ) : null}
+                  <View style={styles.recordMeta}>
+                    <Text style={[styles.metaText, { color: c.custom.textDisabled }]}>
+                      Mượn: {formatDate(record.borrow_at)}
+                    </Text>
+                    {isReturned ? (
+                      <Text style={[styles.metaText, { color: c.custom.textDisabled }]}>
+                        Trả: {formatDate(record.return_at!)}
+                      </Text>
+                    ) : (
+                      <Text style={[styles.metaText, { color: c.custom.textDisabled }]}>
+                        Hạn trả: {formatDate(record.due_at)}
+                      </Text>
+                    )}
+                    {record.note ? (
+                      <Text style={[styles.noteText, { color: c.primary }]}>
+                        Tình trạng: {record.note}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <View style={[
+                    styles.statusBadge,
+                    isReturned ? { backgroundColor: c.custom.textDisabled } : overdue ? { backgroundColor: c.error } : { backgroundColor: c.custom.success },
+                  ]}>
+                    <Text style={[styles.statusText, { color: c.background }]}>
+                      {isReturned ? 'Đã trả' : overdue ? 'Quá hạn' : 'Đang mượn'}
+                    </Text>
+                  </View>
+                </View>
+              </Surface>
+            );
+          })
+        )}
       </ScrollView>
-
-      <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
-        {snackbar}
-      </Snackbar>
     </SafeAreaView>
   );
 }
 
 function createStyles(theme: AppTheme) {
-  const success = theme.dark ? '#4A8C5C' : '#067647';
-
   return StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: theme.colors.background,
-    },
-    flex: {
-      flex: 1,
-    },
-    scrollContent: {
-      flexGrow: 1,
-      justifyContent: 'center',
-      padding: 16,
-    },
-    formContainer: {
-      borderRadius: 18,
-      borderColor: theme.colors.outlineVariant,
-      backgroundColor: theme.colors.surface,
-    },
-    formContent: {
-      gap: 14,
-      paddingVertical: 22,
-    },
-    formTitle: {
-      color: theme.colors.onSurface,
-      fontWeight: '900',
-    },
-    formSubtitle: {
-      color: theme.colors.onSurfaceVariant,
-      marginTop: 4,
-    },
-    largeButton: {
-      minHeight: 52,
-    },
-    choiceContainer: {
-      flex: 1,
-      justifyContent: 'center',
-      padding: 20,
-    },
-    choiceCard: {
-      borderColor: theme.colors.outlineVariant,
-      backgroundColor: theme.colors.surface,
-      borderRadius: 18,
-    },
-    choiceContent: {
+    container: { flex: 1 },
+    flex: { flex: 1 },
+    header: {
+      flexDirection: 'row',
       alignItems: 'center',
-      gap: 14,
-      paddingVertical: 24,
+      paddingHorizontal: 16,
+      paddingTop: 20,
+      paddingBottom: 4,
+      gap: 10,
     },
-    checkCircle: {
-      width: 84,
-      height: 84,
-      borderRadius: 42,
-      backgroundColor: `${success}22`,
-      justifyContent: 'center',
-      alignItems: 'center',
+    headerSpine: { width: 3, height: 20, borderRadius: 2 },
+    headerTitle: { fontSize: 20, fontWeight: '700' },
+    filterRow: {
+      flexDirection: 'row',
+      paddingHorizontal: 16,
+      paddingTop: 14,
+      paddingBottom: 6,
+      gap: 8,
     },
-    checkIcon: {
-      fontSize: 42,
-      color: success,
-      fontWeight: '900',
-    },
-    choiceTitle: {
-      color: theme.colors.onSurface,
-      textAlign: 'center',
-      fontWeight: '900',
-    },
-    choiceSubtitle: {
-      color: theme.colors.onSurfaceVariant,
-      textAlign: 'center',
-      lineHeight: 20,
-    },
-    faceHeader: {
-      margin: 12,
-      marginBottom: 0,
+    filterChip: {
+      paddingHorizontal: 14,
+      paddingVertical: 6,
       borderRadius: 16,
-      backgroundColor: theme.colors.surface,
+      borderWidth: 0.5,
     },
-    cardTitle: {
-      color: theme.colors.onSurface,
-      fontWeight: '800',
-    },
-    mutedText: {
-      color: theme.colors.onSurfaceVariant,
-      marginTop: 4,
-    },
-    captureContainer: {
-      flex: 1,
-    },
-    faceActions: {
-      margin: 12,
-      borderRadius: 16,
-      backgroundColor: theme.colors.surface,
-    },
-    loadingOverlay: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0,0,0,0.65)',
-      justifyContent: 'center',
+    filterText: { fontSize: 13, fontWeight: '600' },
+    stateCard: {
+      marginHorizontal: 16,
+      marginTop: 24,
+      padding: 32,
+      borderRadius: 10,
       alignItems: 'center',
+      borderWidth: 0.5,
     },
-    loadingText: {
-      color: '#FFFFFF',
-      fontSize: 15,
-      marginTop: 12,
+    stateText: { marginTop: 12, marginBottom: 16, textAlign: 'center' },
+    stateButton: { borderRadius: 6 },
+    stateButtonLabel: { fontSize: 14 },
+    recordCard: {
+      marginHorizontal: 16,
+      marginTop: 10,
+      borderRadius: 10,
+      flexDirection: 'row',
+      overflow: 'hidden',
+      borderWidth: 0.5,
     },
+    recordSpine: { width: 4 },
+    bookCover: {
+      width: 48,
+      height: 66,
+      borderRadius: 4,
+      margin: 10,
+      marginRight: 0,
+    },
+    bookCoverPlaceholder: {
+      width: 48,
+      height: 66,
+      borderRadius: 4,
+      margin: 10,
+      marginRight: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    recordContent: { flex: 1, padding: 10 },
+    bookTitle: { fontWeight: '600', fontSize: 14, lineHeight: 18 },
+    bookAuthor: { fontSize: 12, marginTop: 1 },
+    recordMeta: { marginTop: 6, gap: 1 },
+    metaText: { fontSize: 11 },
+    noteText: { fontSize: 11, marginTop: 1 },
+    statusBadge: {
+      alignSelf: 'flex-start',
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 4,
+      marginTop: 6,
+    },
+    statusText: { fontSize: 11, fontWeight: '700' },
   });
+}
+</file>
+
+<file path="package.json">
+{
+  "name": "librarymobileapp",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "dependencies": {
+    "@expo/vector-icons": "^15.1.1",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-ml-kit/text-recognition": "^2.0.0",
+    "@react-navigation/bottom-tabs": "^7.18.0",
+    "@react-navigation/native": "^7.3.1",
+    "@react-navigation/stack": "^7.10.3",
+    "axios": "^1.17.0",
+    "expo": "~56.0.11",
+    "expo-camera": "^56.0.8",
+    "expo-dev-client": "~56.0.20",
+    "expo-file-system": "~56.0.8",
+    "expo-status-bar": "~56.0.4",
+    "react": "19.2.3",
+    "react-native": "0.85.3",
+    "react-native-gesture-handler": "~2.31.1",
+    "react-native-paper": "^5.15.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "^4.25.2",
+    "react-native-vector-icons": "^10.3.0"
+  },
+  "devDependencies": {
+    "@react-native/jest-preset": "^0.85.3",
+    "@testing-library/react-native": "^14.0.0",
+    "@types/jest": "29.5.14",
+    "@types/react": "~19.2.2",
+    "@types/react-native-vector-icons": "^6.4.18",
+    "jest": "~29.7.0",
+    "ts-jest": "^29.4.11",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "test": "jest"
+  },
+  "private": true
 }
 </file>
 
@@ -5413,197 +5659,349 @@ const styles = StyleSheet.create({
 });
 </file>
 
-<file path="src/screens/ProfileScreen.tsx">
+<file path="src/screens/RegisterScreen.tsx">
 import React, { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import {
-  Avatar,
-  Button,
-  Card,
-  Dialog,
-  Divider,
-  List,
-  Portal,
-  Switch,
-  Text,
-  useTheme,
-} from 'react-native-paper';
-import { useAuth } from '../context/AuthContext';
-import { useMobileTheme } from '../context/ThemeContext';
+import { ActivityIndicator, Button, Card, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
+import api from '../api/client';
+import { authApi } from '../api/auth';
+import AutoFaceCapture from '../components/AutoFaceCapture';
+import StudentCardScanner, { ScannedCardData } from '../components/StudentCardScanner';
 import { AppTheme } from '../theme/DarkTheme';
 
-interface ProfileScreenProps {
+interface RegisterScreenProps {
   navigation: any;
 }
 
-export default function ProfileScreen({ navigation }: ProfileScreenProps) {
+export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   const theme = useTheme() as AppTheme;
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const { user, patron, logout } = useAuth();
-  const { mode, toggleTheme } = useMobileTheme();
-  const [logoutVisible, setLogoutVisible] = useState(false);
+  const [step, setStep] = useState<'scan' | 'form' | 'choice' | 'face'>('scan');
+  const [studentCode, setStudentCode] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [className, setClassName] = useState('');
+  const [course, setCourse] = useState('');
+  const [permanentAddress, setPermanentAddress] = useState('');
+  const [registeredUser, setRegisteredUser] = useState<any>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [snackbar, setSnackbar] = useState('');
 
-  const roleLabel =
-    user?.role === 'admin'
-      ? 'Quản trị viên'
-      : user?.role === 'staff'
-        ? 'Nhân viên'
-        : 'Độc giả';
+  const showError = (message: string) => setSnackbar(message);
 
-  const displayName = user?.full_name || 'Người dùng';
-
-  const handleLogout = async () => {
-    setLogoutVisible(false);
-    await logout();
+  const handleScanned = (data: ScannedCardData) => {
+    setStudentCode(data.studentCode || '');
+    setFullName(data.fullName || '');
+    setClassName(data.className || '');
+    setCourse(data.course || '');
+    setPermanentAddress(data.permanentAddress || '');
+    setStep('form');
   };
 
-  return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
-      <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
-        <Card mode="contained" style={styles.header}>
-          <Card.Content style={styles.headerContent}>
-            <Avatar.Text
-              size={74}
-              label={(displayName || user?.email || 'U').slice(0, 1).toUpperCase()}
-              color={theme.colors.onPrimary}
-              style={styles.avatar}
-            />
-            <Text variant="headlineSmall" style={styles.name} numberOfLines={2}>
-              {displayName}
-            </Text>
-            <Text variant="bodyMedium" style={styles.email} selectable>
-              {user?.email}
-            </Text>
-            {patron?.student_code ? (
-              <Text variant="bodySmall" style={styles.studentCode} selectable>
-                MSSV: {patron.student_code}
+  const validateForm = () => {
+    if (!studentCode.trim()) {
+      showError('Vui lòng nhập mã sinh viên');
+      return false;
+    }
+    if (studentCode.length < 4) {
+      showError('Mã sinh viên phải có ít nhất 4 ký tự');
+      return false;
+    }
+    if (!fullName.trim()) {
+      showError('Vui lòng nhập họ tên');
+      return false;
+    }
+    if (!email.trim()) {
+      showError('Vui lòng nhập email');
+      return false;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      showError('Email không hợp lệ');
+      return false;
+    }
+    if (!password) {
+      showError('Vui lòng nhập mật khẩu');
+      return false;
+    }
+    if (password.length < 6) {
+      showError('Mật khẩu phải có ít nhất 6 ký tự');
+      return false;
+    }
+    if (password !== confirmPassword) {
+      showError('Mật khẩu xác nhận không khớp');
+      return false;
+    }
+    return true;
+  };
+
+  const handleRegisterClick = async () => {
+    if (!validateForm()) return;
+
+    setIsUploading(true);
+    try {
+      const response = await authApi.patronRegister({
+        student_code: studentCode.trim(),
+        password,
+        full_name: fullName.trim(),
+        email: email.trim(),
+        class_name: className.trim() || undefined,
+        course: course.trim() || undefined,
+        permanent_address: permanentAddress.trim() || undefined,
+      });
+      setRegisteredUser(response.user);
+      setStep('choice');
+    } catch (error: any) {
+      const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || 'Đăng ký thất bại';
+      showError(message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleFaceEnroll = async (images: string[]) => {
+    if (!registeredUser?.id || images.length !== 4) return;
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('frontal', {
+        uri: `data:image/jpeg;base64,${images[0]}`,
+        type: 'image/jpeg',
+        name: 'face_frontal.jpg',
+      } as any);
+      formData.append('right', {
+        uri: `data:image/jpeg;base64,${images[1]}`,
+        type: 'image/jpeg',
+        name: 'face_right.jpg',
+      } as any);
+      formData.append('left', {
+        uri: `data:image/jpeg;base64,${images[2]}`,
+        type: 'image/jpeg',
+        name: 'face_left.jpg',
+      } as any);
+      formData.append('down', {
+        uri: `data:image/jpeg;base64,${images[3]}`,
+        type: 'image/jpeg',
+        name: 'face_down.jpg',
+      } as any);
+      formData.append('consent_given', 'true');
+
+      await api.post(`/patrons/${registeredUser.id}/enroll-batch`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 130000,
+      });
+
+      setSnackbar('Đăng ký tài khoản và khuôn mặt thành công');
+      navigation.replace('Login');
+    } catch (error: any) {
+      const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || 'Đăng ký khuôn mặt thất bại';
+      showError(message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  if (step === 'scan') {
+    return (
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <StudentCardScanner
+          onScanned={handleScanned}
+          onError={showError}
+          onSkip={() => {
+            setStep('form');
+          }}
+        />
+        <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
+          {snackbar}
+        </Snackbar>
+      </SafeAreaView>
+    );
+  }
+
+  if (step === 'choice') {
+    return (
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <View style={styles.choiceContainer}>
+          <Card mode="outlined" style={styles.choiceCard}>
+            <Card.Content style={styles.choiceContent}>
+              <View style={styles.checkCircle}>
+                <Text style={styles.checkIcon}>✓</Text>
+              </View>
+              <Text variant="headlineSmall" style={styles.choiceTitle}>Đăng ký tài khoản thành công</Text>
+              <Text style={styles.choiceSubtitle}>
+                Bạn có muốn đăng ký khuôn mặt để đăng nhập nhanh tại cổng thư viện không?
               </Text>
-            ) : null}
-            <View style={styles.roleBadge}>
-              <Text variant="labelMedium" style={styles.role}>{roleLabel}</Text>
-            </View>
+              <Button mode="contained" onPress={() => setStep('face')} contentStyle={styles.largeButton}>
+                Đăng ký khuôn mặt
+              </Button>
+              <Button mode="text" onPress={() => navigation.replace('Login')}>
+                Bỏ qua
+              </Button>
+            </Card.Content>
+          </Card>
+        </View>
+        <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
+          {snackbar}
+        </Snackbar>
+      </SafeAreaView>
+    );
+  }
+
+  if (step === 'face') {
+    return (
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <Card mode="contained" style={styles.faceHeader}>
+          <Card.Content>
+            <Text variant="titleLarge" style={styles.cardTitle}>Đăng ký khuôn mặt</Text>
+            <Text style={styles.mutedText}>Chụp khuôn mặt từ 4 góc để đăng nhập nhanh sau này.</Text>
           </Card.Content>
         </Card>
 
-        <Card mode="outlined" style={styles.section}>
-          <List.Section>
-            <List.Subheader style={styles.subheader}>Tài khoản</List.Subheader>
-            <List.Item
-              title="Họ và tên"
-              description={user?.full_name || 'Chưa cập nhật'}
-              titleStyle={styles.itemTitle}
-              descriptionStyle={styles.itemDescription}
-              left={(props) => <List.Icon {...props} icon="account" color={theme.colors.primary} />}
-            />
-            <Divider />
-            <List.Item
-              title="Email"
-              description={user?.email || 'Chưa cập nhật'}
-              titleStyle={styles.itemTitle}
-              descriptionStyle={styles.itemDescription}
-              left={(props) => <List.Icon {...props} icon="email" color={theme.colors.primary} />}
-            />
-            <Divider />
-            {patron?.student_code ? (
-              <>
-                <List.Item
-                  title="MSSV"
-                  description={patron.student_code}
-                  titleStyle={styles.itemTitle}
-                  descriptionStyle={styles.itemDescription}
-                  left={(props) => <List.Icon {...props} icon="card-account-details" color={theme.colors.primary} />}
-                />
-                <Divider />
-              </>
-            ) : null}
-            <List.Item
-              title="Vai trò"
-              description={roleLabel}
-              titleStyle={styles.itemTitle}
-              descriptionStyle={styles.itemDescription}
-              left={(props) => <List.Icon {...props} icon="shield-account" color={theme.colors.primary} />}
-            />
-          </List.Section>
-        </Card>
-
-        <Card mode="outlined" style={styles.section}>
-          <List.Section>
-            <List.Subheader style={styles.subheader}>Giao diện</List.Subheader>
-            <List.Item
-              title="Chế độ sáng/tối"
-              description={mode === 'dark' ? 'Đang dùng giao diện tối' : 'Đang dùng giao diện sáng'}
-              titleStyle={styles.itemTitle}
-              descriptionStyle={styles.itemDescription}
-              left={(props) => <List.Icon {...props} icon={mode === 'dark' ? 'weather-night' : 'white-balance-sunny'} color={theme.colors.primary} />}
-              right={() => <Switch value={mode === 'dark'} onValueChange={toggleTheme} />}
-            />
-          </List.Section>
-        </Card>
-
-        <Card mode="outlined" style={styles.section}>
-          <List.Section>
-            <List.Subheader style={styles.subheader}>Bảo mật</List.Subheader>
-            <List.Item
-              title="Đổi mật khẩu"
-              description="Thay đổi mật khẩu đăng nhập"
-              titleStyle={styles.itemTitle}
-              descriptionStyle={styles.itemDescription}
-              left={(props) => <List.Icon {...props} icon="lock-reset" color={theme.colors.primary} />}
-              right={(props) => <List.Icon {...props} icon="chevron-right" color={theme.colors.onSurfaceVariant} />}
-              onPress={() => navigation.navigate('ChangePassword')}
-            />
-          </List.Section>
-        </Card>
-
-        <Card mode="outlined" style={styles.section}>
-          <List.Section>
-            <List.Subheader style={styles.subheader}>Khuôn mặt</List.Subheader>
-            <List.Item
-              title="Cập nhật khuôn mặt"
-              description="Chụp lại khuôn mặt để đăng nhập nhanh"
-              titleStyle={styles.itemTitle}
-              descriptionStyle={styles.itemDescription}
-              left={(props) => <List.Icon {...props} icon="face-recognition" color={theme.colors.primary} />}
-              right={(props) => <List.Icon {...props} icon="chevron-right" color={theme.colors.onSurfaceVariant} />}
-              onPress={() => navigation.navigate('FaceCamera')}
-            />
-          </List.Section>
-        </Card>
-
-        <Button
-          mode="outlined"
-          onPress={() => setLogoutVisible(true)}
-          style={styles.logoutButton}
-          textColor={theme.colors.error}
-          icon="logout"
-        >
-          Đăng xuất
-        </Button>
-
-        <View style={styles.versionRow}>
-          <Text variant="bodySmall" style={styles.version}>Thư Viện App</Text>
-          <Text variant="bodySmall" style={styles.version}>v1.0.0</Text>
+        <View style={styles.captureContainer}>
+          <AutoFaceCapture onFilesReady={handleFaceEnroll} onError={showError} />
         </View>
+
+        {!isUploading ? (
+          <Card mode="contained" style={styles.faceActions}>
+            <Card.Content>
+              <Button mode="text" onPress={() => navigation.replace('Login')}>
+                Bỏ qua
+              </Button>
+            </Card.Content>
+          </Card>
+        ) : null}
+
+        {isUploading ? (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+            <Text style={styles.loadingText}>Đang đăng ký khuôn mặt...</Text>
+          </View>
+        ) : null}
+
+        <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
+          {snackbar}
+        </Snackbar>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <ScrollView style={styles.flex} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <Card mode="outlined" style={styles.formContainer}>
+          <Card.Content style={styles.formContent}>
+            <View>
+              <Text variant="headlineSmall" style={styles.formTitle}>Đăng ký tài khoản</Text>
+              <Text style={styles.formSubtitle}>Nhập thông tin để tạo tài khoản độc giả mới.</Text>
+            </View>
+
+            {studentCode || fullName ? (
+              <View style={styles.prefillBanner}>
+                <Text style={styles.prefillText}>Đã điền thông tin từ thẻ sinh viên</Text>
+              </View>
+            ) : null}
+
+            <TextInput
+              label="Mã sinh viên"
+              value={studentCode}
+              onChangeText={setStudentCode}
+              mode="outlined"
+              autoCapitalize="none"
+              left={<TextInput.Icon icon="account" color={theme.colors.onSurfaceVariant} />}
+            />
+
+            <TextInput
+              label="Họ và tên"
+              value={fullName}
+              onChangeText={setFullName}
+              mode="outlined"
+              left={<TextInput.Icon icon="account-outline" color={theme.colors.onSurfaceVariant} />}
+            />
+
+            <TextInput
+              label="Lớp (không bắt buộc)"
+              value={className}
+              onChangeText={setClassName}
+              mode="outlined"
+              left={<TextInput.Icon icon="school" color={theme.colors.onSurfaceVariant} />}
+            />
+
+            <TextInput
+              label="Khóa học (không bắt buộc)"
+              value={course}
+              onChangeText={setCourse}
+              mode="outlined"
+              left={<TextInput.Icon icon="bookmark-outline" color={theme.colors.onSurfaceVariant} />}
+            />
+
+            <TextInput
+              label="HKTT (không bắt buộc)"
+              value={permanentAddress}
+              onChangeText={setPermanentAddress}
+              mode="outlined"
+              multiline
+              numberOfLines={2}
+              left={<TextInput.Icon icon="home-outline" color={theme.colors.onSurfaceVariant} />}
+            />
+
+            <TextInput
+              label="Email"
+              value={email}
+              onChangeText={setEmail}
+              mode="outlined"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              left={<TextInput.Icon icon="email" color={theme.colors.onSurfaceVariant} />}
+            />
+
+            <TextInput
+              label="Mật khẩu"
+              value={password}
+              onChangeText={setPassword}
+              mode="outlined"
+              secureTextEntry
+              left={<TextInput.Icon icon="lock" color={theme.colors.onSurfaceVariant} />}
+            />
+
+            <TextInput
+              label="Xác nhận mật khẩu"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              mode="outlined"
+              secureTextEntry
+              left={<TextInput.Icon icon="lock-check" color={theme.colors.onSurfaceVariant} />}
+            />
+
+            <Button
+              mode="contained"
+              onPress={handleRegisterClick}
+              loading={isUploading}
+              disabled={isUploading}
+              contentStyle={styles.largeButton}
+            >
+              Đăng ký
+            </Button>
+
+            <Button mode="text" onPress={() => navigation.goBack()}>
+              Đã có tài khoản? Đăng nhập
+            </Button>
+          </Card.Content>
+        </Card>
       </ScrollView>
 
-      <Portal>
-        <Dialog visible={logoutVisible} onDismiss={() => setLogoutVisible(false)}>
-          <Dialog.Title>Đăng xuất</Dialog.Title>
-          <Dialog.Content>
-            <Text>Bạn có chắc muốn đăng xuất?</Text>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setLogoutVisible(false)}>Hủy</Button>
-            <Button onPress={handleLogout} textColor={theme.colors.error}>Đăng xuất</Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
+      <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
+        {snackbar}
+      </Snackbar>
     </SafeAreaView>
   );
 }
 
 function createStyles(theme: AppTheme) {
+  const success = theme.dark ? '#4A8C5C' : '#067647';
+
   return StyleSheet.create({
     container: {
       flex: 1,
@@ -5612,82 +6010,118 @@ function createStyles(theme: AppTheme) {
     flex: {
       flex: 1,
     },
-    content: {
+    scrollContent: {
+      flexGrow: 1,
+      justifyContent: 'center',
       padding: 16,
-      paddingBottom: 28,
-      gap: 14,
     },
-    header: {
+    formContainer: {
+      borderRadius: 18,
+      borderColor: theme.colors.outlineVariant,
+      backgroundColor: theme.colors.surface,
+    },
+    formContent: {
+      gap: 14,
+      paddingVertical: 22,
+    },
+    formTitle: {
+      color: theme.colors.onSurface,
+      fontWeight: '900',
+    },
+    formSubtitle: {
+      color: theme.colors.onSurfaceVariant,
+      marginTop: 4,
+    },
+    prefillBanner: {
+      backgroundColor: `${theme.dark ? '#4A8C5C' : '#067647'}22`,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 8,
+      borderLeftWidth: 3,
+      borderLeftColor: theme.dark ? '#4A8C5C' : '#067647',
+    },
+    prefillText: {
+      color: theme.dark ? '#4A8C5C' : '#067647',
+      fontSize: 13,
+      fontWeight: '600',
+    },
+    largeButton: {
+      minHeight: 52,
+    },
+    choiceContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      padding: 20,
+    },
+    choiceCard: {
+      borderColor: theme.colors.outlineVariant,
       backgroundColor: theme.colors.surface,
       borderRadius: 18,
     },
-    headerContent: {
+    choiceContent: {
       alignItems: 'center',
-      gap: 6,
-      paddingVertical: 18,
+      gap: 14,
+      paddingVertical: 24,
     },
-    avatar: {
-      backgroundColor: theme.colors.primary,
-      marginBottom: 8,
-    },
-    name: {
-      color: theme.colors.onSurface,
-      fontWeight: '800',
-      textAlign: 'center',
-    },
-    email: {
-      color: theme.colors.onSurfaceVariant,
-      textAlign: 'center',
-    },
-    studentCode: {
-      color: theme.colors.secondary,
-      fontWeight: '700',
-    },
-    roleBadge: {
-      marginTop: 8,
-      paddingHorizontal: 14,
-      paddingVertical: 5,
-      borderRadius: 999,
-      backgroundColor: theme.colors.primaryContainer,
-    },
-    role: {
-      color: theme.dark ? theme.colors.primary : theme.colors.onSurface,
-      fontWeight: '800',
-      textTransform: 'uppercase',
-    },
-    section: {
-      backgroundColor: theme.colors.surface,
-      borderColor: theme.colors.outlineVariant,
-      borderRadius: 14,
-      overflow: 'hidden',
-    },
-    subheader: {
-      color: theme.colors.primary,
-      fontWeight: '800',
-      fontSize: 13,
-    },
-    itemTitle: {
-      color: theme.colors.onSurface,
-      fontSize: 14,
-      fontWeight: '700',
-    },
-    itemDescription: {
-      color: theme.colors.onSurfaceVariant,
-      fontSize: 13,
-    },
-    logoutButton: {
-      borderColor: theme.colors.error,
-      borderRadius: 10,
-    },
-    versionRow: {
-      flexDirection: 'row',
+    checkCircle: {
+      width: 84,
+      height: 84,
+      borderRadius: 42,
+      backgroundColor: `${success}22`,
       justifyContent: 'center',
       alignItems: 'center',
-      gap: 8,
+    },
+    checkIcon: {
+      fontSize: 42,
+      color: success,
+      fontWeight: '900',
+    },
+    choiceTitle: {
+      color: theme.colors.onSurface,
+      textAlign: 'center',
+      fontWeight: '900',
+    },
+    choiceSubtitle: {
+      color: theme.colors.onSurfaceVariant,
+      textAlign: 'center',
+      lineHeight: 20,
+    },
+    faceHeader: {
+      margin: 12,
+      marginBottom: 0,
+      borderRadius: 16,
+      backgroundColor: theme.colors.surface,
+    },
+    cardTitle: {
+      color: theme.colors.onSurface,
+      fontWeight: '800',
+    },
+    mutedText: {
+      color: theme.colors.onSurfaceVariant,
       marginTop: 4,
     },
-    version: {
-      color: theme.colors.onSurfaceVariant,
+    captureContainer: {
+      flex: 1,
+    },
+    faceActions: {
+      margin: 12,
+      borderRadius: 16,
+      backgroundColor: theme.colors.surface,
+    },
+    loadingOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0,0,0,0.65)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    loadingText: {
+      color: '#FFFFFF',
+      fontSize: 15,
+      marginTop: 12,
     },
   });
 }
@@ -6311,130 +6745,6 @@ function createStyles(theme: AppTheme) {
 }
 </file>
 
-<file path="src/api/auth.ts">
-import api from './client';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AuthTokens, User } from '../types';
-
-export interface LoginRequest {
-  email: string;
-  password: string;
-}
-
-export interface PatronLoginRequest {
-  student_code: string;
-  password: string;
-}
-
-export interface PatronRegisterRequest {
-  student_code: string;
-  password: string;
-  full_name: string;
-  email: string;
-  class_name?: string;
-}
-
-export interface LoginResponse {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
-  user?: any;
-}
-
-export interface PatronLoginResponse {
-  access_token: string;
-  refresh_token?: string;
-  token_type: string;
-  user: any;
-}
-
-export interface FaceLoginResponse {
-  access_token: string;
-  refresh_token?: string;
-  token_type: string;
-}
-
-export const authApi = {
-  login: async (data: LoginRequest): Promise<LoginResponse> => {
-    const response = await api.post<LoginResponse>('/auth/login', data);
-    const tokens: AuthTokens = {
-      access_token: response.data.access_token,
-      refresh_token: response.data.refresh_token,
-      token_type: response.data.token_type,
-    };
-    await AsyncStorage.setItem('accessToken', tokens.access_token);
-    await AsyncStorage.setItem('refreshToken', tokens.refresh_token);
-    if (response.data.user) {
-      await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
-      await AsyncStorage.removeItem('patronData');
-    }
-    return response.data;
-  },
-
-  patronLogin: async (data: PatronLoginRequest): Promise<PatronLoginResponse> => {
-    const response = await api.post<PatronLoginResponse>('/patrons/login', data);
-    await AsyncStorage.setItem('accessToken', response.data.access_token);
-    if (response.data.refresh_token) {
-      await AsyncStorage.setItem('refreshToken', response.data.refresh_token);
-    }
-    await AsyncStorage.setItem('patronData', JSON.stringify(response.data.user));
-    return response.data;
-  },
-
-  patronRegister: async (data: PatronRegisterRequest): Promise<PatronLoginResponse> => {
-    const response = await api.post<PatronLoginResponse>('/patrons/register', data);
-    if (!response.data.user) {
-      throw new Error('Invalid response: missing user data');
-    }
-    await AsyncStorage.setItem('accessToken', response.data.access_token);
-    await AsyncStorage.setItem('patronData', JSON.stringify(response.data.user));
-    return response.data;
-  },
-
-  faceLogin: async (imageUri: string): Promise<FaceLoginResponse> => {
-    const formData = new FormData();
-    formData.append('file', {
-      uri: imageUri,
-      type: 'image/jpeg',
-      name: 'face.jpg',
-    } as any);
-    const response = await api.post<FaceLoginResponse>('/auth/face-login', formData);
-    if (response.data.access_token) {
-      await AsyncStorage.setItem('accessToken', response.data.access_token);
-    }
-    if (response.data.refresh_token) {
-      await AsyncStorage.setItem('refreshToken', response.data.refresh_token);
-    }
-    return response.data;
-  },
-
-  refreshToken: async (refreshToken: string): Promise<{ access_token: string }> => {
-    const response = await api.post('/auth/refresh', { refresh_token: refreshToken });
-    return response.data;
-  },
-
-  logout: async (): Promise<void> => {
-    await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'patronData', 'userData']);
-  },
-
-  getCurrentUser: async (): Promise<User> => {
-    const response = await api.get<User>('/users/me');
-    return response.data;
-  },
-
-  getCurrentPatron: async (): Promise<any> => {
-    const response = await api.get<any>('/patrons/me');
-    return response.data;
-  },
-
-  changePassword: async (patronId: string, newPassword: string): Promise<void> => {
-    await api.put(`/patrons/${patronId}/password`, {
-      new_password: newPassword,
-    });
-  },
-};
-</file>
-
 <file path="src/context/AuthContext.tsx">
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -6578,468 +6888,550 @@ export function useAuth() {
 }
 </file>
 
-<file path="src/screens/BorrowScreen.tsx">
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Alert, ScrollView } from 'react-native';
+<file path="src/screens/ProfileScreen.tsx">
+import React, { useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, Button, Surface, TextInput, ActivityIndicator, Card, Divider } from 'react-native-paper';
-import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
+import {
+  Avatar,
+  Button,
+  Card,
+  Dialog,
+  Divider,
+  List,
+  Portal,
+  Switch,
+  Text,
+  useTheme,
+} from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { borrowApi } from '../api/borrow';
-import { openLibraryApi } from '../api/openlibrary';
-import { authApi } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
-import { Book, OpenLibraryBook } from '../types';
-import { colors } from '../theme/colors';
-import { devError, devLog } from '../utils/logger';
+import { useMobileTheme } from '../context/ThemeContext';
+import { AppTheme } from '../theme/DarkTheme';
 
-export default function BorrowScreen() {
-  const { patron } = useAuth();
-  const [scanned, setScanned] = useState(false);
-  const [isbn, setIsbn] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
-  const [book, setBook] = useState<OpenLibraryBook | null>(null);
-  const [localBook, setLocalBook] = useState<Book | null>(null);
-  const [isBorrowing, setIsBorrowing] = useState(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
-  const [permission, requestPermission] = useCameraPermissions();
-  const [activeCount, setActiveCount] = useState(0);
-  const [overdueCount, setOverdueCount] = useState(0);
-  const [isLoadingQuota, setIsLoadingQuota] = useState(false);
-  const [borrowStep, setBorrowStep] = useState<'confirm' | 'scan'>('confirm');
+interface ProfileScreenProps {
+  navigation: any;
+}
 
-  const MAX_BORROW_BOOKS = 3;
-  const remaining = MAX_BORROW_BOOKS - activeCount;
-  const canBorrow = remaining > 0 && overdueCount === 0;
+function InfoField({ icon, label, value, theme }: { icon: string; label: string; value: string; theme: AppTheme }) {
+  return (
+    <View style={infoStyles.row}>
+      <MaterialCommunityIcons name={icon as any} size={16} color={theme.colors.primary} />
+      <View style={infoStyles.textWrap}>
+        <Text style={[infoStyles.label, { color: theme.colors.onSurfaceVariant }]}>{label}</Text>
+        <Text style={[infoStyles.value, { color: theme.colors.onSurface }]} selectable numberOfLines={2}>
+          {value}
+        </Text>
+      </View>
+    </View>
+  );
+}
 
-  const loadPatronQuota = async () => {
-    if (!patron?.student_code) return;
-    setIsLoadingQuota(true);
-    try {
-      const data = await borrowApi.getActiveBorrowsByStudentCode(patron.student_code);
-      setActiveCount(data.total ?? 0);
-      setOverdueCount(data.overdue_count ?? 0);
-    } catch {
-      // silently fail
-    } finally {
-      setIsLoadingQuota(false);
-    }
+const infoStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  textWrap: {
+    flex: 1,
+    gap: 1,
+  },
+  label: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  value: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+});
+
+export default function ProfileScreen({ navigation }: ProfileScreenProps) {
+  const theme = useTheme() as AppTheme;
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const { user, patron, logout } = useAuth();
+  const { mode, toggleTheme } = useMobileTheme();
+  const [logoutVisible, setLogoutVisible] = useState(false);
+
+  const roleLabel =
+    user?.role === 'admin'
+      ? 'Quản trị viên'
+      : user?.role === 'staff'
+        ? 'Nhân viên'
+        : 'Độc giả';
+
+  const displayName = user?.full_name || 'Người dùng';
+
+  const handleLogout = async () => {
+    setLogoutVisible(false);
+    await logout();
   };
 
-  useEffect(() => {
-    if (patron) {
-      loadPatronQuota();
-    }
-  }, [patron]);
+  const studentFields = [
+    { icon: 'card-account-details', label: 'MSSV', value: patron?.student_code || '—' },
+    { icon: 'account-school', label: 'Lớp', value: patron?.class_name || patron?.className || '—' },
+    { icon: 'bookmark-outline', label: 'Khóa học', value: patron?.course || '—' },
+    { icon: 'domain', label: 'Khoa', value: patron?.faculty || '—' },
+    { icon: 'cake-variant-outline', label: 'Ngày sinh', value: patron?.date_of_birth || patron?.dateOfBirth || '—' },
+    { icon: 'home-outline', label: 'HKTT', value: patron?.permanent_address || patron?.permanentAddress || '—' },
+    { icon: 'card-bulleted-outline', label: 'CCCD', value: patron?.identity_number || '—' },
+    { icon: 'badge-account', label: 'Số thẻ TV', value: patron?.card_number || '—' },
+    { icon: 'calendar-plus', label: 'Ngày cấp thẻ', value: patron?.issue_date || patron?.issueDate || '—' },
+    { icon: 'calendar-clock', label: 'Hạn thẻ', value: patron?.membership_expiry || patron?.membershipExpiry || '—' },
+    { icon: 'card-account-phone', label: 'Số điện thoại', value: patron?.phone || '—' },
+  ];
 
-  useEffect(() => {
-    if (!scanned && patron) {
-      loadPatronQuota();
-    }
-  }, [scanned]);
-
-  const searchBook = async (isbnToSearch: string) => {
-    if (!isbnToSearch.trim()) return;
-    setIsSearching(true);
-    setSearchError(null);
-    try {
-      try {
-        const localBookData = await borrowApi.getBook(isbnToSearch.trim());
-        setLocalBook(localBookData);
-      } catch {
-        // local not found, try OpenLibrary
-      }
-
-      const openLibraryBook = await openLibraryApi.getBookByIsbn(isbnToSearch.trim());
-      if (openLibraryBook) {
-        setBook(openLibraryBook);
-      } else if (!localBook) {
-        setSearchError('Không tìm thấy sách với ISBN này');
-      }
-    } catch (error) {
-      devError('[Borrow] Search error:', error);
-      setSearchError('Không thể tìm kiếm sách');
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  const handleBarCodeScanned = (result: BarcodeScanningResult) => {
-    if (scanned || !result.data) return;
-    setScanned(true);
-    setIsbn(result.data);
-    searchBook(result.data);
-  };
-
-  const handleBorrow = async () => {
-    if (!isbn.trim()) return;
-    if (!canBorrow) {
-      Alert.alert('Không thể mượn', overdueCount > 0
-        ? 'Bạn có sách quá hạn, không thể mượn thêm'
-        : 'Bạn đã mượn đủ 3 cuốn, không thể mượn thêm');
-      return;
-    }
-    setIsBorrowing(true);
-    try {
-      const patronData = await authApi.getCurrentPatron();
-      const status = patronData.current_status || patronData.currentStatus;
-      if (status !== 'inside') {
-        Alert.alert('Không thể mượn', 'Bạn phải đi qua cổng vào thư viện trước khi mượn sách');
-        setIsBorrowing(false);
-        return;
-      }
-
-      const result = await borrowApi.borrowBook(isbn.trim());
-      if (result.status === 'success') {
-        Alert.alert('Thành công', result.message, [
-          { text: 'OK', onPress: () => resetState() },
-        ]);
-      }
-    } catch (error: any) {
-      let msg = 'Mượn sách thất bại';
-      if (!error.response) msg = 'Không thể kết nối server. Vui lòng kiểm tra mạng.';
-      else if (error.response?.status === 401) msg = 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.';
-      else if (error.response?.data?.detail) msg = error.response.data.detail;
-      Alert.alert('Lỗi', msg);
-    } finally {
-      setIsBorrowing(false);
-    }
-  };
-
-  const resetState = () => {
-    setScanned(false);
-    setIsbn('');
-    setBook(null);
-    setLocalBook(null);
-    setSearchError(null);
-    loadPatronQuota();
-  };
-
-  const searchAgain = () => {
-    setScanned(false);
-    setBook(null);
-    setLocalBook(null);
-    setSearchError(null);
-  };
-
-  const displayBook = book || (localBook ? {
-    title: localBook.title,
-    author: localBook.author,
-    cover: localBook.cover_url ? { medium: localBook.cover_url } : undefined,
-    authors: localBook.author ? [{ name: localBook.author }] : undefined,
-    publish_date: localBook.publish_year?.toString(),
-    number_of_pages: localBook.pages,
-    publishers: localBook.publisher ? [localBook.publisher] : undefined,
-  } : null);
-
-  if (!permission) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <ActivityIndicator color={colors.primary} />
-      </SafeAreaView>
-    );
-  }
-
-  if (!permission.granted) {
-    return (
-      <SafeAreaView style={styles.permissionContainer} edges={['bottom']}>
-        <Text style={styles.permissionText}>Cần quyền camera để quét mã vạch</Text>
-        <Button mode="contained" onPress={requestPermission} style={styles.permissionButton}>
-          Cấp quyền
-        </Button>
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.orText}>hoặc nhập ISBN thủ công</Text>
-          <View style={styles.dividerLine} />
-        </View>
-        <TextInput
-          label="ISBN"
-          value={isbn}
-          onChangeText={setIsbn}
-          mode="outlined"
-          style={styles.isbnInput}
-          outlineStyle={styles.inputOutline}
-          activeOutlineColor={colors.primary}
-          right={<TextInput.Icon icon="magnify" onPress={() => searchBook(isbn)} color={colors.primary} testID="search-button-permission" />}
-        />
-      </SafeAreaView>
-    );
-  }
+  const isStudent = user?.role === 'patron' && !!patron?.student_code;
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      {borrowStep === 'confirm' ? (
-        <View style={styles.confirmContainer}>
-          <View style={styles.confirmHeader}>
-            <Text variant="labelMedium" style={styles.confirmKicker}>Xác nhận thông tin</Text>
-            <Text variant="headlineSmall" style={styles.confirmTitle}>Mượn sách tại quầy</Text>
-          </View>
-
-          <Card style={styles.patronCard}>
-            <Card.Content style={styles.patronCardContent}>
-              <View style={styles.patronAvatar}>
-                <Text style={styles.patronAvatarText}>
-                  {(patron?.full_name || patron?.student_code || '?').slice(0, 1).toUpperCase()}
-                </Text>
-              </View>
-              <View style={styles.patronInfo}>
-                <Text variant="titleMedium" style={styles.patronName} numberOfLines={1}>
-                  {patron?.full_name || 'Không rõ tên'}
-                </Text>
-                <Text variant="bodySmall" style={styles.patronMssv}>
-                  MSSV: {patron?.student_code || '—'}
-                </Text>
-              </View>
-            </Card.Content>
-          </Card>
-
-          {isLoadingQuota ? (
-            <ActivityIndicator color={colors.primary} style={styles.quotaLoader} />
-          ) : (
-            <View style={[styles.quotaBanner, !canBorrow && overdueCount > 0 ? styles.quotaBannerError : !canBorrow ? styles.quotaBannerWarning : styles.quotaBannerOk]}>
-              <MaterialCommunityIcons
-                name={canBorrow ? 'check-circle' : 'alert-circle'}
-                size={18}
-                color={canBorrow ? colors.success : colors.error}
-              />
-              <Text style={[styles.quotaText, !canBorrow && styles.quotaTextError]}>
-                {overdueCount > 0
-                  ? `Có ${overdueCount} sách quá hạn - không thể mượn thêm`
-                  : remaining > 0
-                    ? `Còn có thể mượn ${remaining} cuốn`
-                    : 'Đã mượn đủ 3 cuốn - không thể mượn thêm'}
+      <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
+        <Card mode="contained" style={styles.header}>
+          <Card.Content style={styles.headerContent}>
+            <Avatar.Text
+              size={74}
+              label={(displayName || user?.email || 'U').slice(0, 1).toUpperCase()}
+              color={theme.colors.onPrimary}
+              style={styles.avatar}
+            />
+            <Text variant="headlineSmall" style={styles.name} numberOfLines={2}>
+              {displayName}
+            </Text>
+            <Text variant="bodyMedium" style={styles.email} selectable>
+              {user?.email}
+            </Text>
+            {patron?.student_code ? (
+              <Text variant="bodySmall" style={styles.studentCode} selectable>
+                MSSV: {patron.student_code}
               </Text>
-            </View>
-          )}
+            ) : null}
+          </Card.Content>
+        </Card>
 
-          <View style={styles.confirmActions}>
-            <Button
-              mode="contained"
-              onPress={() => setBorrowStep('scan')}
-              disabled={!canBorrow || isLoadingQuota}
-              style={styles.confirmButton}
-              contentStyle={styles.confirmButtonContent}
-              icon="book-plus"
-            >
-              {!canBorrow ? 'Không thể mượn thêm' : 'Bắt đầu quét sách'}
-            </Button>
-          </View>
-        </View>
-      ) : (
-        <View style={styles.scanStepContainer}>
-          <View style={styles.scanTopBar}>
-            <Button mode="text" compact onPress={() => { setBorrowStep('confirm'); searchAgain(); }} icon="arrow-left">
-              Đổi patron
-            </Button>
-            <View style={styles.scanQuotaSmall}>
-              <MaterialCommunityIcons
-                name={canBorrow ? 'check-circle' : 'alert-circle'}
-                size={14}
-                color={canBorrow ? colors.success : colors.error}
-              />
-              <Text style={[styles.scanQuotaText, !canBorrow && styles.scanQuotaTextError]}>
-                {remaining > 0 ? `Còn ${remaining} cuốn` : 'Đã đủ'}
-              </Text>
-            </View>
-          </View>
-
-          {!scanned ? (
-            <View style={styles.scannerContainer}>
-              <CameraView
-                style={styles.camera}
-                facing="back"
-                barcodeScannerSettings={{
-                  barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
-                }}
-                onBarcodeScanned={handleBarCodeScanned}
-              />
-              <View style={styles.overlay}>
-                <View style={styles.scanArea}>
-                  <View style={[styles.corner, styles.topLeft]} />
-                  <View style={[styles.corner, styles.topRight]} />
-                  <View style={[styles.corner, styles.bottomLeft]} />
-                  <View style={[styles.corner, styles.bottomRight]} />
+        {isStudent && (
+          <Card mode="outlined" style={styles.section}>
+            <View style={styles.sectionAccent} />
+            <List.Section>
+              <List.Subheader style={styles.subheader}>
+                <View style={styles.subheaderRow}>
+                  <MaterialCommunityIcons name="school" size={16} color={theme.colors.primary} />
+                  <Text style={styles.subheaderText}>Thông tin sinh viên</Text>
                 </View>
-                <Text style={styles.scanText}>Đặt mã vạch trong khung hình</Text>
-              </View>
-
-              <Surface style={styles.manualInput} elevation={0}>
-                <View style={styles.manualAccent} />
-                <Text variant="bodyMedium" style={styles.manualLabel}>Hoặc nhập ISBN thủ công:</Text>
-                <TextInput
-                  label="ISBN"
-                  value={isbn}
-                  onChangeText={setIsbn}
-                  mode="outlined"
-                  style={styles.isbnInputFull}
-                  outlineStyle={styles.inputOutline}
-                  activeOutlineColor={colors.primary}
-                  right={<TextInput.Icon icon="magnify" onPress={() => searchBook(isbn)} disabled={isSearching} color={colors.primary} testID="search-button" />}
-                />
-              </Surface>
-            </View>
-          ) : (
-            <ScrollView style={styles.resultContainer} contentContainerStyle={styles.resultContent}>
-              {isSearching ? (
-                <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
-              ) : searchError ? (
-                <Card style={styles.errorCard}>
-                  <View style={styles.errorIconContainer}>
-                    <MaterialCommunityIcons name="book-search-outline" size={64} color={colors.textSecondary} />
+              </List.Subheader>
+              <View style={styles.infoGrid}>
+                {studentFields.map((field, i) => (
+                  <View key={i} style={styles.infoGridItem}>
+                    <InfoField theme={theme} icon={field.icon} label={field.label} value={field.value} />
+                    {i < studentFields.length - 1 && i % 2 === 0 && (
+                      <View style={{ height: 1, backgroundColor: theme.colors.outlineVariant, marginVertical: 8 }} />
+                    )}
                   </View>
-                  <Text variant="titleMedium" style={styles.errorTitle}>Không tìm thấy sách</Text>
-                  <Text variant="bodyMedium" style={styles.errorMessage}>{searchError}</Text>
-                  {isbn ? <Text variant="bodySmall" style={styles.errorIsbn}>ISBN: {isbn}</Text> : null}
-                  <Button mode="contained" onPress={searchAgain} style={styles.retryButton} icon="barcode-scan">
-                    Quét lại
-                  </Button>
-                </Card>
-              ) : displayBook ? (
-                <Card style={styles.bookCard}>
-                  <View style={styles.cardAccent} />
-                  {displayBook.cover?.medium ? (
-                    <Card.Cover source={{ uri: displayBook.cover.medium }} style={styles.cover} />
-                  ) : (
-                    <View style={styles.coverPlaceholder}>
-                      <MaterialCommunityIcons name="book-open-variant" size={48} color={colors.textSecondary} />
-                      <Text style={styles.coverPlaceholderText}>Không có ảnh</Text>
-                    </View>
-                  )}
-                  <Card.Content>
-                    <Text variant="titleLarge" style={styles.bookTitle}>{displayBook.title}</Text>
-                    {'authors' in displayBook && displayBook.authors && displayBook.authors.length > 0 ? (
-                      <Text variant="bodyMedium" style={styles.bookAuthor}>{displayBook.authors.map(a => a.name).join(', ')}</Text>
-                    ) : 'author' in displayBook && displayBook.author ? (
-                      <Text variant="bodyMedium" style={styles.bookAuthor}>{displayBook.author}</Text>
-                    ) : null}
+                ))}
+              </View>
+            </List.Section>
+          </Card>
+        )}
 
-                    <View style={styles.metaRow}>
-                      {'publish_date' in displayBook && displayBook.publish_date ? (
-                        <View style={styles.metaItem}>
-                          <MaterialCommunityIcons name="calendar" size={14} color={colors.textSecondary} />
-                          <Text style={styles.metaText}>{displayBook.publish_date}</Text>
-                        </View>
-                      ) : null}
-                      {'number_of_pages' in displayBook && displayBook.number_of_pages ? (
-                        <View style={styles.metaItem}>
-                          <MaterialCommunityIcons name="book-open-page-variant" size={14} color={colors.textSecondary} />
-                          <Text style={styles.metaText}>{displayBook.number_of_pages} trang</Text>
-                        </View>
-                      ) : null}
-                    </View>
+        <Card mode="outlined" style={styles.section}>
+          <List.Section>
+            <List.Subheader style={styles.subheader}>Tài khoản</List.Subheader>
+            <List.Item
+              title="Mã người dùng"
+              description={user?.id || '—'}
+              titleStyle={styles.itemTitle}
+              descriptionStyle={styles.itemDescription}
+              left={(props) => <List.Icon {...props} icon="barcode" color={theme.colors.primary} />}
+            />
+            <Divider />
+            <List.Item
+              title="Họ và tên"
+              description={user?.full_name || 'Chưa cập nhật'}
+              titleStyle={styles.itemTitle}
+              descriptionStyle={styles.itemDescription}
+              left={(props) => <List.Icon {...props} icon="account" color={theme.colors.primary} />}
+            />
+            <Divider />
+            <List.Item
+              title="Email"
+              description={user?.email || 'Chưa cập nhật'}
+              titleStyle={styles.itemTitle}
+              descriptionStyle={styles.itemDescription}
+              left={(props) => <List.Icon {...props} icon="email" color={theme.colors.primary} />}
+            />
+            <Divider />
+            {patron?.student_code ? (
+              <>
+                <List.Item
+                  title="MSSV"
+                  description={patron.student_code}
+                  titleStyle={styles.itemTitle}
+                  descriptionStyle={styles.itemDescription}
+                  left={(props) => <List.Icon {...props} icon="card-account-details" color={theme.colors.primary} />}
+                />
+                <Divider />
+              </>
+            ) : null}
+            {patron?.status ? (
+              <>
+                <List.Item
+                  title="Trạng thái thẻ"
+                  description={patron.status === 'active' ? 'Đang hoạt động' : patron.status === 'inactive' ? 'Ngừng hoạt động' : patron.status === 'expired' ? 'Đã hết hạn' : patron.status}
+                  titleStyle={styles.itemTitle}
+                  descriptionStyle={[styles.itemDescription, { color: patron.status === 'active' ? theme.colors.custom.success : theme.colors.error }]}
+                  left={(props) => <List.Icon {...props} icon={patron.status === 'active' ? 'check-circle' : 'alert-circle'} color={patron.status === 'active' ? theme.colors.custom.success : theme.colors.error} />}
+                />
+                <Divider />
+              </>
+            ) : null}
+            <List.Item
+              title="Vai trò"
+              titleStyle={styles.itemTitle}
+              left={(props) => <List.Icon {...props} icon="shield-account" color={theme.colors.primary} />}
+              right={() => (
+                <View style={[styles.rolePill, { backgroundColor: theme.colors.primaryContainer }]}>
+                  <Text style={[styles.rolePillText, { color: theme.colors.primary }]}>{roleLabel}</Text>
+                </View>
+              )}
+            />
+            <List.Item
+              title=""
+              description={user?.role === 'admin' ? 'Toàn quyền quản lý hệ thống' : user?.role === 'staff' ? 'Quản lý mượn/trả sách, xem báo cáo' : 'Mượn/trả sách, quản lý hồ sơ cá nhân'}
+              descriptionStyle={[styles.itemDescription, { fontStyle: 'italic', marginTop: -8 }]}
+              left={() => null}
+            />
+          </List.Section>
+        </Card>
 
-                    {localBook?.shelf_location && (
-                      <Text variant="bodySmall" style={styles.locationLabel}>
-                        <MaterialCommunityIcons name="map-marker" size={13} color={colors.primary} /> Vị trí: {localBook.shelf_location}
-                      </Text>
-                    )}
+        <Card mode="outlined" style={styles.section}>
+          <List.Section>
+            <List.Subheader style={styles.subheader}>Giao diện</List.Subheader>
+            <List.Item
+              title="Chế độ sáng/tối"
+              description={mode === 'dark' ? 'Đang dùng giao diện tối' : 'Đang dùng giao diện sáng'}
+              titleStyle={styles.itemTitle}
+              descriptionStyle={styles.itemDescription}
+              left={(props) => <List.Icon {...props} icon={mode === 'dark' ? 'weather-night' : 'white-balance-sunny'} color={theme.colors.primary} />}
+              right={() => <Switch value={mode === 'dark'} onValueChange={toggleTheme} />}
+            />
+          </List.Section>
+        </Card>
 
-                    {!canBorrow && (
-                      <View style={styles.quotaWarningBox}>
-                        <MaterialCommunityIcons name="alert-circle-outline" size={16} color={colors.error} />
-                        <Text style={styles.quotaWarningText}>
-                          {overdueCount > 0
-                            ? 'Bạn có sách quá hạn, không thể mượn thêm'
-                            : 'Bạn đã mượn đủ 3 cuốn, không thể mượn thêm'}
-                        </Text>
-                      </View>
-                    )}
-                  </Card.Content>
-                  <Card.Actions style={styles.cardActions}>
-                    <Button mode="outlined" onPress={searchAgain} style={styles.cardActionButton} labelStyle={styles.cardActionButtonLabel}>
-                      Quét lại
-                    </Button>
-                    <Button mode="contained" onPress={handleBorrow} loading={isBorrowing} disabled={isBorrowing || !canBorrow} style={styles.cardActionButton} labelStyle={styles.cardActionButtonLabel}>
-                      Xác nhận mượn
-                    </Button>
-                  </Card.Actions>
-                </Card>
-              ) : null}
-            </ScrollView>
-          )}
+        <Card mode="outlined" style={styles.section}>
+          <List.Section>
+            <List.Subheader style={styles.subheader}>Bảo mật</List.Subheader>
+            <List.Item
+              title="Đổi mật khẩu"
+              description="Thay đổi mật khẩu đăng nhập"
+              titleStyle={styles.itemTitle}
+              descriptionStyle={styles.itemDescription}
+              left={(props) => <List.Icon {...props} icon="lock-reset" color={theme.colors.primary} />}
+              right={(props) => <List.Icon {...props} icon="chevron-right" color={theme.colors.onSurfaceVariant} />}
+              onPress={() => navigation.navigate('ChangePassword')}
+            />
+          </List.Section>
+        </Card>
+
+        <Card mode="outlined" style={styles.section}>
+          <List.Section>
+            <List.Subheader style={styles.subheader}>Khuôn mặt</List.Subheader>
+            <List.Item
+              title="Cập nhật khuôn mặt"
+              description="Chụp lại khuôn mặt để đăng nhập nhanh"
+              titleStyle={styles.itemTitle}
+              descriptionStyle={styles.itemDescription}
+              left={(props) => <List.Icon {...props} icon="face-recognition" color={theme.colors.primary} />}
+              right={(props) => <List.Icon {...props} icon="chevron-right" color={theme.colors.onSurfaceVariant} />}
+              onPress={() => navigation.navigate('FaceCamera')}
+            />
+          </List.Section>
+        </Card>
+
+        <Button
+          mode="outlined"
+          onPress={() => setLogoutVisible(true)}
+          style={styles.logoutButton}
+          textColor={theme.colors.error}
+          icon="logout"
+        >
+          Đăng xuất
+        </Button>
+
+        <View style={styles.versionRow}>
+          <Text variant="bodySmall" style={styles.version}>Thư Viện App</Text>
+          <Text variant="bodySmall" style={styles.version}>v1.0.0</Text>
         </View>
-      )}
+      </ScrollView>
+
+      <Portal>
+        <Dialog visible={logoutVisible} onDismiss={() => setLogoutVisible(false)}>
+          <Dialog.Title>Đăng xuất</Dialog.Title>
+          <Dialog.Content>
+            <Text>Bạn có chắc muốn đăng xuất?</Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setLogoutVisible(false)}>Hủy</Button>
+            <Button onPress={handleLogout} textColor={theme.colors.error}>Đăng xuất</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  permissionContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: colors.background },
-  permissionText: { color: colors.text, fontSize: 16, marginBottom: 16, textAlign: 'center' },
-  permissionButton: { borderRadius: 6 },
-  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 24, paddingHorizontal: 16 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: colors.divider },
-  orText: { color: colors.textSecondary, marginHorizontal: 12, fontSize: 12 },
-  isbnInput: { width: '80%', marginTop: 4, backgroundColor: 'transparent' },
-  inputOutline: { borderRadius: 6, borderColor: colors.border },
-  scannerContainer: { flex: 1, position: 'relative' },
-  camera: { flex: 1 },
-  overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  scanArea: { width: 280, height: 150, borderRadius: 8, position: 'relative' },
-  corner: { position: 'absolute', width: 36, height: 36, borderColor: colors.primary, borderWidth: 2 },
-  topLeft: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 8 },
-  topRight: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 8 },
-  bottomLeft: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 8 },
-  bottomRight: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 8 },
-  scanText: { color: colors.text, marginTop: 20, fontSize: 16, textAlign: 'center', fontWeight: '500' },
-  manualInput: { padding: 16, backgroundColor: colors.surface, position: 'relative', overflow: 'hidden', borderTopWidth: 0.5, borderTopColor: colors.border },
-  manualAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, backgroundColor: colors.primary },
-  manualLabel: { color: colors.textSecondary, marginBottom: 8, fontSize: 13 },
-  isbnInputFull: { marginTop: 4, backgroundColor: 'transparent' },
-  resultContainer: { flex: 1, padding: 16 },
-  resultContent: { flexGrow: 1, justifyContent: 'center' },
-  loader: { alignSelf: 'center' },
-  bookCard: { backgroundColor: colors.surface, borderRadius: 8, overflow: 'hidden', position: 'relative', borderWidth: 0.5, borderColor: colors.border },
-  cardAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, backgroundColor: colors.primary, zIndex: 1 },
-  cover: { height: 280, resizeMode: 'contain', backgroundColor: colors.surfaceVariant },
-  coverPlaceholder: { height: 200, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.surfaceVariant },
-  coverPlaceholderText: { color: colors.textSecondary, marginTop: 8, fontSize: 13 },
-  bookTitle: { color: colors.text, marginTop: 12, fontWeight: '700', fontSize: 20 },
-  bookAuthor: { color: colors.textSecondary, marginTop: 4, fontSize: 14 },
-  metaRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8, gap: 16 },
-  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  metaText: { color: colors.textSecondary, fontSize: 13 },
-  locationLabel: { color: colors.primary, marginTop: 4, fontSize: 13, fontWeight: '600' },
-  cardActions: { padding: 12, gap: 8 },
-  cardActionButton: { borderRadius: 6 },
-  cardActionButtonLabel: { fontSize: 13, fontWeight: '600' },
-  errorCard: { backgroundColor: colors.surface, borderRadius: 8, padding: 32, alignItems: 'center', borderWidth: 0.5, borderColor: colors.border },
-  errorIconContainer: { marginBottom: 16 },
-  errorTitle: { color: colors.text, fontWeight: '700', marginBottom: 8 },
-  errorMessage: { color: colors.textSecondary, textAlign: 'center', marginBottom: 4 },
-  errorIsbn: { color: colors.textSecondary, marginTop: 8, marginBottom: 20, fontSize: 12 },
-  retryButton: { borderRadius: 6, marginTop: 12 },
-  quotaLoading: { paddingVertical: 8, alignItems: 'center' },
-  quotaBanner: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
-  quotaBannerOk: { backgroundColor: colors.surfaceVariant },
-  quotaBannerWarning: { backgroundColor: 'rgba(196, 154, 60, 0.15)' },
-  quotaBannerError: { backgroundColor: 'rgba(196, 78, 78, 0.15)' },
-  quotaText: { color: colors.text, fontSize: 13, fontWeight: '600' },
-  quotaTextError: { color: colors.error },
-  quotaWarningBox: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, padding: 10, borderRadius: 6, backgroundColor: 'rgba(196, 78, 78, 0.12)', borderWidth: 1, borderColor: 'rgba(196, 78, 78, 0.3)' },
-  quotaWarningText: { color: colors.error, fontSize: 13, flex: 1 },
-  quotaLoader: { alignSelf: 'center', marginVertical: 16 },
-  confirmContainer: { flex: 1, padding: 20, justifyContent: 'center', gap: 20 },
-  confirmHeader: { alignItems: 'center', gap: 4 },
-  confirmKicker: { color: colors.primary, fontWeight: '800', textTransform: 'uppercase', fontSize: 12 },
-  confirmTitle: { color: colors.text, fontWeight: '800', fontSize: 22 },
-  patronCard: { backgroundColor: colors.surface, borderRadius: 12, borderColor: colors.border },
-  patronCardContent: { padding: 16 },
-  patronAvatar: { width: 64, height: 64, borderRadius: 32, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginBottom: 12 },
-  patronAvatarText: { color: colors.background, fontWeight: '900', fontSize: 28 },
-  patronInfo: { alignItems: 'center', gap: 4 },
-  patronName: { color: colors.text, fontWeight: '700', fontSize: 18 },
-  patronMssv: { color: colors.textSecondary, fontSize: 13 },
-  confirmActions: { marginTop: 8 },
-  confirmButton: { borderRadius: 8 },
-  confirmButtonContent: { minHeight: 52 },
-  scanStepContainer: { flex: 1 },
-  scanTopBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 8, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
-  scanQuotaSmall: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 16, backgroundColor: colors.surfaceVariant },
-  scanQuotaText: { color: colors.text, fontSize: 13, fontWeight: '600' },
-  scanQuotaTextError: { color: colors.error },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    flex: {
+      flex: 1,
+    },
+    content: {
+      padding: 16,
+      paddingBottom: 28,
+      gap: 14,
+    },
+    header: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: 18,
+    },
+    headerContent: {
+      alignItems: 'center',
+      gap: 6,
+      paddingVertical: 18,
+    },
+    avatar: {
+      backgroundColor: theme.colors.primary,
+      marginBottom: 8,
+    },
+    name: {
+      color: theme.colors.onSurface,
+      fontWeight: '800',
+      textAlign: 'center',
+    },
+    email: {
+      color: theme.colors.onSurfaceVariant,
+      textAlign: 'center',
+    },
+    studentCode: {
+      color: theme.colors.secondary,
+      fontWeight: '700',
+    },
+    roleBadge: {
+      marginTop: 8,
+      paddingHorizontal: 14,
+      paddingVertical: 5,
+      borderRadius: 999,
+      backgroundColor: theme.colors.primaryContainer,
+    },
+    role: {
+      color: theme.dark ? theme.colors.primary : theme.colors.onSurface,
+      fontWeight: '800',
+      textTransform: 'uppercase',
+    },
+    rolePill: {
+      paddingHorizontal: 12,
+      paddingVertical: 4,
+      borderRadius: 999,
+    },
+    rolePillText: {
+      fontSize: 12,
+      fontWeight: '800',
+      textTransform: 'uppercase',
+    },
+    section: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.outlineVariant,
+      borderRadius: 14,
+      overflow: 'hidden',
+      position: 'relative',
+    },
+    sectionAccent: {
+      position: 'absolute',
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: 3,
+      backgroundColor: theme.colors.primary,
+      zIndex: 1,
+    },
+    subheader: {
+      color: theme.colors.primary,
+      fontWeight: '800',
+      fontSize: 13,
+    },
+    subheaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    subheaderText: {
+      color: theme.colors.primary,
+      fontWeight: '800',
+      fontSize: 13,
+      textTransform: 'uppercase',
+    },
+    infoGrid: {
+      paddingHorizontal: 16,
+      paddingBottom: 12,
+      gap: 10,
+    },
+    infoGridItem: {},
+    itemTitle: {
+      color: theme.colors.onSurface,
+      fontSize: 14,
+      fontWeight: '700',
+    },
+    itemDescription: {
+      color: theme.colors.onSurfaceVariant,
+      fontSize: 13,
+    },
+    logoutButton: {
+      borderColor: theme.colors.error,
+      borderRadius: 10,
+    },
+    versionRow: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: 4,
+    },
+    version: {
+      color: theme.colors.onSurfaceVariant,
+    },
+  });
+}
+</file>
+
+<file path="src/api/auth.ts">
+import api from './client';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AuthTokens, User } from '../types';
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface PatronLoginRequest {
+  student_code: string;
+  password: string;
+}
+
+export interface PatronRegisterRequest {
+  student_code: string;
+  password: string;
+  full_name: string;
+  email: string;
+  class_name?: string;
+  course?: string;
+  permanent_address?: string;
+}
+
+export interface LoginResponse {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  user?: any;
+}
+
+export interface PatronLoginResponse {
+  access_token: string;
+  refresh_token?: string;
+  token_type: string;
+  user: any;
+}
+
+export interface FaceLoginResponse {
+  access_token: string;
+  refresh_token?: string;
+  token_type: string;
+}
+
+export const authApi = {
+  login: async (data: LoginRequest): Promise<LoginResponse> => {
+    const response = await api.post<LoginResponse>('/auth/login', data);
+    const tokens: AuthTokens = {
+      access_token: response.data.access_token,
+      refresh_token: response.data.refresh_token,
+      token_type: response.data.token_type,
+    };
+    await AsyncStorage.setItem('accessToken', tokens.access_token);
+    await AsyncStorage.setItem('refreshToken', tokens.refresh_token);
+    if (response.data.user) {
+      await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
+      await AsyncStorage.removeItem('patronData');
+    }
+    return response.data;
+  },
+
+  patronLogin: async (data: PatronLoginRequest): Promise<PatronLoginResponse> => {
+    const response = await api.post<PatronLoginResponse>('/patrons/login', data);
+    await AsyncStorage.setItem('accessToken', response.data.access_token);
+    if (response.data.refresh_token) {
+      await AsyncStorage.setItem('refreshToken', response.data.refresh_token);
+    }
+    await AsyncStorage.setItem('patronData', JSON.stringify(response.data.user));
+    return response.data;
+  },
+
+  patronRegister: async (data: PatronRegisterRequest): Promise<PatronLoginResponse> => {
+    const response = await api.post<PatronLoginResponse>('/patrons/register', data);
+    if (!response.data.user) {
+      throw new Error('Invalid response: missing user data');
+    }
+    await AsyncStorage.setItem('accessToken', response.data.access_token);
+    await AsyncStorage.setItem('patronData', JSON.stringify(response.data.user));
+    return response.data;
+  },
+
+  faceLogin: async (imageUri: string): Promise<FaceLoginResponse> => {
+    const formData = new FormData();
+    formData.append('file', {
+      uri: imageUri,
+      type: 'image/jpeg',
+      name: 'face.jpg',
+    } as any);
+    const response = await api.post<FaceLoginResponse>('/auth/face-login', formData);
+    if (response.data.access_token) {
+      await AsyncStorage.setItem('accessToken', response.data.access_token);
+    }
+    if (response.data.refresh_token) {
+      await AsyncStorage.setItem('refreshToken', response.data.refresh_token);
+    }
+    return response.data;
+  },
+
+  refreshToken: async (refreshToken: string): Promise<{ access_token: string }> => {
+    const response = await api.post('/auth/refresh', { refresh_token: refreshToken });
+    return response.data;
+  },
+
+  logout: async (): Promise<void> => {
+    await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'patronData', 'userData']);
+  },
+
+  getCurrentUser: async (): Promise<User> => {
+    const response = await api.get<User>('/users/me');
+    return response.data;
+  },
+
+  getCurrentPatron: async (): Promise<any> => {
+    const response = await api.get<any>('/patrons/me');
+    return response.data;
+  },
+
+  changePassword: async (patronId: string, newPassword: string): Promise<void> => {
+    await api.put(`/patrons/${patronId}/password`, {
+      new_password: newPassword,
+    });
+  },
+};
 </file>
 
 <file path="src/navigation/types.ts">
@@ -7077,6 +7469,411 @@ declare global {
   namespace ReactNavigation {
     interface RootParamList extends RootStackParamList {}
   }
+}
+</file>
+
+<file path="src/screens/BorrowScreen.tsx">
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, StyleSheet, Alert, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  Text, Button, Surface, TextInput, ActivityIndicator, Card, Divider, useTheme,
+} from 'react-native-paper';
+import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { borrowApi } from '../api/borrow';
+import { authApi } from '../api/auth';
+import { useAuth } from '../context/AuthContext';
+import { BookWithStats } from '../types';
+import { AppTheme } from '../theme/DarkTheme';
+import { devError, devLog } from '../utils/logger';
+
+export default function BorrowScreen() {
+  const theme = useTheme() as AppTheme;
+  const c = theme.colors;
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const { patron } = useAuth();
+  const [scanned, setScanned] = useState(false);
+  const [isbn, setIsbn] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [localBook, setLocalBook] = useState<BookWithStats | null>(null);
+  const [isBorrowing, setIsBorrowing] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [permission, requestPermission] = useCameraPermissions();
+  const [activeCount, setActiveCount] = useState(0);
+  const [overdueCount, setOverdueCount] = useState(0);
+  const [isLoadingQuota, setIsLoadingQuota] = useState(false);
+
+  const MAX_BORROW_BOOKS = 3;
+  const remaining = MAX_BORROW_BOOKS - activeCount;
+  const canBorrow = remaining > 0 && overdueCount === 0;
+
+  const loadPatronQuota = async () => {
+    if (!patron?.student_code) return;
+    setIsLoadingQuota(true);
+    try {
+      const data = await borrowApi.getActiveBorrowsByStudentCode(patron.student_code);
+      setActiveCount(data.total ?? 0);
+      setOverdueCount(data.overdue_count ?? 0);
+    } catch {
+    } finally {
+      setIsLoadingQuota(false);
+    }
+  };
+
+  useEffect(() => {
+    if (patron) loadPatronQuota();
+  }, [patron]);
+
+  useEffect(() => {
+    if (!scanned && patron) loadPatronQuota();
+  }, [scanned]);
+
+  const searchBook = async (isbnToSearch: string) => {
+    if (!isbnToSearch.trim()) return;
+    setIsSearching(true);
+    setSearchError(null);
+    try {
+      const bookData = await borrowApi.getBook(isbnToSearch.trim());
+      setLocalBook(bookData);
+    } catch (error) {
+      devError('[Borrow] Search error:', error);
+      setSearchError('Không tìm thấy sách với ISBN này');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleBarCodeScanned = (result: BarcodeScanningResult) => {
+    if (scanned || !result.data) return;
+    setScanned(true);
+    setIsbn(result.data);
+    searchBook(result.data);
+  };
+
+  const handleBorrow = async () => {
+    if (!isbn.trim()) return;
+    if (!canBorrow) {
+      Alert.alert('Không thể mượn', overdueCount > 0
+        ? 'Bạn có sách quá hạn, không thể mượn thêm'
+        : 'Bạn đã mượn đủ 3 cuốn, không thể mượn thêm');
+      return;
+    }
+    setIsBorrowing(true);
+    try {
+      const patronData = await authApi.getCurrentPatron();
+      const status = patronData.current_status || patronData.currentStatus;
+      if (status !== 'inside') {
+        Alert.alert('Không thể mượn', 'Bạn phải đi qua cổng vào thư viện trước khi mượn sách');
+        setIsBorrowing(false);
+        return;
+      }
+      const result = await borrowApi.borrowBook(isbn.trim());
+      if (result.status === 'success') {
+        Alert.alert('Thành công', result.message, [
+          { text: 'OK', onPress: () => resetState() },
+        ]);
+      }
+    } catch (error: any) {
+      let msg = 'Mượn sách thất bại';
+      if (!error.response) msg = 'Không thể kết nối server. Vui lòng kiểm tra mạng.';
+      else if (error.response?.status === 401) msg = 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.';
+      else if (error.response?.data?.detail) msg = error.response.data.detail;
+      Alert.alert('Lỗi', msg);
+    } finally {
+      setIsBorrowing(false);
+    }
+  };
+
+  const resetState = () => {
+    setScanned(false);
+    setIsbn('');
+    setBook(null);
+    setLocalBook(null);
+    setSearchError(null);
+    loadPatronQuota();
+  };
+
+  const searchAgain = () => {
+    setScanned(false);
+    setLocalBook(null);
+    setSearchError(null);
+  };
+
+  const displayBook = localBook;
+
+  if (!permission) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: c.background }]}>
+        <ActivityIndicator color={c.primary} />
+      </SafeAreaView>
+    );
+  }
+
+  if (!permission.granted) {
+    return (
+      <SafeAreaView style={[styles.permissionContainer, { backgroundColor: c.background }]} edges={['bottom']}>
+        <Text style={[styles.permissionText, { color: c.onSurface }]}>Cần quyền camera để quét mã vạch</Text>
+        <Button mode="contained" onPress={requestPermission} style={styles.permissionButton}>
+          Cấp quyền
+        </Button>
+        <View style={styles.divider}>
+          <View style={[styles.dividerLine, { backgroundColor: c.outlineVariant }]} />
+          <Text style={[styles.orText, { color: c.onSurfaceVariant }]}>hoặc nhập ISBN thủ công</Text>
+          <View style={[styles.dividerLine, { backgroundColor: c.outlineVariant }]} />
+        </View>
+        <TextInput
+          label="ISBN"
+          value={isbn}
+          onChangeText={setIsbn}
+          mode="outlined"
+          style={styles.isbnInput}
+          outlineStyle={{ borderRadius: 6, borderColor: c.outlineVariant }}
+          activeOutlineColor={c.primary}
+          right={<TextInput.Icon icon="magnify" onPress={() => searchBook(isbn)} color={c.primary} testID="search-button-permission" />}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: c.background }]} edges={['bottom']}>
+      <View style={[styles.scanTopBar, { backgroundColor: c.surface, borderBottomColor: c.outlineVariant }]}>
+        <View>
+          <Text style={[styles.topBarTitle, { color: c.onSurface }]} numberOfLines={1}>
+            Mượn sách
+          </Text>
+          <Text style={[styles.topBarSub, { color: c.onSurfaceVariant }]} numberOfLines={1}>
+            {patron?.full_name || patron?.student_code || ''}
+          </Text>
+        </View>
+        {isLoadingQuota ? (
+          <ActivityIndicator size={16} color={c.primary} />
+        ) : (
+          <View style={[
+            styles.quotaPill,
+            { backgroundColor: c.surfaceVariant },
+            overdueCount > 0 && styles.quotaPillOverdue,
+            !canBorrow && overdueCount === 0 && styles.quotaPillFull,
+          ]}>
+            <MaterialCommunityIcons
+              name={overdueCount > 0 ? 'alert-circle' : remaining > 0 ? 'book-check' : 'book-off'}
+              size={14}
+              color={overdueCount > 0 ? c.error : remaining > 0 ? '#4A8C5C' : c.onSurfaceVariant}
+            />
+            <Text style={[
+              styles.quotaPillText,
+              { color: c.onSurface },
+              overdueCount > 0 && { color: c.error },
+            ]}>
+              {overdueCount > 0
+                ? `${overdueCount} quá hạn`
+                : `Còn ${remaining}/${MAX_BORROW_BOOKS}`}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.scannerContainer}>
+        {!scanned ? (
+          <>
+            <CameraView
+              style={styles.camera}
+              facing="back"
+              barcodeScannerSettings={{
+                barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
+              }}
+              onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+            />
+            <View style={styles.overlay}>
+              <View style={styles.scanArea}>
+                <View style={[styles.corner, styles.topLeft, { borderColor: c.primary }]} />
+                <View style={[styles.corner, styles.topRight, { borderColor: c.primary }]} />
+                <View style={[styles.corner, styles.bottomLeft, { borderColor: c.primary }]} />
+                <View style={[styles.corner, styles.bottomRight, { borderColor: c.primary }]} />
+              </View>
+              <Text style={[styles.scanText, { color: c.onSurface }]}>Đặt mã vạch trong khung hình</Text>
+            </View>
+
+            {!canBorrow && (
+              <View style={[styles.blockOverlay, { backgroundColor: theme.dark ? 'rgba(13,17,23,0.88)' : 'rgba(246,248,251,0.92)' }]}>
+                <MaterialCommunityIcons
+                  name={overdueCount > 0 ? 'calendar-remove' : 'book-off'}
+                  size={40}
+                  color={c.onSurfaceVariant}
+                />
+                <Text style={[styles.blockTitle, { color: c.onSurface }]}>
+                  {overdueCount > 0 ? 'Có sách quá hạn' : 'Đã mượn đủ sách'}
+                </Text>
+                <Text style={[styles.blockSub, { color: c.onSurfaceVariant }]}>
+                  {overdueCount > 0
+                    ? `Bạn có ${overdueCount} sách quá hạn. Vui lòng trả trước khi mượn thêm.`
+                    : `Bạn đã mượn tối đa ${MAX_BORROW_BOOKS} cuốn. Vui lòng trả sách trước khi mượn thêm.`}
+                </Text>
+              </View>
+            )}
+
+            <Surface style={[styles.manualInput, { backgroundColor: c.surface, borderTopColor: c.outlineVariant }]} elevation={0}>
+              <View style={[styles.manualAccent, { backgroundColor: c.primary }]} />
+              <Text style={[styles.manualLabel, { color: c.onSurfaceVariant }]}>Hoặc nhập ISBN thủ công:</Text>
+              <TextInput
+                label="ISBN"
+                value={isbn}
+                onChangeText={setIsbn}
+                mode="outlined"
+                style={styles.isbnInputFull}
+                outlineStyle={{ borderRadius: 6, borderColor: c.outlineVariant }}
+                activeOutlineColor={c.primary}
+                right={<TextInput.Icon icon="magnify" onPress={() => searchBook(isbn)} disabled={isSearching || !canBorrow} color={c.primary} testID="search-button" />}
+              />
+            </Surface>
+          </>
+        ) : (
+          <ScrollView style={styles.resultContainer} contentContainerStyle={styles.resultContent}>
+            {isSearching ? (
+              <ActivityIndicator size="large" color={c.primary} style={styles.loader} />
+            ) : searchError ? (
+              <Card style={[styles.errorCard, { backgroundColor: c.surface, borderColor: c.outlineVariant }]}>
+                <View style={styles.errorIconContainer}>
+                  <MaterialCommunityIcons name="book-search-outline" size={64} color={c.onSurfaceVariant} />
+                </View>
+                <Text variant="titleMedium" style={[styles.errorTitle, { color: c.onSurface }]}>Không tìm thấy sách</Text>
+                <Text variant="bodyMedium" style={[styles.errorMessage, { color: c.onSurfaceVariant }]}>{searchError}</Text>
+                {isbn ? <Text variant="bodySmall" style={[styles.errorIsbn, { color: c.onSurfaceVariant }]}>ISBN: {isbn}</Text> : null}
+                <Button mode="contained" onPress={searchAgain} style={styles.retryButton} icon="barcode-scan">
+                  Quét lại
+                </Button>
+              </Card>
+            ) : displayBook ? (
+              <Card style={[styles.bookCard, { backgroundColor: c.surface, borderColor: c.outlineVariant }]}>
+                <View style={[styles.cardAccent, { backgroundColor: c.primary }]} />
+                {displayBook.cover_url ? (
+                  <Card.Cover source={{ uri: displayBook.cover_url }} style={styles.cover} />
+                ) : (
+                  <View style={[styles.coverPlaceholder, { backgroundColor: c.surfaceVariant }]}>
+                    <MaterialCommunityIcons name="book-open-variant" size={48} color={c.onSurfaceVariant} />
+                    <Text style={[styles.coverPlaceholderText, { color: c.onSurfaceVariant }]}>Không có ảnh</Text>
+                  </View>
+                )}
+                <Card.Content>
+                  <Text variant="titleLarge" style={[styles.bookTitle, { color: c.onSurface }]}>{displayBook.title}</Text>
+                  {displayBook.author ? (
+                    <Text variant="bodyMedium" style={[styles.bookAuthor, { color: c.onSurfaceVariant }]}>{displayBook.author}</Text>
+                  ) : null}
+                  <View style={styles.metaRow}>
+                    {displayBook.published_date ? (
+                      <View style={styles.metaItem}>
+                        <MaterialCommunityIcons name="calendar" size={14} color={c.onSurfaceVariant} />
+                        <Text style={[styles.metaText, { color: c.onSurfaceVariant }]}>{displayBook.published_date}</Text>
+                      </View>
+                    ) : null}
+                    {displayBook.page_count ? (
+                      <View style={styles.metaItem}>
+                        <MaterialCommunityIcons name="book-open-page-variant" size={14} color={c.onSurfaceVariant} />
+                        <Text style={[styles.metaText, { color: c.onSurfaceVariant }]}>{displayBook.page_count} trang</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  {localBook?.shelf_location && (
+                    <Text variant="bodySmall" style={[styles.locationLabel, { color: c.primary }]}>
+                      <MaterialCommunityIcons name="map-marker" size={13} color={c.primary} /> Vị trí: {localBook.shelf_location}
+                    </Text>
+                  )}
+                  {!canBorrow && (
+                    <View style={[styles.quotaWarningBox, { backgroundColor: theme.dark ? 'rgba(196,78,78,0.12)' : 'rgba(196,78,78,0.08)', borderColor: theme.dark ? 'rgba(196,78,78,0.3)' : 'rgba(196,78,78,0.2)' }]}>
+                      <MaterialCommunityIcons name="alert-circle-outline" size={16} color={c.error} />
+                      <Text style={[styles.quotaWarningText, { color: c.error }]}>
+                        {overdueCount > 0
+                          ? 'Bạn có sách quá hạn, không thể mượn thêm'
+                          : 'Bạn đã mượn đủ 3 cuốn, không thể mượn thêm'}
+                      </Text>
+                    </View>
+                  )}
+                </Card.Content>
+                <Card.Actions style={styles.cardActions}>
+                  <Button mode="outlined" onPress={searchAgain} style={styles.cardActionButton} labelStyle={{ fontSize: 13, fontWeight: '600' }}>
+                    Quét lại
+                  </Button>
+                  <Button mode="contained" onPress={handleBorrow} loading={isBorrowing} disabled={isBorrowing || !canBorrow} style={styles.cardActionButton} labelStyle={{ fontSize: 13, fontWeight: '600' }}>
+                    Xác nhận mượn
+                  </Button>
+                </Card.Actions>
+              </Card>
+            ) : null}
+          </ScrollView>
+        )}
+      </View>
+    </SafeAreaView>
+  );
+}
+
+function createStyles(theme: AppTheme) {
+  const c = theme.colors;
+  return StyleSheet.create({
+    container: { flex: 1 },
+    permissionContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+    permissionText: { fontSize: 16, marginBottom: 16, textAlign: 'center' },
+    permissionButton: { borderRadius: 6 },
+    divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 24, paddingHorizontal: 16 },
+    dividerLine: { flex: 1, height: 1 },
+    orText: { marginHorizontal: 12, fontSize: 12 },
+    isbnInput: { width: '80%', marginTop: 4, backgroundColor: 'transparent' },
+    scannerContainer: { flex: 1, position: 'relative' },
+    camera: { flex: 1 },
+    overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+    scanArea: { width: 280, height: 150, borderRadius: 8, position: 'relative' },
+    corner: { position: 'absolute', width: 36, height: 36, borderWidth: 2 },
+    topLeft: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 8 },
+    topRight: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 8 },
+    bottomLeft: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 8 },
+    bottomRight: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 8 },
+    scanText: { marginTop: 20, fontSize: 16, textAlign: 'center', fontWeight: '500' },
+    manualInput: { padding: 16, position: 'relative', overflow: 'hidden', borderTopWidth: 0.5 },
+    manualAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3 },
+    manualLabel: { marginBottom: 8, fontSize: 13 },
+    isbnInputFull: { marginTop: 4, backgroundColor: 'transparent' },
+    resultContainer: { flex: 1, padding: 16 },
+    resultContent: { flexGrow: 1, justifyContent: 'center' },
+    loader: { alignSelf: 'center' },
+    bookCard: { borderRadius: 8, overflow: 'hidden', position: 'relative', borderWidth: 0.5 },
+    cardAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, zIndex: 1 },
+    cover: { height: 280, resizeMode: 'contain' },
+    coverPlaceholder: { height: 200, justifyContent: 'center', alignItems: 'center' },
+    coverPlaceholderText: { marginTop: 8, fontSize: 13 },
+    bookTitle: { marginTop: 12, fontWeight: '700', fontSize: 20 },
+    bookAuthor: { marginTop: 4, fontSize: 14 },
+    metaRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8, gap: 16 },
+    metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    metaText: { fontSize: 13 },
+    locationLabel: { marginTop: 4, fontSize: 13, fontWeight: '600' },
+    cardActions: { padding: 12, gap: 8 },
+    cardActionButton: { borderRadius: 6 },
+    errorCard: { borderRadius: 8, padding: 32, alignItems: 'center', borderWidth: 0.5 },
+    errorIconContainer: { marginBottom: 16 },
+    errorTitle: { fontWeight: '700', marginBottom: 8 },
+    errorMessage: { textAlign: 'center', marginBottom: 4 },
+    errorIsbn: { marginTop: 8, marginBottom: 20, fontSize: 12 },
+    retryButton: { borderRadius: 6, marginTop: 12 },
+    quotaWarningBox: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, padding: 10, borderRadius: 6, borderWidth: 1 },
+    quotaWarningText: { fontSize: 13, flex: 1 },
+    scanTopBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderBottomWidth: 1,
+    },
+    topBarTitle: { fontSize: 17, fontWeight: '800' },
+    topBarSub: { fontSize: 12, marginTop: 1 },
+    quotaPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
+    quotaPillOverdue: { backgroundColor: 'rgba(196, 78, 78, 0.15)' },
+    quotaPillFull: { backgroundColor: 'rgba(90, 85, 80, 0.25)' },
+    quotaPillText: { fontSize: 13, fontWeight: '700' },
+    blockOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', padding: 32, gap: 8 },
+    blockTitle: { fontSize: 18, fontWeight: '800', textAlign: 'center' },
+    blockSub: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  });
 }
 </file>
 
@@ -8464,8 +9261,8 @@ export const borrowApi = {
     return response.data;
   },
 
-  getBook: async (isbn: string): Promise<Book> => {
-    const response = await api.get<Book>(`/borrow/book/${isbn}`);
+  getBook: async (isbn: string): Promise<BookWithStats> => {
+    const response = await api.get<BookWithStats>(`/borrow/book/${isbn}`);
     return response.data;
   },
 
@@ -8484,250 +9281,6 @@ export const borrowApi = {
     return response.data;
   },
 };
-</file>
-
-<file path="src/types/index.ts">
-export interface User {
-  id: string;
-  email: string;
-  full_name?: string;
-  role: string;
-  student_code?: string;
-  password_auto_generated?: boolean;
-}
-
-export interface AuthTokens {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
-}
-
-export interface Book {
-  id: string;
-  isbn: string;
-  title: string;
-  author?: string;
-  cover_url?: string;
-  shelf_location?: string;
-  is_available?: boolean;
-  publish_year?: number;
-  pages?: number;
-  publisher?: string;
-}
-
-export interface BorrowRecord {
-  id: string;
-  patron_id: string;
-  book_id: string;
-  copy_id?: string;
-  borrow_at: string;
-  due_at: string;
-  return_at?: string;
-  shelf_location?: string;
-  status: 'borrowed' | 'returned' | 'overdue';
-  returned_by_user_id?: string;
-  returned_by_email?: string;
-  return_method?: string;
-  note?: string;
-  book?: Book;
-}
-
-export interface BorrowResponse {
-  status: 'success' | 'error';
-  message: string;
-  record?: BorrowRecord;
-  book?: Book;
-}
-
-export interface ReturnResponse {
-  status: 'success' | 'error';
-  message: string;
-  record?: BorrowRecord;
-  note?: string;
-}
-
-export interface Patron {
-  id: string;
-  full_name: string;
-  student_code: string;
-  email?: string;
-  phone?: string;
-  card_number: string;
-  membership_expiry: string;
-  status: string;
-  current_status?: string;
-  has_face: boolean;
-}
-
-export interface StaffPatronSummary {
-  id: string;
-  full_name?: string;
-  student_code: string;
-  email?: string;
-  card_number?: string;
-  current_status?: string;
-}
-
-export interface StaffPatronActiveBorrowsResponse {
-  patron: StaffPatronSummary;
-  records: BorrowRecord[];
-  total: number;
-  overdue_count: number;
-}
-
-export interface OpenLibraryBook {
-  title: string;
-  authors?: { name: string }[];
-  cover?: {
-    medium?: string;
-    small?: string;
-    large?: string;
-  };
-  publishers?: { name: string }[];
-  number_of_pages?: number;
-  publish_date?: string;
-  subjects?: { name: string }[];
-}
-
-export interface CameraEvent {
-  event_id: string;
-  event_type: 'camera_event';
-  camera_id: string;
-  status: 'granted' | 'no_match' | 'spoof' | 'expired' | 'wrong_direction' | 'already_granted' | 'error';
-  patron_id?: string;
-  full_name?: string;
-  student_code?: string;
-  score?: number;
-  access_type?: 'entry' | 'exit';
-  bbox?: number[];
-  landmarks?: number[][];
-  occurred_at: string;
-  source: string;
-}
-
-export interface ScheduleStaff {
-  id: string;
-  fullName?: string | null;
-  email: string;
-  role: string;
-  status: string;
-}
-
-export interface LibraryZone {
-  id: string;
-  floor: number;
-  zoneName: string;
-  description?: string | null;
-  isActive: boolean;
-}
-
-export interface StaffShift {
-  id: string;
-  name: string;
-  startTime: string;
-  endTime: string;
-  minStaff: number;
-  isActive: boolean;
-}
-
-export interface StaffAttendance {
-  id: string;
-  scheduleId: string;
-  staffId: string;
-  checkInAt?: string | null;
-  checkOutAt?: string | null;
-  status: string;
-  method: string;
-}
-
-export interface StaffScheduleAssignment {
-  id: string;
-  staffId: string;
-  shiftId: string;
-  zoneId: string;
-  workDate: string;
-  status: string;
-  note?: string | null;
-  staff?: ScheduleStaff | null;
-  shift?: StaffShift | null;
-  zone?: LibraryZone | null;
-  attendance?: StaffAttendance | null;
-}
-
-export interface ScheduleAssignmentList {
-  items: StaffScheduleAssignment[];
-  total: number;
-}
-
-export interface StaffAvailabilityRequest {
-  id: string;
-  staffId: string;
-  dateFrom: string;
-  dateTo: string;
-  type: string;
-  reason?: string | null;
-  status: string;
-}
-
-export interface BookWithStats {
-  id: string;
-  isbn: string;
-  title: string;
-  author: string | null;
-  cover_url: string | null;
-  shelf_location: string | null;
-  total_copies: number;
-  available_copies: number;
-  created_at: string;
-}
-
-export interface BookImportResultRow {
-  isbn: string;
-  title: string;
-  quantity: number;
-  barcodes: string[];
-  status: string;
-  message: string | null;
-}
-
-export interface BookImportResponse {
-  success: boolean;
-  total_rows: number;
-  imported: number;
-  skipped: number;
-  errors: number;
-  results: BookImportResultRow[];
-}
-
-export interface BorrowSlipItem {
-  barcode: string;
-  isbn?: string;
-}
-
-export interface CreateBorrowSlipRequest {
-  patron_id: string;
-  items: BorrowSlipItem[];
-}
-
-export interface BorrowSlip {
-  id: string;
-  patron_id: string;
-  borrow_at: string;
-  due_at: string;
-  status: string;
-  created_by_user_id?: string;
-  created_by_email?: string;
-  total_items: number;
-  created_at: string;
-  updated_at: string;
-  records?: BorrowRecord[];
-}
-
-export interface CreateBorrowSlipResponse {
-  status: string;
-  message: string;
-  slip?: BorrowSlip;
-}
 </file>
 
 <file path="src/navigation/AppNavigator.tsx">
@@ -9028,6 +9581,267 @@ const loadingStyles = StyleSheet.create({
     letterSpacing: 4,
   },
 });
+</file>
+
+<file path="src/types/index.ts">
+export interface User {
+  id: string;
+  email: string;
+  full_name?: string;
+  role: string;
+  student_code?: string;
+  password_auto_generated?: boolean;
+}
+
+export interface AuthTokens {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+}
+
+export interface Book {
+  id: string;
+  isbn: string;
+  title: string;
+  author?: string;
+  cover_url?: string;
+  shelf_location?: string;
+  is_available?: boolean;
+  publish_year?: number;
+  pages?: number;
+  publisher?: string;
+}
+
+export interface BorrowRecord {
+  id: string;
+  patron_id: string;
+  book_id: string;
+  copy_id?: string;
+  borrow_at: string;
+  due_at: string;
+  return_at?: string;
+  shelf_location?: string;
+  status: 'borrowed' | 'returned' | 'overdue';
+  returned_by_user_id?: string;
+  returned_by_email?: string;
+  return_method?: string;
+  note?: string;
+  book?: Book;
+}
+
+export interface BorrowResponse {
+  status: 'success' | 'error';
+  message: string;
+  record?: BorrowRecord;
+  book?: Book;
+}
+
+export interface ReturnResponse {
+  status: 'success' | 'error';
+  message: string;
+  record?: BorrowRecord;
+  note?: string;
+}
+
+export interface Patron {
+  id: string;
+  full_name: string;
+  student_code: string;
+  email?: string;
+  phone?: string;
+  card_number: string;
+  membership_expiry: string;
+  status: string;
+  current_status?: string;
+  has_face: boolean;
+  course?: string;
+  permanent_address?: string;
+  class_name?: string;
+  date_of_birth?: string;
+  faculty?: string;
+  identity_number?: string;
+  issue_date?: string;
+}
+
+export interface StaffPatronSummary {
+  id: string;
+  full_name?: string;
+  student_code: string;
+  email?: string;
+  card_number?: string;
+  current_status?: string;
+}
+
+export interface StaffPatronActiveBorrowsResponse {
+  patron: StaffPatronSummary;
+  records: BorrowRecord[];
+  total: number;
+  overdue_count: number;
+}
+
+export interface OpenLibraryBook {
+  title: string;
+  authors?: { name: string }[];
+  cover?: {
+    medium?: string;
+    small?: string;
+    large?: string;
+  };
+  publishers?: { name: string }[];
+  number_of_pages?: number;
+  publish_date?: string;
+  subjects?: { name: string }[];
+}
+
+export interface CameraEvent {
+  event_id: string;
+  event_type: 'camera_event';
+  camera_id: string;
+  status: 'granted' | 'no_match' | 'spoof' | 'expired' | 'wrong_direction' | 'already_granted' | 'error';
+  patron_id?: string;
+  full_name?: string;
+  student_code?: string;
+  score?: number;
+  access_type?: 'entry' | 'exit';
+  bbox?: number[];
+  landmarks?: number[][];
+  occurred_at: string;
+  source: string;
+}
+
+export interface ScheduleStaff {
+  id: string;
+  fullName?: string | null;
+  email: string;
+  role: string;
+  status: string;
+}
+
+export interface LibraryZone {
+  id: string;
+  floor: number;
+  zoneName: string;
+  description?: string | null;
+  isActive: boolean;
+}
+
+export interface StaffShift {
+  id: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  minStaff: number;
+  isActive: boolean;
+}
+
+export interface StaffAttendance {
+  id: string;
+  scheduleId: string;
+  staffId: string;
+  checkInAt?: string | null;
+  checkOutAt?: string | null;
+  status: string;
+  method: string;
+}
+
+export interface StaffScheduleAssignment {
+  id: string;
+  staffId: string;
+  shiftId: string;
+  zoneId: string;
+  workDate: string;
+  status: string;
+  note?: string | null;
+  staff?: ScheduleStaff | null;
+  shift?: StaffShift | null;
+  zone?: LibraryZone | null;
+  attendance?: StaffAttendance | null;
+}
+
+export interface ScheduleAssignmentList {
+  items: StaffScheduleAssignment[];
+  total: number;
+}
+
+export interface StaffAvailabilityRequest {
+  id: string;
+  staffId: string;
+  dateFrom: string;
+  dateTo: string;
+  type: string;
+  reason?: string | null;
+  status: string;
+}
+
+export interface BookWithStats {
+  id: string;
+  isbn: string;
+  title: string;
+  subtitle: string | null;
+  author: string | null;
+  cover_url: string | null;
+  publisher: string | null;
+  published_date: string | null;
+  description: string | null;
+  page_count: number | null;
+  categories: string | null;
+  average_rating: number | null;
+  language: string | null;
+  isbn10: string | null;
+  isbn13: string | null;
+  shelf_location: string | null;
+  total_copies: number;
+  available_copies: number;
+  created_at: string;
+}
+
+export interface BookImportResultRow {
+  isbn: string;
+  title: string;
+  quantity: number;
+  barcodes: string[];
+  status: string;
+  message: string | null;
+}
+
+export interface BookImportResponse {
+  success: boolean;
+  total_rows: number;
+  imported: number;
+  skipped: number;
+  errors: number;
+  results: BookImportResultRow[];
+}
+
+export interface BorrowSlipItem {
+  barcode: string;
+  isbn?: string;
+}
+
+export interface CreateBorrowSlipRequest {
+  patron_id: string;
+  items: BorrowSlipItem[];
+}
+
+export interface BorrowSlip {
+  id: string;
+  patron_id: string;
+  borrow_at: string;
+  due_at: string;
+  status: string;
+  created_by_user_id?: string;
+  created_by_email?: string;
+  total_items: number;
+  created_at: string;
+  updated_at: string;
+  records?: BorrowRecord[];
+}
+
+export interface CreateBorrowSlipResponse {
+  status: string;
+  message: string;
+  slip?: BorrowSlip;
+}
 </file>
 
 </files>

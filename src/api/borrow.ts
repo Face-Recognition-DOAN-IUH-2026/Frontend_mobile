@@ -50,8 +50,8 @@ export const borrowApi = {
     return response.data;
   },
 
-  getBook: async (isbn: string): Promise<Book> => {
-    const response = await api.get<Book>(`/borrow/book/${isbn}`);
+  getBook: async (isbn: string): Promise<BookWithStats> => {
+    const response = await api.get<BookWithStats>(`/borrow/book/${isbn}`);
     return response.data;
   },
 
