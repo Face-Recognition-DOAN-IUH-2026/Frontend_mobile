@@ -1,5 +1,5 @@
 import api from './client';
-import { BorrowResponse, ReturnResponse, BorrowRecord, Book, BookWithStats, BookImportResponse, StaffPatronActiveBorrowsResponse, CreateBorrowSlipRequest, CreateBorrowSlipResponse } from '../types';
+import { BorrowResponse, ReturnResponse, BorrowRecord, Book, BookWithStats, BookImportResponse, StaffPatronActiveBorrowsResponse, CreateBorrowSlipRequest, CreateBorrowSlipResponse, LookupBorrowSlipRequest, LookupBorrowSlipResponse, ConfirmBorrowSlipRequest } from '../types';
 
 export interface BorrowRequest {
   barcode: string;
@@ -25,6 +25,11 @@ export const borrowApi = {
     const response = await api.get<StaffPatronActiveBorrowsResponse>(
       `/borrow/staff/patrons/${encodeURIComponent(studentCode)}/active`,
     );
+    return response.data;
+  },
+
+  getPatronActiveBorrows: async (): Promise<StaffPatronActiveBorrowsResponse> => {
+    const response = await api.get<StaffPatronActiveBorrowsResponse>('/borrow/patron/active');
     return response.data;
   },
 
@@ -67,6 +72,16 @@ export const borrowApi = {
 
   createSlip: async (data: CreateBorrowSlipRequest): Promise<CreateBorrowSlipResponse> => {
     const response = await api.post<CreateBorrowSlipResponse>('/borrow/staff/slip/create', data);
+    return response.data;
+  },
+
+  lookupBorrowSlip: async (data: LookupBorrowSlipRequest): Promise<LookupBorrowSlipResponse> => {
+    const response = await api.post<LookupBorrowSlipResponse>('/borrow/staff/slip/lookup', data);
+    return response.data;
+  },
+
+  confirmBorrowSlip: async (data: ConfirmBorrowSlipRequest): Promise<CreateBorrowSlipResponse> => {
+    const response = await api.post<CreateBorrowSlipResponse>('/borrow/staff/slip/confirm', data);
     return response.data;
   },
 };

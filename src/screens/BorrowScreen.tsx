@@ -1,131 +1,192 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { View, StyleSheet, Alert, ScrollView } from 'react-native';
+import React, { useState, useCallback, useMemo } from 'react';
+import { View, StyleSheet, Alert, FlatList, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
-  Text, Button, Surface, TextInput, ActivityIndicator, Card, Divider, useTheme,
+  Text, Button, Surface, ActivityIndicator, Card, Divider, useTheme,
 } from 'react-native-paper';
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
+import { useFocusEffect } from '@react-navigation/native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { borrowApi } from '../api/borrow';
-import { authApi } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
-import { BookWithStats } from '../types';
+import { Book, BorrowRecord } from '../types';
 import { AppTheme } from '../theme/DarkTheme';
-import { devError, devLog } from '../utils/logger';
+import { devError } from '../utils/logger';
+
+interface ScannedBorrowItem {
+  barcode: string;
+  isbn: string;
+  copy_id: string | null;
+  copy_barcode: string | null;
+  book: Book;
+  alreadyBorrowed?: boolean;
+}
 
 export default function BorrowScreen() {
   const theme = useTheme() as AppTheme;
   const c = theme.colors;
   const styles = useMemo(() => createStyles(theme), [theme]);
   const { patron } = useAuth();
+  const [cameraReady, setCameraReady] = useState(false);
   const [scanned, setScanned] = useState(false);
-  const [isbn, setIsbn] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
-  const [localBook, setLocalBook] = useState<BookWithStats | null>(null);
-  const [isBorrowing, setIsBorrowing] = useState(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [activeCount, setActiveCount] = useState(0);
   const [overdueCount, setOverdueCount] = useState(0);
+  const [activeRecords, setActiveRecords] = useState<BorrowRecord[]>([]);
   const [isLoadingQuota, setIsLoadingQuota] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [scannedItems, setScannedItems] = useState<ScannedBorrowItem[]>([]);
+  const [isCreating, setIsCreating] = useState(false);
 
   const MAX_BORROW_BOOKS = 3;
   const remaining = MAX_BORROW_BOOKS - activeCount;
   const canBorrow = remaining > 0 && overdueCount === 0;
 
   const loadPatronQuota = async () => {
-    if (!patron?.student_code) return;
+    if (!patron?.id) return;
     setIsLoadingQuota(true);
     try {
-      const data = await borrowApi.getActiveBorrowsByStudentCode(patron.student_code);
+      const data = await borrowApi.getPatronActiveBorrows();
       setActiveCount(data.total ?? 0);
       setOverdueCount(data.overdue_count ?? 0);
+      setActiveRecords(data.records ?? []);
     } catch {
     } finally {
       setIsLoadingQuota(false);
     }
   };
 
-  useEffect(() => {
-    if (patron) loadPatronQuota();
-  }, [patron]);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadPatronQuota();
+    setRefreshing(false);
+  }, []);
 
-  useEffect(() => {
-    if (!scanned && patron) loadPatronQuota();
-  }, [scanned]);
+  useFocusEffect(
+    useCallback(() => {
+      if (patron) loadPatronQuota();
+    }, [patron])
+  );
 
-  const searchBook = async (isbnToSearch: string) => {
-    if (!isbnToSearch.trim()) return;
-    setIsSearching(true);
-    setSearchError(null);
-    try {
-      const bookData = await borrowApi.getBook(isbnToSearch.trim());
-      setLocalBook(bookData);
-    } catch (error) {
-      devError('[Borrow] Search error:', error);
-      setSearchError('Không tìm thấy sách với ISBN này');
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  const handleBarCodeScanned = (result: BarcodeScanningResult) => {
-    if (scanned || !result.data) return;
+  const handleBarCodeScanned = useCallback(async (result: BarcodeScanningResult) => {
+    if (scanned || !result.data || !patron?.id) return;
     setScanned(true);
-    setIsbn(result.data);
-    searchBook(result.data);
-  };
+    const barcode = result.data;
 
-  const handleBorrow = async () => {
-    if (!isbn.trim()) return;
-    if (!canBorrow) {
-      Alert.alert('Không thể mượn', overdueCount > 0
-        ? 'Bạn có sách quá hạn, không thể mượn thêm'
-        : 'Bạn đã mượn đủ 3 cuốn, không thể mượn thêm');
+    if (scannedItems.find((item) => item.barcode === barcode)) {
+      setScanned(false);
       return;
     }
-    setIsBorrowing(true);
+
+    const normalizeCode = (v: string | undefined | null) => v?.replace(/[\s-]+/g, '').replace(/\.0+$/, '') ?? '';
+    const barcodeNormalized = normalizeCode(barcode);
+    const alreadyBorrowedRecord = activeRecords.find(
+      (r) => normalizeCode(r.book?.isbn) === barcodeNormalized || normalizeCode(r.book_id) === barcodeNormalized
+    );
+
+    if (alreadyBorrowedRecord) {
+      const book: Book = {
+        id: alreadyBorrowedRecord.book_id,
+        isbn: alreadyBorrowedRecord.book?.isbn || barcode,
+        title: alreadyBorrowedRecord.book?.title || barcode,
+        author: alreadyBorrowedRecord.book?.author,
+        cover_url: alreadyBorrowedRecord.book?.cover_url,
+        shelf_location: alreadyBorrowedRecord.book?.shelf_location,
+      };
+      setScannedItems((prev) => [...prev, { barcode, isbn: barcode, copy_id: null, copy_barcode: null, book, alreadyBorrowed: true }]);
+      setScanned(false);
+      return;
+    }
+
     try {
-      const patronData = await authApi.getCurrentPatron();
-      const status = patronData.current_status || patronData.currentStatus;
-      if (status !== 'inside') {
-        Alert.alert('Không thể mượn', 'Bạn phải đi qua cổng vào thư viện trước khi mượn sách');
-        setIsBorrowing(false);
-        return;
+      const result = await borrowApi.lookupBorrowSlip({
+        patron_id: patron.id,
+        items: [{ barcode, isbn: barcode }],
+      });
+      const item = result.items.find((i) => i.barcode === barcode);
+      if (!item || !item.can_borrow || !item.book || !item.copy) {
+        const msg = item?.reason || 'Không tìm thấy sách trong thư viện';
+        Alert.alert('Thông báo', `"${item?.book?.title || barcode}": ${msg}`);
+      } else {
+        const book: Book = {
+          id: item.book.id,
+          isbn: item.book.isbn,
+          title: item.book.title,
+          author: item.book.author || undefined,
+          cover_url: item.book.cover_url || undefined,
+          shelf_location: item.book.shelf_location || undefined,
+        };
+        setScannedItems((prev) => [...prev, { barcode, isbn: barcode, copy_id: item.copy?.id || null, copy_barcode: item.copy?.barcode || null, book }]);
       }
-      const result = await borrowApi.borrowBook(isbn.trim());
-      if (result.status === 'success') {
-        Alert.alert('Thành công', result.message, [
-          { text: 'OK', onPress: () => resetState() },
-        ]);
+      if (result.errors?.length) {
+        for (const err of result.errors) {
+          Alert.alert('Thông báo', err);
+        }
       }
     } catch (error: any) {
-      let msg = 'Mượn sách thất bại';
-      if (!error.response) msg = 'Không thể kết nối server. Vui lòng kiểm tra mạng.';
-      else if (error.response?.status === 401) msg = 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.';
-      else if (error.response?.data?.detail) msg = error.response.data.detail;
-      Alert.alert('Lỗi', msg);
-    } finally {
-      setIsBorrowing(false);
+      devError('[Borrow] Scan error:', error);
+      let msg = 'Không tìm thấy sách trong thư viện';
+      if (error.response?.status === 403) {
+        msg = error.response?.data?.detail || 'Bạn không thể mượn sách lúc này';
+      } else if (error.response?.data?.detail) {
+        msg = error.response.data.detail;
+      }
+      Alert.alert('Thông báo', msg);
     }
+    setTimeout(() => setScanned(false), 500);
+  }, [scanned, scannedItems, activeRecords, patron]);
+
+  const removeItem = (index: number) => {
+    setScannedItems((prev) => prev.filter((_, i) => i !== index));
   };
 
   const resetState = () => {
-    setScanned(false);
-    setIsbn('');
-    setBook(null);
-    setLocalBook(null);
-    setSearchError(null);
+    setScannedItems([]);
     loadPatronQuota();
   };
 
-  const searchAgain = () => {
-    setScanned(false);
-    setLocalBook(null);
-    setSearchError(null);
+  const submitSlip = async (items: ScannedBorrowItem[]) => {
+    if (!items.length || !patron?.id) return;
+    setIsCreating(true);
+    try {
+      const apiItems = items.map((item) => ({
+        barcode: item.copy_barcode || item.barcode,
+        isbn: item.isbn,
+        book_id: item.book.id,
+        copy_id: item.copy_id!,
+      }));
+      const result = await borrowApi.confirmBorrowSlip({ patron_id: patron.id, items: apiItems });
+      if (result.status === 'success') {
+        Alert.alert('Thành công', result.message, [{ text: 'OK', onPress: resetState }]);
+      }
+    } catch (error: any) {
+      devError('[Borrow] Create slip error:', error);
+      let msg = 'Tạo phiếu mượn thất bại';
+      if (error.response?.data?.detail) msg = error.response.data.detail;
+      Alert.alert('Lỗi', msg);
+    } finally {
+      setIsCreating(false);
+    }
   };
 
-  const displayBook = localBook;
+  const handleCreateSlip = () => {
+    if (!scannedItems.length) return;
+    const validItems = scannedItems.filter((item) => !item.alreadyBorrowed);
+    const alreadyBorrowedItems = scannedItems.filter((item) => item.alreadyBorrowed);
+
+    if (alreadyBorrowedItems.length > 0) {
+      Alert.alert(
+        'Sách đã được mượn trước đó',
+        `Có ${alreadyBorrowedItems.length} sách đã được mượn trước đó và sẽ không được thêm vào phiếu.`,
+        [
+          { text: 'Bỏ qua', style: 'cancel' },
+          { text: 'Tạo phiếu', onPress: () => submitSlip(validItems) },
+        ]
+      );
+      return;
+    }
+    submitSlip(validItems);
+  };
 
   if (!permission) {
     return (
@@ -142,21 +203,6 @@ export default function BorrowScreen() {
         <Button mode="contained" onPress={requestPermission} style={styles.permissionButton}>
           Cấp quyền
         </Button>
-        <View style={styles.divider}>
-          <View style={[styles.dividerLine, { backgroundColor: c.outlineVariant }]} />
-          <Text style={[styles.orText, { color: c.onSurfaceVariant }]}>hoặc nhập ISBN thủ công</Text>
-          <View style={[styles.dividerLine, { backgroundColor: c.outlineVariant }]} />
-        </View>
-        <TextInput
-          label="ISBN"
-          value={isbn}
-          onChangeText={setIsbn}
-          mode="outlined"
-          style={styles.isbnInput}
-          outlineStyle={{ borderRadius: 6, borderColor: c.outlineVariant }}
-          activeOutlineColor={c.primary}
-          right={<TextInput.Icon icon="magnify" onPress={() => searchBook(isbn)} color={c.primary} testID="search-button-permission" />}
-        />
       </SafeAreaView>
     );
   }
@@ -200,134 +246,106 @@ export default function BorrowScreen() {
       </View>
 
       <View style={styles.scannerContainer}>
-        {!scanned ? (
-          <>
-            <CameraView
-              style={styles.camera}
-              facing="back"
-              barcodeScannerSettings={{
-                barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
-              }}
-              onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-            />
-            <View style={styles.overlay}>
-              <View style={styles.scanArea}>
-                <View style={[styles.corner, styles.topLeft, { borderColor: c.primary }]} />
-                <View style={[styles.corner, styles.topRight, { borderColor: c.primary }]} />
-                <View style={[styles.corner, styles.bottomLeft, { borderColor: c.primary }]} />
-                <View style={[styles.corner, styles.bottomRight, { borderColor: c.primary }]} />
-              </View>
-              <Text style={[styles.scanText, { color: c.onSurface }]}>Đặt mã vạch trong khung hình</Text>
-            </View>
-
-            {!canBorrow && (
-              <View style={[styles.blockOverlay, { backgroundColor: theme.dark ? 'rgba(13,17,23,0.88)' : 'rgba(246,248,251,0.92)' }]}>
-                <MaterialCommunityIcons
-                  name={overdueCount > 0 ? 'calendar-remove' : 'book-off'}
-                  size={40}
-                  color={c.onSurfaceVariant}
-                />
-                <Text style={[styles.blockTitle, { color: c.onSurface }]}>
-                  {overdueCount > 0 ? 'Có sách quá hạn' : 'Đã mượn đủ sách'}
-                </Text>
-                <Text style={[styles.blockSub, { color: c.onSurfaceVariant }]}>
-                  {overdueCount > 0
-                    ? `Bạn có ${overdueCount} sách quá hạn. Vui lòng trả trước khi mượn thêm.`
-                    : `Bạn đã mượn tối đa ${MAX_BORROW_BOOKS} cuốn. Vui lòng trả sách trước khi mượn thêm.`}
-                </Text>
-              </View>
-            )}
-
-            <Surface style={[styles.manualInput, { backgroundColor: c.surface, borderTopColor: c.outlineVariant }]} elevation={0}>
-              <View style={[styles.manualAccent, { backgroundColor: c.primary }]} />
-              <Text style={[styles.manualLabel, { color: c.onSurfaceVariant }]}>Hoặc nhập ISBN thủ công:</Text>
-              <TextInput
-                label="ISBN"
-                value={isbn}
-                onChangeText={setIsbn}
-                mode="outlined"
-                style={styles.isbnInputFull}
-                outlineStyle={{ borderRadius: 6, borderColor: c.outlineVariant }}
-                activeOutlineColor={c.primary}
-                right={<TextInput.Icon icon="magnify" onPress={() => searchBook(isbn)} disabled={isSearching || !canBorrow} color={c.primary} testID="search-button" />}
-              />
-            </Surface>
-          </>
+        {permission.granted && canBorrow ? (
+          <CameraView
+            style={styles.camera}
+            facing="back"
+            onCameraReady={() => setCameraReady(true)}
+            barcodeScannerSettings={{
+              barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
+            }}
+            onBarcodeScanned={cameraReady && !scanned ? handleBarCodeScanned : undefined}
+          />
         ) : (
-          <ScrollView style={styles.resultContainer} contentContainerStyle={styles.resultContent}>
-            {isSearching ? (
-              <ActivityIndicator size="large" color={c.primary} style={styles.loader} />
-            ) : searchError ? (
-              <Card style={[styles.errorCard, { backgroundColor: c.surface, borderColor: c.outlineVariant }]}>
-                <View style={styles.errorIconContainer}>
-                  <MaterialCommunityIcons name="book-search-outline" size={64} color={c.onSurfaceVariant} />
-                </View>
-                <Text variant="titleMedium" style={[styles.errorTitle, { color: c.onSurface }]}>Không tìm thấy sách</Text>
-                <Text variant="bodyMedium" style={[styles.errorMessage, { color: c.onSurfaceVariant }]}>{searchError}</Text>
-                {isbn ? <Text variant="bodySmall" style={[styles.errorIsbn, { color: c.onSurfaceVariant }]}>ISBN: {isbn}</Text> : null}
-                <Button mode="contained" onPress={searchAgain} style={styles.retryButton} icon="barcode-scan">
-                  Quét lại
-                </Button>
-              </Card>
-            ) : displayBook ? (
-              <Card style={[styles.bookCard, { backgroundColor: c.surface, borderColor: c.outlineVariant }]}>
-                <View style={[styles.cardAccent, { backgroundColor: c.primary }]} />
-                {displayBook.cover_url ? (
-                  <Card.Cover source={{ uri: displayBook.cover_url }} style={styles.cover} />
-                ) : (
-                  <View style={[styles.coverPlaceholder, { backgroundColor: c.surfaceVariant }]}>
-                    <MaterialCommunityIcons name="book-open-variant" size={48} color={c.onSurfaceVariant} />
-                    <Text style={[styles.coverPlaceholderText, { color: c.onSurfaceVariant }]}>Không có ảnh</Text>
-                  </View>
-                )}
-                <Card.Content>
-                  <Text variant="titleLarge" style={[styles.bookTitle, { color: c.onSurface }]}>{displayBook.title}</Text>
-                  {displayBook.author ? (
-                    <Text variant="bodyMedium" style={[styles.bookAuthor, { color: c.onSurfaceVariant }]}>{displayBook.author}</Text>
-                  ) : null}
-                  <View style={styles.metaRow}>
-                    {displayBook.published_date ? (
-                      <View style={styles.metaItem}>
-                        <MaterialCommunityIcons name="calendar" size={14} color={c.onSurfaceVariant} />
-                        <Text style={[styles.metaText, { color: c.onSurfaceVariant }]}>{displayBook.published_date}</Text>
-                      </View>
-                    ) : null}
-                    {displayBook.page_count ? (
-                      <View style={styles.metaItem}>
-                        <MaterialCommunityIcons name="book-open-page-variant" size={14} color={c.onSurfaceVariant} />
-                        <Text style={[styles.metaText, { color: c.onSurfaceVariant }]}>{displayBook.page_count} trang</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                  {localBook?.shelf_location && (
-                    <Text variant="bodySmall" style={[styles.locationLabel, { color: c.primary }]}>
-                      <MaterialCommunityIcons name="map-marker" size={13} color={c.primary} /> Vị trí: {localBook.shelf_location}
-                    </Text>
-                  )}
-                  {!canBorrow && (
-                    <View style={[styles.quotaWarningBox, { backgroundColor: theme.dark ? 'rgba(196,78,78,0.12)' : 'rgba(196,78,78,0.08)', borderColor: theme.dark ? 'rgba(196,78,78,0.3)' : 'rgba(196,78,78,0.2)' }]}>
-                      <MaterialCommunityIcons name="alert-circle-outline" size={16} color={c.error} />
-                      <Text style={[styles.quotaWarningText, { color: c.error }]}>
-                        {overdueCount > 0
-                          ? 'Bạn có sách quá hạn, không thể mượn thêm'
-                          : 'Bạn đã mượn đủ 3 cuốn, không thể mượn thêm'}
-                      </Text>
-                    </View>
-                  )}
-                </Card.Content>
-                <Card.Actions style={styles.cardActions}>
-                  <Button mode="outlined" onPress={searchAgain} style={styles.cardActionButton} labelStyle={{ fontSize: 13, fontWeight: '600' }}>
-                    Quét lại
-                  </Button>
-                  <Button mode="contained" onPress={handleBorrow} loading={isBorrowing} disabled={isBorrowing || !canBorrow} style={styles.cardActionButton} labelStyle={{ fontSize: 13, fontWeight: '600' }}>
-                    Xác nhận mượn
-                  </Button>
-                </Card.Actions>
-              </Card>
-            ) : null}
-          </ScrollView>
+          <View style={styles.cameraPlaceholder}>
+            <MaterialCommunityIcons
+              name={!canBorrow ? 'book-lock-outline' : 'barcode-scan'}
+              size={48}
+              color={c.onSurfaceVariant}
+            />
+            <Text style={styles.cameraPlaceholderText}>
+              {!canBorrow
+                ? overdueCount > 0
+                  ? 'Có sách quá hạn, không thể mượn thêm'
+                  : 'Đã mượn tối đa 3 cuốn'
+                : 'Cần cấp quyền camera'}
+            </Text>
+          </View>
         )}
       </View>
+
+      <Surface style={styles.listPanel} elevation={2}>
+        <View style={styles.listHeader}>
+          <MaterialCommunityIcons name="book-open-variant" size={20} color={c.primary} />
+          <Text style={[styles.listTitle, { color: c.onSurface }]}>
+            Danh sách mượn ({scannedItems.length} cuốn)
+          </Text>
+        </View>
+
+        <Divider />
+
+        {scannedItems.length === 0 ? (
+          <View style={styles.emptyState}>
+            <MaterialCommunityIcons name="barcode-scan" size={48} color={c.onSurfaceVariant} />
+            <Text style={[styles.emptyText, { color: c.onSurfaceVariant }]}>Quét sách để thêm vào phiếu mượn</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={scannedItems}
+            keyExtractor={(_, index) => String(index)}
+            style={styles.list}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            renderItem={({ item, index }) => (
+              <Card
+                style={[
+                  styles.itemCard,
+                  item.alreadyBorrowed && styles.itemCardAlreadyBorrowed,
+                ]}
+              >
+                <View style={styles.itemRow}>
+                  {item.book.cover_url ? (
+                    <Card.Cover source={{ uri: item.book.cover_url }} style={styles.itemCover} />
+                  ) : (
+                    <View style={[styles.itemCoverPlaceholder, { backgroundColor: c.surfaceVariant }]}>
+                      <MaterialCommunityIcons name="book-open-variant" size={24} color={c.onSurfaceVariant} />
+                    </View>
+                  )}
+                  <View style={styles.itemInfo}>
+                    <View style={styles.itemTitleRow}>
+                      <Text style={[styles.itemTitle, { color: c.onSurface }]} numberOfLines={2}>{item.book.title}</Text>
+                      {item.alreadyBorrowed && (
+                        <View style={[styles.alreadyBorrowedBadge, { backgroundColor: theme.dark ? 'rgba(196,78,78,0.2)' : 'rgba(196,78,78,0.1)' }]}>
+                          <MaterialCommunityIcons name="book-lock" size={12} color={c.error} />
+                          <Text style={[styles.alreadyBorrowedText, { color: c.error }]}>Đã mượn</Text>
+                        </View>
+                      )}
+                    </View>
+                    {item.book.author && <Text style={[styles.itemAuthor, { color: c.onSurfaceVariant }]} numberOfLines={1}>{item.book.author}</Text>}
+                    <Text style={[styles.itemIsbn, { color: c.onSurfaceVariant }]}>{item.barcode}</Text>
+                    {item.alreadyBorrowed && (
+                      <Text style={[styles.alreadyBorrowedNote, { color: c.onSurfaceVariant }]}>Sách này đang được mượn — sẽ không thêm vào phiếu</Text>
+                    )}
+                  </View>
+                  <Button mode="text" compact onPress={() => removeItem(index)} textColor={c.error} style={styles.removeButton}>
+                    Xoá
+                  </Button>
+                </View>
+              </Card>
+            )}
+          />
+        )}
+
+        <Divider />
+
+        <View style={styles.actionRow}>
+          <Button mode="outlined" onPress={resetState} style={styles.actionButton} textColor={c.onSurfaceVariant}>
+            Xoá tất cả
+          </Button>
+          <Button mode="contained" onPress={handleCreateSlip} loading={isCreating} disabled={isCreating || scannedItems.length === 0 || !canBorrow} style={styles.actionButton}>
+            {isCreating ? 'Đang tạo phiếu...' : `Tạo phiếu mượn (${scannedItems.length} cuốn)`}
+          </Button>
+        </View>
+      </Surface>
     </SafeAreaView>
   );
 }
@@ -339,48 +357,6 @@ function createStyles(theme: AppTheme) {
     permissionContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
     permissionText: { fontSize: 16, marginBottom: 16, textAlign: 'center' },
     permissionButton: { borderRadius: 6 },
-    divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 24, paddingHorizontal: 16 },
-    dividerLine: { flex: 1, height: 1 },
-    orText: { marginHorizontal: 12, fontSize: 12 },
-    isbnInput: { width: '80%', marginTop: 4, backgroundColor: 'transparent' },
-    scannerContainer: { flex: 1, position: 'relative' },
-    camera: { flex: 1 },
-    overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-    scanArea: { width: 280, height: 150, borderRadius: 8, position: 'relative' },
-    corner: { position: 'absolute', width: 36, height: 36, borderWidth: 2 },
-    topLeft: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 8 },
-    topRight: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 8 },
-    bottomLeft: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 8 },
-    bottomRight: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 8 },
-    scanText: { marginTop: 20, fontSize: 16, textAlign: 'center', fontWeight: '500' },
-    manualInput: { padding: 16, position: 'relative', overflow: 'hidden', borderTopWidth: 0.5 },
-    manualAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3 },
-    manualLabel: { marginBottom: 8, fontSize: 13 },
-    isbnInputFull: { marginTop: 4, backgroundColor: 'transparent' },
-    resultContainer: { flex: 1, padding: 16 },
-    resultContent: { flexGrow: 1, justifyContent: 'center' },
-    loader: { alignSelf: 'center' },
-    bookCard: { borderRadius: 8, overflow: 'hidden', position: 'relative', borderWidth: 0.5 },
-    cardAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, zIndex: 1 },
-    cover: { height: 280, resizeMode: 'contain' },
-    coverPlaceholder: { height: 200, justifyContent: 'center', alignItems: 'center' },
-    coverPlaceholderText: { marginTop: 8, fontSize: 13 },
-    bookTitle: { marginTop: 12, fontWeight: '700', fontSize: 20 },
-    bookAuthor: { marginTop: 4, fontSize: 14 },
-    metaRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8, gap: 16 },
-    metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    metaText: { fontSize: 13 },
-    locationLabel: { marginTop: 4, fontSize: 13, fontWeight: '600' },
-    cardActions: { padding: 12, gap: 8 },
-    cardActionButton: { borderRadius: 6 },
-    errorCard: { borderRadius: 8, padding: 32, alignItems: 'center', borderWidth: 0.5 },
-    errorIconContainer: { marginBottom: 16 },
-    errorTitle: { fontWeight: '700', marginBottom: 8 },
-    errorMessage: { textAlign: 'center', marginBottom: 4 },
-    errorIsbn: { marginTop: 8, marginBottom: 20, fontSize: 12 },
-    retryButton: { borderRadius: 6, marginTop: 12 },
-    quotaWarningBox: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, padding: 10, borderRadius: 6, borderWidth: 1 },
-    quotaWarningText: { fontSize: 13, flex: 1 },
     scanTopBar: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -395,8 +371,31 @@ function createStyles(theme: AppTheme) {
     quotaPillOverdue: { backgroundColor: 'rgba(196, 78, 78, 0.15)' },
     quotaPillFull: { backgroundColor: 'rgba(90, 85, 80, 0.25)' },
     quotaPillText: { fontSize: 13, fontWeight: '700' },
-    blockOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', padding: 32, gap: 8 },
-    blockTitle: { fontSize: 18, fontWeight: '800', textAlign: 'center' },
-    blockSub: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+    scannerContainer: { height: 220, position: 'relative' },
+    camera: { flex: 1 },
+    cameraPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 8 },
+    cameraPlaceholderText: { fontSize: 14, textAlign: 'center' },
+    listPanel: { flex: 1, borderTopLeftRadius: 12, borderTopRightRadius: 12, marginTop: -12 },
+    listHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12 },
+    listTitle: { fontSize: 15, fontWeight: '700' },
+    list: { flex: 1, paddingHorizontal: 12 },
+    emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 8, paddingVertical: 40 },
+    emptyText: { fontSize: 14, textAlign: 'center' },
+    itemCard: { marginVertical: 4, borderRadius: 8, overflow: 'hidden' },
+    itemCardAlreadyBorrowed: { opacity: 0.7 },
+    itemRow: { flexDirection: 'row', alignItems: 'center', padding: 8 },
+    itemCover: { width: 48, height: 64, borderRadius: 4 },
+    itemCoverPlaceholder: { width: 48, height: 64, borderRadius: 4, justifyContent: 'center', alignItems: 'center' },
+    itemInfo: { flex: 1, marginLeft: 10, justifyContent: 'center' },
+    itemTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    itemTitle: { fontSize: 14, fontWeight: '600', flexShrink: 1 },
+    itemAuthor: { fontSize: 12, marginTop: 1 },
+    itemIsbn: { fontSize: 11, marginTop: 1 },
+    alreadyBorrowedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+    alreadyBorrowedText: { fontSize: 10, fontWeight: '600' },
+    alreadyBorrowedNote: { fontSize: 11, marginTop: 2, fontStyle: 'italic' },
+    removeButton: { marginLeft: 4 },
+    actionRow: { flexDirection: 'row', justifyContent: 'space-between', padding: 12, gap: 12 },
+    actionButton: { flex: 1, borderRadius: 6 },
   });
 }

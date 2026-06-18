@@ -255,4 +255,40 @@ export interface CreateBorrowSlipResponse {
   status: string;
   message: string;
   slip?: BorrowSlip;
+  records?: BorrowRecord[];
+}
+
+export interface LookupBorrowSlipRequest {
+  patron_id: string;
+  items: BorrowSlipItem[];
+}
+
+export interface LookupBorrowSlipItem {
+  barcode: string;
+  isbn?: string;
+  can_borrow: boolean;
+  reason: string | null;
+  book: BookWithStats | null;
+  copy: { id: string; book_id: string; barcode: string; is_available: boolean; shelf_location: string | null } | null;
+}
+
+export interface LookupBorrowSlipResponse {
+  can_create: boolean;
+  patron: { id: string; full_name: string | null; student_code: string; email: string | null };
+  items: LookupBorrowSlipItem[];
+  errors: string[];
+  total_items: number;
+  available_items: number;
+}
+
+export interface ConfirmBorrowSlipItem {
+  barcode: string;
+  isbn?: string;
+  book_id: string;
+  copy_id: string;
+}
+
+export interface ConfirmBorrowSlipRequest {
+  patron_id: string;
+  items: ConfirmBorrowSlipItem[];
 }

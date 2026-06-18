@@ -11,6 +11,9 @@ import { devError } from '../utils/logger';
 
 interface ScannedBorrowItem {
   barcode: string;
+  isbn: string;
+  copy_id: string | null;
+  copy_barcode: string | null;
   book: Book;
   alreadyBorrowed?: boolean;
 }
@@ -42,6 +45,11 @@ export default function StaffBorrowScreen() {
     setScanned(true);
     const barcode = result.data;
 
+    if (!patronId) {
+      setTimeout(() => setScanned(false), 500);
+      return;
+    }
+
     if (scannedItems.find((item) => item.barcode === barcode)) {
       setScanToast('Sách này đã có trong danh sách');
       setTimeout(() => setScanned(false), 500);
@@ -54,58 +62,61 @@ export default function StaffBorrowScreen() {
       return;
     }
 
-    const normalizeCode = (v: string) => v?.replace(/[\s-]+/g, '').replace(/\.0+$/, '') ?? '';
+    const normalizeCode = (v: string | undefined | null) => v?.replace(/[\s-]+/g, '').replace(/\.0+$/, '') ?? '';
     const barcodeNormalized = normalizeCode(barcode);
     const alreadyBorrowedRecord = activeRecords.find(
       (r) => normalizeCode(r.book?.isbn) === barcodeNormalized || normalizeCode(r.book_id) === barcodeNormalized
     );
 
     if (alreadyBorrowedRecord) {
-      // Thêm vào list với flag alreadyBorrowed để hiển thị inline
-      setScannedItems((prev) => [...prev, { 
-        barcode, 
-        book: {
-          id: alreadyBorrowedRecord.book_id,
-          isbn: alreadyBorrowedRecord.book?.isbn || barcode,
-          title: alreadyBorrowedRecord.book?.title || barcode,
-          author: alreadyBorrowedRecord.book?.author,
-          cover_url: alreadyBorrowedRecord.book?.cover_url,
-          shelf_location: alreadyBorrowedRecord.book?.shelf_location,
-        }, 
-        alreadyBorrowed: true 
-      }]);
+      const book: Book = {
+        id: alreadyBorrowedRecord.book_id,
+        isbn: alreadyBorrowedRecord.book?.isbn || barcode,
+        title: alreadyBorrowedRecord.book?.title || barcode,
+        author: alreadyBorrowedRecord.book?.author,
+        cover_url: alreadyBorrowedRecord.book?.cover_url,
+        shelf_location: alreadyBorrowedRecord.book?.shelf_location,
+      };
+      setScannedItems((prev) => [...prev, { barcode, isbn: barcode, copy_id: null, copy_barcode: null, book, alreadyBorrowed: true }]);
       setScanToast(`⚠️ "${alreadyBorrowedRecord.book?.title || barcode}" đã được mượn — sẽ không thêm vào phiếu`);
       setTimeout(() => setScanned(false), 2000);
       return;
     }
 
     try {
-      const localBook = await borrowApi.getBook(barcode);
-      if (localBook) {
-        setScannedItems((prev) => [...prev, { barcode, book: localBook }]);
-        setScanToast(`Đã thêm: ${localBook.title}`);
+      const result = await borrowApi.lookupBorrowSlip({
+        patron_id: patronId!,
+        items: [{ barcode, isbn: barcode }],
+      });
+      const item = result.items.find((i) => i.barcode === barcode);
+      if (!item || !item.can_borrow) {
+        const msg = item?.reason || 'Sách không thể mượn';
+        const title = item?.book?.title || '';
+        Alert.alert('Thông báo', title ? `"${title}": ${msg}` : `${msg} (ISBN: ${barcode})`);
+        setTimeout(() => setScanned(false), 500);
+        return;
       }
+      const book: Book = {
+        id: item.book!.id,
+        isbn: item.book!.isbn,
+        title: item.book!.title,
+        author: item.book!.author || undefined,
+        cover_url: item.book!.cover_url || undefined,
+        shelf_location: item.book!.shelf_location || undefined,
+      };
+      setScannedItems((prev) => [...prev, {
+        barcode,
+        isbn: barcode,
+        copy_id: item.copy?.id || null,
+        copy_barcode: item.copy?.barcode || null,
+        book,
+      }]);
+      setScanToast(`Đã thêm: ${book.title}`);
     } catch {
-      try {
-        const bookWithStats = await borrowApi.lookupBookByIsbn(barcode);
-        if (bookWithStats) {
-          const book: Book = {
-            id: bookWithStats.id,
-            isbn: bookWithStats.isbn,
-            title: bookWithStats.title,
-            author: bookWithStats.author,
-            cover_url: bookWithStats.cover_url,
-            shelf_location: bookWithStats.shelf_location,
-          };
-          setScannedItems((prev) => [...prev, { barcode, book }]);
-          setScanToast(`Đã thêm: ${book.title}`);
-        }
-      } catch {
-        setScanToast(`Không tìm thấy sách: ${barcode}`);
-      }
+      Alert.alert('Thông báo', `Không tìm thấy sách: ${barcode}`);
     }
     setTimeout(() => setScanned(false), 500);
-  }, [scanned, scannedItems, remaining, activeRecords]);
+  }, [scanned, scannedItems, remaining, activeRecords, patronId]);
 
   const lookupPatron = async () => {
     if (!patronCode.trim()) return;
@@ -183,10 +194,12 @@ export default function StaffBorrowScreen() {
     setIsCreating(true);
     try {
       const apiItems = items.map((item) => ({
-        barcode: item.barcode,
-        isbn: item.book.isbn || item.barcode,
+        barcode: item.copy_barcode || item.barcode,
+        isbn: item.isbn,
+        book_id: item.book.id,
+        copy_id: item.copy_id!,
       }));
-      const result = await borrowApi.createSlip({ patron_id: patronId, items: apiItems });
+      const result = await borrowApi.confirmBorrowSlip({ patron_id: patronId, items: apiItems });
       if (result.status === 'success') {
         Alert.alert('Thành công', result.message, [
           { text: 'OK', onPress: resetState },
