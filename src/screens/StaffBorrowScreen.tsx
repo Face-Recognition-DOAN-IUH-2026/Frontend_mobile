@@ -112,8 +112,14 @@ export default function StaffBorrowScreen() {
         book,
       }]);
       setScanToast(`Đã thêm: ${book.title}`);
-    } catch {
-      Alert.alert('Thông báo', `Không tìm thấy sách: ${barcode}`);
+    } catch (error: any) {
+      let msg = `Không tìm thấy sách: ${barcode}`;
+      if (error.response?.status === 403) {
+        msg = error.response?.data?.detail || 'Bạn không thể mượn sách lúc này';
+      } else if (error.response?.data?.detail) {
+        msg = error.response.data.detail;
+      }
+      Alert.alert('Thông báo', msg);
     }
     setTimeout(() => setScanned(false), 500);
   }, [scanned, scannedItems, remaining, activeRecords, patronId]);
@@ -131,8 +137,18 @@ export default function StaffBorrowScreen() {
         setActiveRecords(data.records ?? []);
         setScanToast(`Đã chọn độc giả: ${data.patron.full_name || data.patron.student_code}`);
       }
-    } catch {
-      setScanToast('Không tìm thấy độc giả với mã số này');
+    } catch (err: any) {
+      const status = err?.response?.status || err?.status;
+      const detail = err?.response?.data?.detail || err?.message || '';
+      if (status === 403) {
+        if (detail.includes('chua vao thu vien')) {
+          setScanToast('Độc giả chưa ở trong thư viện. Vui lòng yêu cầu độc giả quét thẻ tại cửa vào.');
+        } else {
+          setScanToast('Thẻ độc giả đã bị khóa/hết hạn. Vui lòng liên hệ thư viện.');
+        }
+      } else {
+        setScanToast('Không tìm thấy độc giả với mã số này');
+      }
       setPatronId(null);
       setPatronName('');
       setActiveCount(0);
