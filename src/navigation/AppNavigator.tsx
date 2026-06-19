@@ -7,7 +7,6 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from 'react-native-paper';
 import { useAuth } from '../context/AuthContext';
 
-import BorrowScreen from '../screens/BorrowScreen';
 import ChangePasswordScreen from '../screens/ChangePasswordScreen';
 import FaceCameraScreen from '../screens/FaceCameraScreen';
 import FaceLoginScreen from '../screens/FaceLoginScreen';
@@ -85,19 +84,6 @@ function MainTabNavigator() {
           ),
         }}
       />
-      {/* Patron tabs - hidden for admin/staff */}
-      {!isStaffScanner && (
-        <MainTab.Screen
-          name="Borrow"
-          component={BorrowScreen}
-          options={{
-            title: 'Mượn sách',
-            tabBarIcon: ({ color, size }) => (
-              <MaterialCommunityIcons name="book-plus" size={size} color={color} />
-            ),
-          }}
-        />
-      )}
       {isStaffScanner && (
         <>
           <MainTab.Screen

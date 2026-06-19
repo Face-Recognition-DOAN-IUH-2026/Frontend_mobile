@@ -158,7 +158,6 @@ describe('Mobile App Tests', () => {
     const mockScreens = [
       'LoginScreen',
       'HomeScreen',
-      'BorrowScreen',
       'ReturnScreen',
       'ProfileScreen',
       'FaceCameraScreen',
