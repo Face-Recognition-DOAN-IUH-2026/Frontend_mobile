@@ -1,57 +1,55 @@
 import { MD3DarkTheme, configureFonts } from 'react-native-paper';
-import { colors } from './colors';
+import { AppTheme } from './types';
+import { baseColors } from './BaseColors';
 
 const fontConfig = {
   fontFamily: 'System',
 };
 
-export const DarkTheme = {
+export { AppTheme, CustomColors } from './types';
+export const DarkTheme: AppTheme = {
   ...MD3DarkTheme,
   dark: true,
+  roundness: 8,
+  fonts: configureFonts({ config: fontConfig }),
   colors: {
     ...MD3DarkTheme.colors,
-    primary: colors.primary,
-    primaryContainer: colors.surfaceVariant,
-    secondary: colors.secondary,
-    secondaryContainer: colors.surfaceVariant,
-    tertiary: colors.warning,
-    background: colors.background,
-    surface: colors.surface,
-    surfaceVariant: colors.surfaceVariant,
-    error: colors.error,
-    errorContainer: colors.errorDark,
-    onPrimary: colors.background,
-    onSecondary: colors.text,
-    onTertiary: colors.background,
-    onBackground: colors.text,
-    onSurface: colors.text,
-    onSurfaceVariant: colors.textSecondary,
-    onError: colors.text,
-    outline: colors.border,
-    outlineVariant: colors.divider,
-    inverseSurface: colors.surfaceVariant,
-    inverseOnSurface: colors.text,
-    inversePrimary: colors.primary,
-    shadow: colors.border,
-    surfaceTint: colors.primary,
+    primary: '#1A73E8',
+    primaryContainer: '#1A3A6B',
+    secondary: baseColors.secondary,
+    tertiary: '#E37400',
+    background: baseColors.background,
+    surface: baseColors.surface,
+    surfaceVariant: baseColors.surfaceVariant,
+    error: baseColors.error,
+    errorContainer: baseColors.errorDark,
+    onPrimary: '#FFFFFF',
+    onSecondary: baseColors.text,
+    onTertiary: '#FFFFFF',
+    onBackground: baseColors.text,
+    onSurface: baseColors.text,
+    onSurfaceVariant: baseColors.textSecondary,
+    onError: baseColors.text,
+    outline: baseColors.border,
+    outlineVariant: baseColors.divider,
+    inverseSurface: baseColors.surfaceVariant,
+    inverseOnSurface: baseColors.text,
+    inversePrimary: '#8AB4F8',
+    shadow: baseColors.border,
+    surfaceTint: '#1A73E8',
     elevation: {
       level0: 'transparent',
-      level1: colors.surface,
-      level2: colors.surfaceVariant,
+      level1: baseColors.surface,
+      level2: baseColors.surfaceVariant,
       level3: '#2A2F3A',
       level4: '#2F3540',
       level5: '#353B48',
     },
     custom: {
-      bookmark: colors.bookmark,
-      glow: colors.glow,
-      textDisabled: colors.textDisabled,
-      success: colors.success,
-      warning: colors.warning,
+      textDisabled: baseColors.textDisabled,
+      success: baseColors.success,
+      warning: baseColors.warning,
     },
+    divider: baseColors.divider,
   },
-  roundness: 8,
-  fonts: configureFonts({ config: fontConfig }),
 };
-
-export type AppTheme = typeof DarkTheme;

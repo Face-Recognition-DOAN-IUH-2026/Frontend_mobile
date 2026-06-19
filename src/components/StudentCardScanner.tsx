@@ -1,11 +1,11 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { View, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
-import { Text, Button, ActivityIndicator } from 'react-native-paper';
+import { Text, Button, ActivityIndicator, useTheme } from 'react-native-paper';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as FileSystem from 'expo-file-system/legacy';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import TextRecognition from '@react-native-ml-kit/text-recognition';
-import { colors } from '../theme/colors';
+import { AppTheme } from '../theme/DarkTheme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH * 0.85;
@@ -148,6 +148,40 @@ function parseCardText(text: string): Partial<ScannedCardData> {
 }
 
 export default function StudentCardScanner({ onScanned, onError, onSkip }: StudentCardScannerProps) {
+  const theme = useTheme<AppTheme>();
+  const c = theme.colors;
+
+  const styles = useMemo(() => StyleSheet.create({
+    container: { flex: 1, backgroundColor: c.background },
+    camera: { flex: 1 },
+    msgText: { color: c.onSurface, fontSize: 16, textAlign: 'center', marginTop: 24 },
+    permissionBox: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, gap: 16 },
+    permissionBtn: { marginTop: 8 },
+    overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 80, justifyContent: 'center', alignItems: 'center' },
+    cardFrame: { width: CARD_WIDTH, height: CARD_HEIGHT, borderRadius: FRAME_BORDER_RADIUS, position: 'relative' },
+    corner: { position: 'absolute', width: CORNER_SIZE, height: CORNER_SIZE, borderColor: c.primary },
+    cornerTL: { top: -CORNER_WIDTH, left: -CORNER_WIDTH, borderTopWidth: CORNER_WIDTH, borderLeftWidth: CORNER_WIDTH, borderTopLeftRadius: FRAME_BORDER_RADIUS + 4 },
+    cornerTR: { top: -CORNER_WIDTH, right: -CORNER_WIDTH, borderTopWidth: CORNER_WIDTH, borderRightWidth: CORNER_WIDTH, borderTopRightRadius: FRAME_BORDER_RADIUS + 4 },
+    cornerBL: { bottom: -CORNER_WIDTH, left: -CORNER_WIDTH, borderBottomWidth: CORNER_WIDTH, borderLeftWidth: CORNER_WIDTH, borderBottomLeftRadius: FRAME_BORDER_RADIUS + 4 },
+    cornerBR: { bottom: -CORNER_WIDTH, right: -CORNER_WIDTH, borderBottomWidth: CORNER_WIDTH, borderRightWidth: CORNER_WIDTH, borderBottomRightRadius: FRAME_BORDER_RADIUS + 4 },
+    statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(13, 17, 23, 0.85)', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, position: 'absolute', top: '40%' },
+    statusText: { color: c.onSurface, fontSize: 14, fontWeight: '600' },
+    bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 80, backgroundColor: c.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingHorizontal: 20, borderTopWidth: 1, borderTopColor: c.outline },
+    hintText: { color: c.onSurfaceVariant, fontSize: 13, flex: 1, textAlign: 'center' },
+    captureBtn: { width: 56, height: 56, borderRadius: 28, backgroundColor: c.primary, alignItems: 'center', justifyContent: 'center' },
+    confirmBox: { flex: 1, padding: 20, justifyContent: 'center' },
+    checkIconWrap: { alignItems: 'center', marginBottom: 12 },
+    confirmTitle: { color: c.onSurface, fontSize: 20, fontWeight: '900', textAlign: 'center' },
+    confirmSubtitle: { color: c.onSurfaceVariant, fontSize: 14, textAlign: 'center', marginBottom: 20 },
+    fieldList: { backgroundColor: c.surfaceVariant, borderRadius: 12, padding: 16, gap: 10, marginBottom: 20 },
+    fieldRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+    fieldLabel: { color: c.onSurfaceVariant, fontSize: 13, fontWeight: '600', width: 80 },
+    fieldValue: { color: c.onSurface, fontSize: 14, fontWeight: '500', flex: 1, textAlign: 'right' },
+    confirmActions: { gap: 10 },
+    confirmBtn: { borderRadius: 10, backgroundColor: c.custom.success, paddingVertical: 4 },
+    retakeBtn: { borderRadius: 10, borderColor: c.outline },
+  }), [c]);
+
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
   const [phase, setPhase] = useState<'detecting' | 'capturing' | 'processing' | 'confirm'>('detecting');
@@ -299,7 +333,7 @@ export default function StudentCardScanner({ onScanned, onError, onSkip }: Stude
     return (
       <View style={styles.container}>
         <View style={styles.permissionBox}>
-          <MaterialCommunityIcons name="camera-off" size={48} color={colors.textSecondary} />
+          <MaterialCommunityIcons name="camera-off" size={48} color={c.onSurfaceVariant} />
           <Text style={styles.msgText}>Cần quyền camera để quét thẻ</Text>
           <Button mode="contained" onPress={requestPermission} style={styles.permissionBtn}>
             Cấp quyền
@@ -319,7 +353,7 @@ export default function StudentCardScanner({ onScanned, onError, onSkip }: Stude
       <View style={styles.container}>
         <View style={styles.confirmBox}>
           <View style={styles.checkIconWrap}>
-            <MaterialCommunityIcons name="check-circle" size={56} color={colors.success} />
+            <MaterialCommunityIcons name="check-circle" size={56} color={c.custom.success} />
           </View>
           <Text style={styles.confirmTitle}>Đọc thẻ thành công</Text>
           <Text style={styles.confirmSubtitle}>Vui lòng kiểm tra lại thông tin</Text>
@@ -391,19 +425,19 @@ export default function StudentCardScanner({ onScanned, onError, onSkip }: Stude
 
         {phase === 'detecting' && (
           <View style={styles.statusBadge}>
-            <ActivityIndicator size={20} color={colors.primary} />
+            <ActivityIndicator size={20} color={c.primary} />
             <Text style={styles.statusText}>Đang phát hiện thẻ...</Text>
           </View>
         )}
         {phase === 'capturing' && (
           <View style={styles.statusBadge}>
-            <MaterialCommunityIcons name="camera" size={20} color={colors.warning} />
+            <MaterialCommunityIcons name="camera" size={20} color={c.custom.warning} />
             <Text style={styles.statusText}>Đang chụp...</Text>
           </View>
         )}
         {phase === 'processing' && (
           <View style={styles.statusBadge}>
-            <ActivityIndicator size={20} color={colors.primary} />
+            <ActivityIndicator size={20} color={c.primary} />
             <Text style={styles.statusText}>Đang xử lý ảnh...</Text>
           </View>
         )}
@@ -412,7 +446,7 @@ export default function StudentCardScanner({ onScanned, onError, onSkip }: Stude
       <View style={styles.bottomBar}>
         <Text style={styles.hintText}>Đặt thẻ sinh viên vào khung hình</Text>
         <TouchableOpacity style={styles.captureBtn} onPress={handleManualCapture} activeOpacity={0.7}>
-          <MaterialCommunityIcons name="camera" size={28} color={colors.background} />
+          <MaterialCommunityIcons name="camera" size={28} color={c.background} />
         </TouchableOpacity>
         {onSkip && (
           <Button mode="text" onPress={onSkip} compact>
@@ -428,183 +462,3 @@ const CORNER_SIZE = 28;
 const CORNER_WIDTH = 3;
 const FRAME_BORDER_RADIUS = 12;
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  camera: {
-    flex: 1,
-  },
-  msgText: {
-    color: colors.text,
-    fontSize: 16,
-    textAlign: 'center',
-    marginTop: 24,
-  },
-  permissionBox: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-    gap: 16,
-  },
-  permissionBtn: {
-    marginTop: 8,
-  },
-
-  overlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 80,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  cardFrame: {
-    width: CARD_WIDTH,
-    height: CARD_HEIGHT,
-    borderRadius: FRAME_BORDER_RADIUS,
-    position: 'relative',
-  },
-  corner: {
-    position: 'absolute',
-    width: CORNER_SIZE,
-    height: CORNER_SIZE,
-    borderColor: colors.primary,
-  },
-  cornerTL: {
-    top: -CORNER_WIDTH,
-    left: -CORNER_WIDTH,
-    borderTopWidth: CORNER_WIDTH,
-    borderLeftWidth: CORNER_WIDTH,
-    borderTopLeftRadius: FRAME_BORDER_RADIUS + 4,
-  },
-  cornerTR: {
-    top: -CORNER_WIDTH,
-    right: -CORNER_WIDTH,
-    borderTopWidth: CORNER_WIDTH,
-    borderRightWidth: CORNER_WIDTH,
-    borderTopRightRadius: FRAME_BORDER_RADIUS + 4,
-  },
-  cornerBL: {
-    bottom: -CORNER_WIDTH,
-    left: -CORNER_WIDTH,
-    borderBottomWidth: CORNER_WIDTH,
-    borderLeftWidth: CORNER_WIDTH,
-    borderBottomLeftRadius: FRAME_BORDER_RADIUS + 4,
-  },
-  cornerBR: {
-    bottom: -CORNER_WIDTH,
-    right: -CORNER_WIDTH,
-    borderBottomWidth: CORNER_WIDTH,
-    borderRightWidth: CORNER_WIDTH,
-    borderBottomRightRadius: FRAME_BORDER_RADIUS + 4,
-  },
-
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(13, 17, 23, 0.85)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    position: 'absolute',
-    top: '40%',
-  },
-  statusText: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-
-  bottomBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 80,
-    backgroundColor: colors.surface,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingHorizontal: 20,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  hintText: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    flex: 1,
-    textAlign: 'center',
-  },
-  captureBtn: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  confirmBox: {
-    flex: 1,
-    padding: 20,
-    justifyContent: 'center',
-  },
-  checkIconWrap: {
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  confirmTitle: {
-    color: colors.text,
-    fontSize: 20,
-    fontWeight: '900',
-    textAlign: 'center',
-  },
-  confirmSubtitle: {
-    color: colors.textSecondary,
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  fieldList: {
-    backgroundColor: colors.surfaceVariant,
-    borderRadius: 12,
-    padding: 16,
-    gap: 10,
-    marginBottom: 20,
-  },
-  fieldRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  fieldLabel: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '600',
-    width: 80,
-  },
-  fieldValue: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '500',
-    flex: 1,
-    textAlign: 'right',
-  },
-  confirmActions: {
-    gap: 10,
-  },
-  confirmBtn: {
-    borderRadius: 10,
-    backgroundColor: colors.success,
-    paddingVertical: 4,
-  },
-  retakeBtn: {
-    borderRadius: 10,
-    borderColor: colors.border,
-  },
-});

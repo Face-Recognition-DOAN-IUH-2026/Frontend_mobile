@@ -1,12 +1,12 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
 import { View, StyleSheet, ScrollView, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, Button, Surface, TextInput, ActivityIndicator, Card, IconButton, Chip, Dialog, Portal, Snackbar, Divider } from 'react-native-paper';
+import { Text, Button, Surface, TextInput, ActivityIndicator, Card, IconButton, Chip, Dialog, Portal, Snackbar, Divider, useTheme } from 'react-native-paper';
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { borrowApi } from '../api/borrow';
 import { BookWithStats, BookImportResponse } from '../types';
-import { colors } from '../theme/colors';
+import { AppTheme } from '../theme/DarkTheme';
 import { devError, devLog } from '../utils/logger';
 
 interface ImportBooksScreenProps {
@@ -29,6 +29,366 @@ const statusLabels: Record<string, string> = {
 };
 
 export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps) {
+  const theme = useTheme<AppTheme>();
+  const c = theme.colors;
+  const primaryFade = '#1A73E822';
+  const successFade = '#34A85322';
+  const errorFade = '#D9302522';
+
+  const styles = useMemo(() => StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: c.background,
+    },
+    permissionContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 24,
+      backgroundColor: c.background,
+    },
+    permissionText: {
+      color: c.onSurface,
+      fontSize: 16,
+      marginBottom: 16,
+      textAlign: 'center',
+    },
+    permissionButton: {
+      borderRadius: 6,
+    },
+    dividerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginVertical: 24,
+      paddingHorizontal: 16,
+    },
+    dividerLine: {
+      flex: 1,
+      height: 1,
+      backgroundColor: c.divider,
+    },
+    orText: {
+      color: c.onSurfaceVariant,
+      marginHorizontal: 12,
+      fontSize: 12,
+    },
+    isbnInput: {
+      width: '80%',
+      marginTop: 4,
+      backgroundColor: 'transparent',
+    },
+    inputOutline: {
+      borderRadius: 6,
+      borderColor: c.outline,
+    },
+    offlineListContainer: {
+      flex: 1,
+      width: '100%',
+      marginTop: 16,
+    },
+    offlineListTitle: {
+      color: c.onSurface,
+      fontWeight: '700',
+      marginBottom: 8,
+      paddingHorizontal: 8,
+    },
+    cameraContainer: {
+      height: '45%',
+      position: 'relative',
+    },
+    camera: {
+      flex: 1,
+    },
+    cameraOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    scanArea: {
+      width: 280,
+      height: 120,
+      borderRadius: 8,
+      position: 'relative',
+    },
+    corner: {
+      position: 'absolute',
+      width: 32,
+      height: 32,
+      borderColor: c.primary,
+      borderWidth: 2,
+    },
+    topLeft: {
+      top: 0,
+      left: 0,
+      borderRightWidth: 0,
+      borderBottomWidth: 0,
+      borderTopLeftRadius: 8,
+    },
+    topRight: {
+      top: 0,
+      right: 0,
+      borderLeftWidth: 0,
+      borderBottomWidth: 0,
+      borderTopRightRadius: 8,
+    },
+    bottomLeft: {
+      bottom: 0,
+      left: 0,
+      borderRightWidth: 0,
+      borderTopWidth: 0,
+      borderBottomLeftRadius: 8,
+    },
+    bottomRight: {
+      bottom: 0,
+      right: 0,
+      borderLeftWidth: 0,
+      borderTopWidth: 0,
+      borderBottomRightRadius: 8,
+    },
+    scanText: {
+      color: c.onSurface,
+      marginTop: 16,
+      fontSize: 14,
+      textAlign: 'center',
+      fontWeight: '500',
+    },
+    manualInput: {
+      padding: 8,
+      backgroundColor: c.surface,
+      position: 'relative',
+      overflow: 'hidden',
+      borderTopWidth: 0.5,
+      borderTopColor: c.outline,
+    },
+    manualAccent: {
+      position: 'absolute',
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: 3,
+      backgroundColor: c.primary,
+    },
+    manualInputField: {
+      backgroundColor: 'transparent',
+    },
+    listSection: {
+      flex: 1,
+      backgroundColor: c.background,
+    },
+    listSectionHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+    },
+    listSectionTitle: {
+      color: c.onSurface,
+      fontWeight: '700',
+    },
+    listContainer: {
+      flex: 1,
+    },
+    listContent: {
+      padding: 12,
+      gap: 8,
+      paddingBottom: 80,
+    },
+    emptyState: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 32,
+    },
+    emptyText: {
+      color: c.onSurfaceVariant,
+      marginTop: 12,
+      fontWeight: '500',
+    },
+    emptyHint: {
+      color: c.onSurfaceVariant,
+      marginTop: 4,
+      textAlign: 'center',
+    },
+    itemCard: {
+      backgroundColor: c.surface,
+      borderColor: c.outline,
+      borderRadius: 12,
+    },
+    itemContent: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    itemCover: {
+      width: 48,
+      height: 68,
+      borderRadius: 6,
+    },
+    itemCoverPlaceholder: {
+      width: 48,
+      height: 68,
+      borderRadius: 6,
+      backgroundColor: c.surfaceVariant,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    itemInfo: {
+      flex: 1,
+      gap: 2,
+    },
+    itemHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      gap: 6,
+    },
+    itemTitle: {
+      color: c.onSurface,
+      fontWeight: '700',
+      flex: 1,
+    },
+    itemAuthor: {
+      color: c.onSurfaceVariant,
+    },
+    itemIsbn: {
+      color: c.onSurfaceVariant,
+      fontSize: 11,
+      fontFamily: 'monospace',
+    },
+    itemStock: {
+      color: c.onSurfaceVariant,
+      fontSize: 11,
+      marginTop: 2,
+    },
+    itemProjected: {
+      color: c.primary,
+      fontWeight: '600',
+    },
+    errorRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    errorText: {
+      color: c.error,
+      flex: 1,
+    },
+    newChip: {
+      backgroundColor: primaryFade,
+    },
+    newChipText: {
+      color: c.primary,
+      fontSize: 11,
+      fontWeight: '700',
+    },
+    existsChip: {
+      backgroundColor: successFade,
+    },
+    existsChipText: {
+      color: c.custom.success,
+      fontSize: 11,
+      fontWeight: '700',
+    },
+    quantityRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: 4,
+    },
+    qtyBtn: {
+      width: 32,
+      height: 32,
+      margin: 0,
+    },
+    qtyValue: {
+      color: c.onSurface,
+      fontWeight: '700',
+      marginHorizontal: 8,
+      minWidth: 24,
+      textAlign: 'center',
+    },
+    qtySpacer: {
+      flex: 1,
+    },
+    bottomBar: {
+      backgroundColor: c.surface,
+      borderTopWidth: 0.5,
+      borderTopColor: c.outline,
+    },
+    bottomBarContent: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 12,
+    },
+    bottomBarCount: {
+      color: c.onSurfaceVariant,
+    },
+    bottomBarValid: {
+      color: c.primary,
+      fontWeight: '600',
+    },
+    dialogTitle: {
+      textAlign: 'center',
+    },
+    resultStats: {
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+      marginVertical: 8,
+    },
+    resultStat: {
+      alignItems: 'center',
+    },
+    resultStatValue: {
+      color: c.onSurface,
+      fontWeight: '900',
+    },
+    resultStatLabel: {
+      color: c.onSurfaceVariant,
+    },
+    resultDivider: {
+      marginVertical: 8,
+    },
+    resultList: {
+      maxHeight: 200,
+    },
+    resultRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 6,
+    },
+    resultRowIsbn: {
+      color: c.onSurfaceVariant,
+      fontSize: 10,
+      fontFamily: 'monospace',
+    },
+    resultRowTitle: {
+      color: c.onSurface,
+      flex: 1,
+    },
+    resultSuccessChip: {
+      backgroundColor: successFade,
+    },
+    resultSuccessChipText: {
+      color: c.custom.success,
+      fontSize: 10,
+      fontWeight: '700',
+    },
+    resultErrorChip: {
+      backgroundColor: errorFade,
+    },
+    resultErrorChipText: {
+      color: c.error,
+      fontSize: 10,
+      fontWeight: '700',
+    },
+  }), [c]);
+
   const [permission, requestPermission] = useCameraPermissions();
   const [scannedIsbns, setScannedIsbns] = useState<ScannedItem[]>([]);
   const [isImporting, setIsImporting] = useState(false);
@@ -160,14 +520,14 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
           mode="outlined"
           style={styles.manualInputField}
           outlineStyle={styles.inputOutline}
-          activeOutlineColor={colors.primary}
+          activeOutlineColor={c.primary}
           disabled={isManualSearching}
           right={
             <TextInput.Icon
               icon="plus"
               onPress={handleManualAdd}
               disabled={isManualSearching || !manualIsbn.trim()}
-              color={colors.primary}
+              color={c.primary}
             />
           }
         />
@@ -179,7 +539,7 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
     if (scannedIsbns.length === 0) {
       return (
         <View style={styles.emptyState}>
-          <MaterialCommunityIcons name="barcode-scan" size={48} color={colors.textSecondary} />
+          <MaterialCommunityIcons name="barcode-scan" size={48} color={c.onSurfaceVariant} />
           <Text variant="bodyLarge" style={styles.emptyText}>Quét mã ISBN để bắt đầu</Text>
           <Text variant="bodySmall" style={styles.emptyHint}>
             Camera sẽ tự động nhận diện mã vạch
@@ -197,16 +557,16 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
                 <Image source={{ uri: item.lookup.cover_url }} style={styles.itemCover} />
               ) : (
                 <View style={styles.itemCoverPlaceholder}>
-                  <MaterialCommunityIcons name="book-variant" size={24} color={colors.textSecondary} />
+                  <MaterialCommunityIcons name="book-variant" size={24} color={c.onSurfaceVariant} />
                 </View>
               )}
               <View style={styles.itemInfo}>
                 <View style={styles.itemHeader}>
                   {item.loading ? (
-                    <ActivityIndicator size="small" color={colors.primary} />
+                    <ActivityIndicator size="small" color={c.primary} />
                   ) : item.error ? (
                     <View style={styles.errorRow}>
-                      <MaterialCommunityIcons name="alert-circle-outline" size={16} color={colors.error} />
+                      <MaterialCommunityIcons name="alert-circle-outline" size={16} color={c.error} />
                       <Text variant="bodySmall" style={styles.errorText}>{item.error}</Text>
                     </View>
                   ) : (
@@ -270,7 +630,7 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
                       icon="delete-outline"
                       size={18}
                       onPress={() => removeItem(item.isbn)}
-                      iconColor={colors.error}
+                      iconColor={c.error}
                     />
                   </View>
                 )}
@@ -285,7 +645,7 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
   if (!permission) {
     return (
       <SafeAreaView style={styles.container}>
-        <ActivityIndicator color={colors.primary} />
+        <ActivityIndicator color={c.primary} />
       </SafeAreaView>
     );
   }
@@ -309,13 +669,13 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
           mode="outlined"
           style={styles.isbnInput}
           outlineStyle={styles.inputOutline}
-          activeOutlineColor={colors.primary}
+          activeOutlineColor={c.primary}
           right={
             <TextInput.Icon
               icon="plus"
               onPress={handleManualAdd}
               disabled={isManualSearching || !manualIsbn.trim()}
-              color={colors.primary}
+              color={c.primary}
             />
           }
         />
@@ -341,7 +701,7 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
             Đã quét ({scannedIsbns.length} cuốn)
           </Text>
           {scannedIsbns.length > 0 && (
-            <Button compact onPress={() => setScannedIsbns([])} textColor={colors.error}>
+            <Button compact onPress={() => setScannedIsbns([])} textColor={c.error}>
               Xoá tất cả
             </Button>
           )}
@@ -388,11 +748,11 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
                     <Text variant="bodySmall" style={styles.resultStatLabel}>Thành công</Text>
                   </View>
                   <View style={styles.resultStat}>
-                    <Text variant="headlineMedium" style={[styles.resultStatValue, importResult.skipped > 0 && { color: colors.warning }]}>{importResult.skipped}</Text>
+                    <Text variant="headlineMedium" style={[styles.resultStatValue, importResult.skipped > 0 && { color: c.custom.warning }]}>{importResult.skipped}</Text>
                     <Text variant="bodySmall" style={styles.resultStatLabel}>Bỏ qua</Text>
                   </View>
                   <View style={styles.resultStat}>
-                    <Text variant="headlineMedium" style={[styles.resultStatValue, importResult.errors > 0 && { color: colors.error }]}>{importResult.errors}</Text>
+                    <Text variant="headlineMedium" style={[styles.resultStatValue, importResult.errors > 0 && { color: c.error }]}>{importResult.errors}</Text>
                     <Text variant="bodySmall" style={styles.resultStatLabel}>Lỗi</Text>
                   </View>
                 </View>
@@ -432,357 +792,3 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  permissionContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-    backgroundColor: colors.background,
-  },
-  permissionText: {
-    color: colors.text,
-    fontSize: 16,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  permissionButton: {
-    borderRadius: 6,
-  },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 24,
-    paddingHorizontal: 16,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.divider,
-  },
-  orText: {
-    color: colors.textSecondary,
-    marginHorizontal: 12,
-    fontSize: 12,
-  },
-  isbnInput: {
-    width: '80%',
-    marginTop: 4,
-    backgroundColor: 'transparent',
-  },
-  inputOutline: {
-    borderRadius: 6,
-    borderColor: colors.border,
-  },
-  offlineListContainer: {
-    flex: 1,
-    width: '100%',
-    marginTop: 16,
-  },
-  offlineListTitle: {
-    color: colors.text,
-    fontWeight: '700',
-    marginBottom: 8,
-    paddingHorizontal: 8,
-  },
-  cameraContainer: {
-    height: '45%',
-    position: 'relative',
-  },
-  camera: {
-    flex: 1,
-  },
-  cameraOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  scanArea: {
-    width: 280,
-    height: 120,
-    borderRadius: 8,
-    position: 'relative',
-  },
-  corner: {
-    position: 'absolute',
-    width: 32,
-    height: 32,
-    borderColor: colors.primary,
-    borderWidth: 2,
-  },
-  topLeft: {
-    top: 0,
-    left: 0,
-    borderRightWidth: 0,
-    borderBottomWidth: 0,
-    borderTopLeftRadius: 8,
-  },
-  topRight: {
-    top: 0,
-    right: 0,
-    borderLeftWidth: 0,
-    borderBottomWidth: 0,
-    borderTopRightRadius: 8,
-  },
-  bottomLeft: {
-    bottom: 0,
-    left: 0,
-    borderRightWidth: 0,
-    borderTopWidth: 0,
-    borderBottomLeftRadius: 8,
-  },
-  bottomRight: {
-    bottom: 0,
-    right: 0,
-    borderLeftWidth: 0,
-    borderTopWidth: 0,
-    borderBottomRightRadius: 8,
-  },
-  scanText: {
-    color: colors.text,
-    marginTop: 16,
-    fontSize: 14,
-    textAlign: 'center',
-    fontWeight: '500',
-  },
-  manualInput: {
-    padding: 8,
-    backgroundColor: colors.surface,
-    position: 'relative',
-    overflow: 'hidden',
-    borderTopWidth: 0.5,
-    borderTopColor: colors.border,
-  },
-  manualAccent: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 3,
-    backgroundColor: colors.primary,
-  },
-  manualInputField: {
-    backgroundColor: 'transparent',
-  },
-  listSection: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  listSectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  listSectionTitle: {
-    color: colors.text,
-    fontWeight: '700',
-  },
-  listContainer: {
-    flex: 1,
-  },
-  listContent: {
-    padding: 12,
-    gap: 8,
-    paddingBottom: 80,
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 32,
-  },
-  emptyText: {
-    color: colors.textSecondary,
-    marginTop: 12,
-    fontWeight: '500',
-  },
-  emptyHint: {
-    color: colors.textSecondary,
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  itemCard: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: 12,
-  },
-  itemContent: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  itemCover: {
-    width: 48,
-    height: 68,
-    borderRadius: 6,
-  },
-  itemCoverPlaceholder: {
-    width: 48,
-    height: 68,
-    borderRadius: 6,
-    backgroundColor: colors.surfaceVariant,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  itemInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  itemHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 6,
-  },
-  itemTitle: {
-    color: colors.text,
-    fontWeight: '700',
-    flex: 1,
-  },
-  itemAuthor: {
-    color: colors.textSecondary,
-  },
-  itemIsbn: {
-    color: colors.textSecondary,
-    fontSize: 11,
-    fontFamily: 'monospace',
-  },
-  itemStock: {
-    color: colors.textSecondary,
-    fontSize: 11,
-    marginTop: 2,
-  },
-  itemProjected: {
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  errorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  errorText: {
-    color: colors.error,
-    flex: 1,
-  },
-  newChip: {
-    backgroundColor: `${colors.primary}22`,
-  },
-  newChipText: {
-    color: colors.primary,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  existsChip: {
-    backgroundColor: `${colors.success}22`,
-  },
-  existsChipText: {
-    color: colors.success,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  quantityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  qtyBtn: {
-    width: 32,
-    height: 32,
-    margin: 0,
-  },
-  qtyValue: {
-    color: colors.text,
-    fontWeight: '700',
-    marginHorizontal: 8,
-    minWidth: 24,
-    textAlign: 'center',
-  },
-  qtySpacer: {
-    flex: 1,
-  },
-  bottomBar: {
-    backgroundColor: colors.surface,
-    borderTopWidth: 0.5,
-    borderTopColor: colors.border,
-  },
-  bottomBarContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 12,
-  },
-  bottomBarCount: {
-    color: colors.textSecondary,
-  },
-  bottomBarValid: {
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  dialogTitle: {
-    textAlign: 'center',
-  },
-  resultStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginVertical: 8,
-  },
-  resultStat: {
-    alignItems: 'center',
-  },
-  resultStatValue: {
-    color: colors.text,
-    fontWeight: '900',
-  },
-  resultStatLabel: {
-    color: colors.textSecondary,
-  },
-  resultDivider: {
-    marginVertical: 8,
-  },
-  resultList: {
-    maxHeight: 200,
-  },
-  resultRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 6,
-  },
-  resultRowIsbn: {
-    color: colors.textSecondary,
-    fontSize: 10,
-    fontFamily: 'monospace',
-  },
-  resultRowTitle: {
-    color: colors.text,
-    flex: 1,
-  },
-  resultSuccessChip: {
-    backgroundColor: `${colors.success}22`,
-  },
-  resultSuccessChipText: {
-    color: colors.success,
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  resultErrorChip: {
-    backgroundColor: `${colors.error}22`,
-  },
-  resultErrorChipText: {
-    color: colors.error,
-    fontSize: 10,
-    fontWeight: '700',
-  },
-});

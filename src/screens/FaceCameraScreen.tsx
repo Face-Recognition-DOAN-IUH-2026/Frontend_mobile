@@ -4,7 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AutoFaceCapture from '../components/AutoFaceCapture';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { colors } from '../theme/colors';
+import { useTheme } from 'react-native-paper';
+import { AppTheme } from '../theme/DarkTheme';
 import { devError } from '../utils/logger';
 
 interface FaceCameraScreenProps {
@@ -12,6 +13,8 @@ interface FaceCameraScreenProps {
 }
 
 export default function FaceCameraScreen({ navigation }: FaceCameraScreenProps) {
+  const theme = useTheme<AppTheme>();
+  const c = theme.colors;
   const { patron } = useAuth();
   const [isUploading, setIsUploading] = useState(false);
 
@@ -65,7 +68,7 @@ export default function FaceCameraScreen({ navigation }: FaceCameraScreenProps) 
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['bottom']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: c.background }} edges={['bottom']}>
       <AutoFaceCapture
         onFilesReady={handleFilesReady}
         onError={(msg) => Alert.alert('Lỗi', msg)}
@@ -76,8 +79,8 @@ export default function FaceCameraScreen({ navigation }: FaceCameraScreenProps) 
           backgroundColor: 'rgba(0,0,0,0.6)',
           justifyContent: 'center', alignItems: 'center',
         }}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={{ color: colors.text, fontSize: 15, marginTop: 12 }}>
+          <ActivityIndicator size="large" color={c.primary} />
+          <Text style={{ color: c.onSurface, fontSize: 15, marginTop: 12 }}>
             Đang đăng ký khuôn mặt...
           </Text>
         </View>
