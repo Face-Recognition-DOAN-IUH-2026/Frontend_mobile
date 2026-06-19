@@ -177,6 +177,10 @@ export interface ScheduleAssignmentList {
   total: number;
 }
 
+export interface DayCounts {
+  [date: string]: number;
+}
+
 export interface StaffAvailabilityRequest {
   id: string;
   staffId: string;

@@ -1,29 +1,17 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { Animated, Dimensions, FlatList, PanResponder, RefreshControl, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Animated, Dimensions, FlatList, Modal, PanResponder, RefreshControl, ScrollView, SectionList, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ActivityIndicator, Card, Chip, Snackbar, Text, useTheme } from 'react-native-paper';
+import { ActivityIndicator, Text, useTheme } from 'react-native-paper';
 import { scheduleApi } from '../api/schedule';
 import AssignmentCard from '../components/AssignmentCard';
-import { AppTheme } from '../theme/DarkTheme';
 import { StaffScheduleAssignment } from '../types';
-import { DAY_LABELS, formatViDate, getWeekDays, getWeekRange, toDateInput } from '../utils/dateUtils';
+import { DAY_LABELS, startOfWeek, toDateInput } from '../utils/dateUtils';
+import { AppTheme } from '../theme/DarkTheme';
+import { devError } from '../utils/logger';
 
 type AssignmentTimeState = 'now' | 'today' | 'upcoming' | 'past';
-type TabFilter = 'all' | AssignmentTimeState;
-
-const TABS: { key: TabFilter; label: string }[] = [
-  { key: 'all', label: 'Tất cả' },
-  { key: 'now', label: 'Đang trực' },
-  { key: 'today', label: 'Hôm nay' },
-  { key: 'upcoming', label: 'Sắp tới' },
-  { key: 'past', label: 'Đã qua' },
-];
-
-function getErrorMessage(err: any, fallback: string) {
-  return err?.response?.data?.detail || err?.response?.data?.error || err?.message || fallback;
-}
 
 function getAssignmentTimeState(item: StaffScheduleAssignment): AssignmentTimeState {
   const now = new Date();
@@ -39,22 +27,139 @@ function getAssignmentTimeState(item: StaffScheduleAssignment): AssignmentTimeSt
   return 'today';
 }
 
+function getErrorMessage(err: any, fallback: string) {
+  return err?.response?.data?.detail || err?.response?.data?.error || err?.message || fallback;
+}
+
+function zoneLabel(item: StaffScheduleAssignment) {
+  if (!item.zone) return item.zoneId;
+  const zoneName = item.zone.zoneName || '';
+  const compact = zoneName.match(/^(Tang|Tầng)\s*(\d+)/i);
+  return compact ? `Tầng ${compact[2]}` : zoneName || `Tầng ${item.zone.floor ?? '-'}`;
+}
+
+interface ShiftSection {
+  title: string;
+  state: AssignmentTimeState;
+  statusLabel: string;
+  data: StaffScheduleAssignment[];
+}
+
+interface DaySection {
+  title: string;
+  date: string;
+  state: AssignmentTimeState;
+  statusLabel: string;
+  data: ShiftSection[];
+}
+
+function getWeekDaysFromRef(dateStr: string): string[] {
+  const start = startOfWeek(new Date(dateStr + 'T00:00:00'));
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    return toDateInput(d);
+  });
+}
+
+function getMonthGrid(year: number, month: number) {
+  const firstDay = new Date(year, month, 1);
+  const startDow = firstDay.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const daysInPrev = new Date(year, month, 0).getDate();
+
+  const grid: (number | null)[] = [];
+  const prevCount = startDow === 0 ? 6 : startDow - 1;
+
+  for (let i = prevCount - 1; i >= 0; i--) grid.push(-(daysInPrev - i));
+  for (let i = 1; i <= daysInMonth; i++) grid.push(i);
+  while (grid.length % 7 !== 0) grid.push(null);
+
+  return grid;
+}
+
 const SCREEN_WIDTH = Dimensions.get('window').width;
+const VI_MONTHS = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
+const VI_DAYS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+const VIEW_MODES = ['Ngày', 'Tuần', 'Tháng'] as const;
 
 export default function ScheduleScreen() {
-  const theme = useTheme() as AppTheme;
+  const { colors: c } = useTheme<AppTheme>();
+
+  const s = useMemo(() => StyleSheet.create({
+    container: { flex: 1 },
+    contentFlex: { flex: 1 },
+    scrollFlex: { flexGrow: 1 },
+    emptyContentStyle: { flexGrow: 1, justifyContent: 'center', padding: 16 },
+    appBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 10 },
+    appBarBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20 },
+    appBarTitle: { flex: 1, fontSize: 18, fontWeight: '700', textAlign: 'center' },
+    segmentedWrap: { paddingHorizontal: 16, paddingVertical: 10 },
+    segmentedBg: { flexDirection: 'row', borderRadius: 10, padding: 3 },
+    segmentedBtn: { flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center' },
+    segmentedText: { fontSize: 14, fontWeight: '600' },
+    dateRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1 },
+    dateDropdown: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    dateText: { fontSize: 16, fontWeight: '700' },
+    loadingBox: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    errorBox: { flex: 1, flexDirection: 'row', gap: 10, alignItems: 'flex-start', padding: 16 },
+    errorText: { flex: 1, fontSize: 14 },
+    emptyContainer: { alignItems: 'center', justifyContent: 'center', gap: 12, padding: 40 },
+    emptyTitle: { fontSize: 18, fontWeight: '700', marginTop: 8 },
+    emptySub: { fontSize: 14, textAlign: 'center' },
+    listContent: { padding: 16, paddingBottom: 80 },
+    sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, paddingHorizontal: 4, marginBottom: 4 },
+    sectionTitle: { fontSize: 15, fontWeight: '900', flex: 1 },
+    sectionStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    sectionDot: { width: 8, height: 8, borderRadius: 4 },
+    sectionStatusText: { fontSize: 12, fontWeight: '700' },
+    snackbar: { position: 'absolute', bottom: 16, left: 16, right: 16, padding: 14, borderRadius: 10, alignItems: 'center' },
+    snackbarText: { fontSize: 14, fontWeight: '600' },
+    pillStrip: { borderBottomWidth: 1, paddingVertical: 10 },
+    pillContent: { flexDirection: 'row', gap: 8, paddingHorizontal: 12 },
+    pill: { alignItems: 'center', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, minWidth: 52, gap: 2 },
+    pillLabel: { fontSize: 11, fontWeight: '700' },
+    pillDate: { fontSize: 15, fontWeight: '700' },
+    pillBadge: { position: 'absolute', top: -4, right: -4, minWidth: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+    pillBadgeText: { fontSize: 10, fontWeight: '800' },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
+    modalContent: { width: SCREEN_WIDTH - 48, borderRadius: 16, padding: 20, paddingBottom: 12 },
+    monthNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 12, borderBottomWidth: 1, marginBottom: 12 },
+    monthNavBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 18 },
+    monthNavTitle: { fontSize: 16, fontWeight: '800' },
+    calendarWrap: { marginBottom: 16, gap: 4 },
+    calendarGrid: { gap: 4 },
+    calRow: { flexDirection: 'row' },
+    calCell: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 6, minHeight: 40 },
+    calDayHeader: { fontSize: 12, fontWeight: '700' },
+    calDayNum: { fontSize: 14, fontWeight: '600' },
+    calDot: { width: 5, height: 5, borderRadius: 3, marginTop: 2 },
+    todayBtn: { borderWidth: 1, borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginTop: 12 },
+    todayBtnText: { fontSize: 14, fontWeight: '700' },
+    daySection: { marginBottom: 4 },
+    daySectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, marginBottom: 6 },
+    daySectionTitle: { fontSize: 15, fontWeight: '900', flex: 1 },
+    shiftSection: { marginBottom: 4 },
+    shiftSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6, paddingHorizontal: 8, marginBottom: 4 },
+    shiftSectionTitle: { fontSize: 13, fontWeight: '700', flex: 1 },
+  }), [c]);
+
   const [assignments, setAssignments] = useState<StaffScheduleAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [snackbar, setSnackbar] = useState('');
-  const [activeTab, setActiveTab] = useState<TabFilter>('all');
-
-  const weekDays = useMemo(() => getWeekDays(), []);
-  const weekRange = useMemo(() => getWeekRange(weekDays), [weekDays]);
+  const [viewMode, setViewMode] = useState<(typeof VIEW_MODES)[number]>('Ngày');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [pickerMonth, setPickerMonth] = useState(() => new Date().getMonth());
+  const [pickerYear, setPickerYear] = useState(() => new Date().getFullYear());
 
   const todayStr = useMemo(() => toDateInput(new Date()), []);
+  const [referenceDate, setReferenceDate] = useState(todayStr);
+
+  const weekDays = useMemo(() => getWeekDaysFromRef(referenceDate), [referenceDate]);
+  const weekRange = useMemo(() => ({ from: weekDays[0], to: weekDays[6] }), [weekDays]);
   const todayIndex = useMemo(() => weekDays.indexOf(todayStr), [weekDays, todayStr]);
   const [currentIndex, setCurrentIndex] = useState<number>(todayIndex >= 0 ? todayIndex : 0);
 
@@ -73,46 +178,171 @@ export default function ScheduleScreen() {
     return map;
   }, [assignments, weekDays]);
 
-  const filterByState = useCallback((items: StaffScheduleAssignment[]) => {
-    if (activeTab === 'all') return items;
-    return items.filter((item) => getAssignmentTimeState(item) === activeTab);
-  }, [activeTab]);
-
-  const currentAssignments = useMemo(
-    () => filterByState(groupedByDate.get(currentDate) ?? []),
-    [currentDate, groupedByDate, filterByState],
-  );
-
-  const counts = useMemo(() => {
-    const c: Record<TabFilter, number> = { all: assignments.length, now: 0, today: 0, upcoming: 0, past: 0 };
+  const dayCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
     for (const item of assignments) {
-      const state = getAssignmentTimeState(item);
-      c[state]++;
+      counts[item.workDate] = (counts[item.workDate] || 0) + 1;
     }
-    return c;
+    return counts;
   }, [assignments]);
 
-  const loadSchedules = async () => {
+  const shiftSections = useMemo((): ShiftSection[] => {
+    const dayItems = groupedByDate.get(currentDate) ?? [];
+    const groups = new Map<string, StaffScheduleAssignment[]>();
+    for (const item of dayItems) {
+      const key = item.shift?.name || item.shiftId;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(item);
+    }
+    const sections: ShiftSection[] = [];
+    for (const [shiftName, items] of groups) {
+      const shift = items[0].shift;
+      const timeRange = shift ? `${(shift.startTime || '').slice(0, 5)}-${(shift.endTime || '').slice(0, 5)}` : '';
+      const states = items.map(getAssignmentTimeState);
+      const sectionState: AssignmentTimeState = states.includes('now')
+        ? 'now' : states.includes('today') ? 'today' : states.includes('upcoming') ? 'upcoming' : 'past';
+      items.sort((a, b) => (a.zone?.zoneName || '').localeCompare(b.zone?.zoneName || ''));
+      sections.push({
+        title: timeRange ? `${shiftName} · ${timeRange}` : shiftName,
+        state: sectionState,
+        statusLabel: sectionState === 'now' ? 'Đang trực' : sectionState === 'today' ? 'Hôm nay' : sectionState === 'upcoming' ? 'Sắp tới' : 'Đã qua',
+        data: items,
+      });
+    }
+    const order = { now: 0, today: 1, upcoming: 2, past: 3 };
+    sections.sort((a, b) => order[a.state] - order[b.state]);
+    return sections;
+  }, [currentDate, groupedByDate]);
+
+  // Week view: all 7 days with day headers, assignments grouped by shift within each day
+  const weekAllSections = useMemo((): DaySection[] => {
+    const order = { now: 0, today: 1, upcoming: 2, past: 3 };
+    return weekDays.map((date) => {
+      const dayItems = groupedByDate.get(date) ?? [];
+      const groups = new Map<string, StaffScheduleAssignment[]>();
+      for (const item of dayItems) {
+        const key = item.shift?.name || item.shiftId;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(item);
+      }
+      const shiftSections: ShiftSection[] = [];
+      for (const [shiftName, items] of groups) {
+        const shift = items[0].shift;
+        const timeRange = shift ? `${(shift.startTime || '').slice(0, 5)}-${(shift.endTime || '').slice(0, 5)}` : '';
+        const states = items.map(getAssignmentTimeState);
+        const sectionState: AssignmentTimeState = states.includes('now') ? 'now' : states.includes('today') ? 'today' : states.includes('upcoming') ? 'upcoming' : 'past';
+        items.sort((a, b) => (a.zone?.zoneName || '').localeCompare(b.zone?.zoneName || ''));
+        shiftSections.push({
+          title: timeRange ? `${shiftName} · ${timeRange}` : shiftName,
+          state: sectionState,
+          statusLabel: sectionState === 'now' ? 'Đang trực' : sectionState === 'today' ? 'Hôm nay' : sectionState === 'upcoming' ? 'Sắp tới' : 'Đã qua',
+          data: items,
+        });
+      }
+      shiftSections.sort((a, b) => order[a.state] - order[b.state]);
+
+      const dayState: AssignmentTimeState = shiftSections.length === 0 ? 'past'
+        : shiftSections.some(s => s.state === 'now') ? 'now'
+        : shiftSections.some(s => s.state === 'today') ? 'today'
+        : shiftSections.some(s => s.state === 'upcoming') ? 'upcoming'
+        : 'past';
+
+      const d = new Date(date + 'T00:00:00');
+      const dayNum = String(d.getDate()).padStart(2, '0');
+      const monthNum = String(d.getMonth() + 1).padStart(2, '0');
+
+      return {
+        title: `${DAY_LABELS[d.getDay()]}, ${dayNum}/${monthNum}`,
+        date,
+        state: dayState,
+        statusLabel: dayState === 'now' ? 'Đang trực' : dayState === 'today' ? 'Hôm nay' : dayState === 'upcoming' ? 'Sắp tới' : 'Đã qua',
+        data: shiftSections,
+      };
+    });
+  }, [weekDays, groupedByDate]);
+
+  // Month view: days in month that have assignments
+  const monthSections = useMemo((): DaySection[] => {
+    const sections: DaySection[] = [];
+    const order = { now: 0, today: 1, upcoming: 2, past: 3 };
+
+    // First pass: collect raw items by date
+    const itemsByDate = new Map<string, StaffScheduleAssignment[]>();
+    for (const item of assignments) {
+      const d = new Date(item.workDate + 'T00:00:00');
+      if (d.getMonth() === pickerMonth && d.getFullYear() === pickerYear) {
+        const dateStr = item.workDate;
+        if (!itemsByDate.has(dateStr)) itemsByDate.set(dateStr, []);
+        itemsByDate.get(dateStr)!.push(item);
+      }
+    }
+
+    // Second pass: build DaySections with grouped shifts
+    for (const [dateStr, items] of itemsByDate) {
+      const d = new Date(dateStr + 'T00:00:00');
+      const dayNum = String(d.getDate()).padStart(2, '0');
+      const monthNum = String(d.getMonth() + 1).padStart(2, '0');
+
+      const groups = new Map<string, StaffScheduleAssignment[]>();
+      for (const item of items) {
+        const key = item.shift?.name || item.shiftId;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(item);
+      }
+
+      const shiftSecs: ShiftSection[] = [];
+      for (const [shiftName, shiftItems] of groups) {
+        const shift = shiftItems[0].shift;
+        const timeRange = shift ? `${(shift.startTime || '').slice(0, 5)}-${(shift.endTime || '').slice(0, 5)}` : '';
+        const states = shiftItems.map(getAssignmentTimeState);
+        const sectionState: AssignmentTimeState = states.includes('now') ? 'now' : states.includes('today') ? 'today' : states.includes('upcoming') ? 'upcoming' : 'past';
+        shiftItems.sort((a, b) => (a.zone?.zoneName || '').localeCompare(b.zone?.zoneName || ''));
+        shiftSecs.push({
+          title: timeRange ? `${shiftName} · ${timeRange}` : shiftName,
+          state: sectionState,
+          statusLabel: sectionState === 'now' ? 'Đang trực' : sectionState === 'today' ? 'Hôm nay' : sectionState === 'upcoming' ? 'Sắp tới' : 'Đã qua',
+          data: shiftItems,
+        });
+      }
+      shiftSecs.sort((a, b) => order[a.state] - order[b.state]);
+
+      const dayState: AssignmentTimeState = shiftSecs.length === 0 ? 'past'
+        : shiftSecs.some(s => s.state === 'now') ? 'now'
+        : shiftSecs.some(s => s.state === 'today') ? 'today'
+        : shiftSecs.some(s => s.state === 'upcoming') ? 'upcoming'
+        : 'past';
+
+      sections.push({
+        title: `${DAY_LABELS[d.getDay()]}, ${dayNum}/${monthNum}`,
+        date: dateStr,
+        state: dayState,
+        statusLabel: dayState === 'now' ? 'Đang trực' : dayState === 'today' ? 'Hôm nay' : dayState === 'upcoming' ? 'Sắp tới' : 'Đã qua',
+        data: shiftSecs,
+      });
+    }
+    return sections;
+  }, [assignments, pickerMonth, pickerYear]);
+
+  const loadSchedules = useCallback(async (isRefresh?: boolean) => {
+    if (!isRefresh) { setLoading(true); }
     setError(null);
     try {
       const result = await scheduleApi.getMySchedules(weekRange.from, weekRange.to);
       setAssignments(result.items);
     } catch (err: any) {
-      setError(getErrorMessage(err, 'Không thể tải lịch trực'));
+      const msg = getErrorMessage(err, 'Không thể tải lịch trực');
+      devError('[Schedule] loadSchedules error:', msg, err?.response?.status, err?.message);
+      setError(msg);
     } finally {
-      setLoading(false);
+      if (!isRefresh) { setLoading(false); }
     }
-  };
+  }, [weekRange.from, weekRange.to]);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadSchedules();
-    }, [weekRange.from, weekRange.to]),
-  );
+  useFocusEffect(useCallback(() => { loadSchedules(); }, [loadSchedules]));
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadSchedules();
+    await loadSchedules(true);
     setRefreshing(false);
   };
 
@@ -120,19 +350,12 @@ export default function ScheduleScreen() {
     setActionLoadingId(`${id}:${action}`);
     setError(null);
     try {
-      if (action === 'check-in') {
-        await scheduleApi.checkIn(id);
-        setSnackbar('Đã check-in thành công');
-      } else {
-        await scheduleApi.checkOut(id);
-        setSnackbar('Đã check-out thành công');
-      }
+      if (action === 'check-in') { await scheduleApi.checkIn(id); setSnackbar('Đã check-in thành công'); }
+      else { await scheduleApi.checkOut(id); setSnackbar('Đã check-out thành công'); }
       await loadSchedules();
     } catch (err: any) {
       setError(getErrorMessage(err, action === 'check-in' ? 'Check-in thất bại' : 'Check-out thất bại'));
-    } finally {
-      setActionLoadingId(null);
-    }
+    } finally { setActionLoadingId(null); }
   };
 
   const currentIndexRef = useRef(currentIndex);
@@ -168,282 +391,430 @@ export default function ScheduleScreen() {
     }),
   ).current;
 
-  return (
-    <SafeAreaView style={[s.container, { backgroundColor: theme.colors.background }]} edges={['bottom']}>
-      {/* Header */}
-      <View style={[s.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.outlineVariant }]}>
-        <View style={s.headerLeft}>
-          <MaterialCommunityIcons name="calendar-clock" size={24} color={theme.colors.onPrimary} />
-          <Text style={[s.headerTitle, { color: theme.colors.onSurface }]}>Lịch trực</Text>
+  const currentDateFormatted = useMemo(() => {
+    const d = new Date(currentDate + 'T00:00:00');
+    const dayLabel = DAY_LABELS[d.getDay()];
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `Th ${dayLabel}, ${day}/${month}/${year}`;
+  }, [currentDate]);
+
+  const handleViewModeChange = (mode: (typeof VIEW_MODES)[number]) => {
+    setViewMode(mode);
+    if (mode === 'Tháng') {
+      const d = new Date(currentDate + 'T00:00:00');
+      setPickerMonth(d.getMonth());
+      setPickerYear(d.getFullYear());
+    }
+  };
+
+  const handleDatePicked = (dateStr: string) => {
+    const idx = weekDays.indexOf(dateStr);
+    if (idx >= 0) {
+      setCurrentIndex(idx);
+      setViewMode('Ngày');
+      setShowDatePicker(false);
+    } else {
+      const newWeekDays = getWeekDaysFromRef(dateStr);
+      const newIdx = newWeekDays.indexOf(dateStr);
+      setCurrentIndex(newIdx >= 0 ? newIdx : 0);
+      setReferenceDate(dateStr);
+      setViewMode('Ngày');
+      setShowDatePicker(false);
+    }
+  };
+
+  // Month calendar data
+  const monthGrid = useMemo(() => getMonthGrid(pickerYear, pickerMonth), [pickerYear, pickerMonth]);
+
+  const monthAssignmentMap = useMemo(() => {
+    const map: Record<number, boolean> = {};
+    for (const item of assignments) {
+      const d = new Date(item.workDate + 'T00:00:00');
+      if (d.getMonth() === pickerMonth && d.getFullYear() === pickerYear) {
+        map[d.getDate()] = true;
+      }
+    }
+    return map;
+  }, [assignments, pickerMonth, pickerYear]);
+
+  // Helpers
+  function renderEmptyState(message?: string) {
+    return (
+      <View style={s.emptyContainer}>
+        <MaterialCommunityIcons name="folder-open-outline" size={80} color={c.outline} />
+        <Text style={[s.emptyTitle, { color: c.onSurfaceVariant }]}>Không có dữ liệu</Text>
+        <Text style={[s.emptySub, { color: c.outline }]}>{message || 'Ngày này không có lịch trực'}</Text>
+      </View>
+    );
+  }
+
+  function renderMainList() {
+    const listSections = shiftSections;
+
+    const flatItems = listSections
+      .flatMap(sec => sec.data.map(item => ({ ...item, _shiftName: sec.title.split(' · ')[0], _shiftTime: sec.title.split(' · ')[1] || '' })))
+      .sort((a, b) => {
+        const aStart = a.shift?.startTime || '';
+        const bStart = b.shift?.startTime || '';
+        return aStart.localeCompare(bStart);
+      });
+
+    if (flatItems.length === 0) {
+      return (
+        <ScrollView contentContainerStyle={s.emptyContentStyle} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}>
+          {renderEmptyState()}
+        </ScrollView>
+      );
+    }
+
+    const d = new Date(currentDate + 'T00:00:00');
+    const dayLabel = `${VI_DAYS[d.getDay()]} ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+
+    return (
+      <FlatList
+        data={flatItems}
+        keyExtractor={(item) => item.id}
+        ListHeaderComponent={
+          <View style={[s.daySectionHeader, { backgroundColor: c.surfaceVariant, marginBottom: 12 }]}>
+            <Text style={[s.daySectionTitle, { color: c.primary }]}>{dayLabel}</Text>
+          </View>
+        }
+        renderItem={({ item }) => (
+          <AssignmentCard
+            item={item}
+            onCheckIn={(id) => runAttendanceAction(id, 'check-in')}
+            onCheckOut={(id) => runAttendanceAction(id, 'check-out')}
+            actionLoadingId={actionLoadingId}
+            shiftLabel={item._shiftName}
+            shiftTime={item._shiftTime}
+          />
+        )}
+        ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+        contentContainerStyle={s.listContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
+      />
+    );
+  }
+
+  // Render day section with nested shift grouping (for week/month views)
+  function renderDaySection(section: DaySection, sectionIdx: number) {
+    if (section.data.length === 0) return null;
+
+    const d = new Date(section.date + 'T00:00:00');
+    const dayOfWeek = d.getDay();
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+    const order = { now: 0, today: 1, upcoming: 2, past: 3 };
+
+    const flatItems = section.data
+      .flatMap(dayShift => dayShift.data.map(item => ({ ...item, _shiftName: dayShift.title.split(' · ')[0], _shiftTime: dayShift.title.split(' · ')[1] || '' })))
+      .sort((a, b) => {
+        const aStart = a.shift?.startTime || '';
+        const bStart = b.shift?.startTime || '';
+        return aStart.localeCompare(bStart);
+      });
+
+    return (
+      <View key={section.date} style={s.daySection}>
+        <View style={[s.daySectionHeader, { backgroundColor: c.surfaceVariant }]}>
+          <Text style={[s.daySectionTitle, { color: c.primary }]}>{section.title}</Text>
         </View>
-        <Text style={[s.headerRange, { color: theme.colors.onSurfaceVariant }]}>{weekRange.from} - {weekRange.to}</Text>
+        {flatItems.map((item) => (
+          <AssignmentCard
+            key={item.id}
+            item={item}
+            onCheckIn={(id) => runAttendanceAction(id, 'check-in')}
+            onCheckOut={(id) => runAttendanceAction(id, 'check-out')}
+            actionLoadingId={actionLoadingId}
+            shiftLabel={item._shiftName}
+            shiftTime={item._shiftTime}
+          />
+        ))}
       </View>
+    );
+  }
 
-      {/* Tab Bar */}
-      <View style={[s.tabBar, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.outlineVariant }]}>
-        <FlatList
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.tabContent}
-          data={TABS}
-          keyExtractor={(tab) => tab.key}
-          renderItem={({ item: tab }) => {
-            const count = counts[tab.key];
-            const isActive = activeTab === tab.key;
+  function renderWeekList() {
+    const daysWithData = weekAllSections.filter(d => d.data.length > 0);
+    if (daysWithData.length === 0) {
+      return (
+        <ScrollView contentContainerStyle={s.scrollFlex} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}>
+          {renderEmptyState()}
+        </ScrollView>
+      );
+    }
+    return (
+      <FlatList
+        data={weekAllSections}
+        keyExtractor={(item) => item.date}
+        renderItem={({ item, index }) => renderDaySection(item, index)}
+        ListHeaderComponent={
+          <View style={[s.pillStrip, { backgroundColor: c.surface, borderBottomColor: c.divider }]}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.pillContent}>
+              {weekDays.map((date, idx) => {
+                const isSelected = idx === currentIndex;
+                const isTodayDate = date === todayStr;
+                const count = dayCounts[date] || 0;
+                return (
+                  <TouchableOpacity
+                    key={date}
+                    onPress={() => { setCurrentIndex(idx); }}
+                    activeOpacity={0.7}
+                    style={[s.pill, { backgroundColor: isSelected ? c.primary : c.surfaceVariant, borderColor: isTodayDate && !isSelected ? c.primary : 'transparent' }]}
+                  >
+                    <Text style={[s.pillLabel, { color: isSelected ? c.onPrimary : c.primary }]}>{DAY_LABELS[idx]}</Text>
+                    <Text style={[s.pillDate, { color: isSelected ? c.onPrimary : c.primary }, isTodayDate && !isSelected && { fontWeight: '900' }]}>{date.slice(8, 10)}</Text>
+                    {count > 0 && (
+                      <View style={[s.pillBadge, { backgroundColor: isSelected ? c.onPrimary : c.primary }]}>
+                        <Text style={[s.pillBadgeText, { color: isSelected ? c.primary : c.onPrimary }]}>{count}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        }
+        ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+        contentContainerStyle={s.listContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
+      />
+    );
+  }
+
+  function renderMonthList() {
+    const monthHasAssignments = new Set(monthSections.map(s => s.date));
+
+    function renderCalendarGrid() {
+      return (
+        <View style={[s.calendarWrap, { backgroundColor: c.surface }]}>
+          <View style={s.calRow}>
+            {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((d) => (
+              <View key={d} style={s.calCell}><Text style={[s.calDayHeader, { color: c.primary }]}>{d}</Text></View>
+            ))}
+          </View>
+          {Array.from({ length: Math.ceil(monthGrid.length / 7) }, (_, rowIdx) => (
+            <View key={rowIdx} style={s.calRow}>
+              {monthGrid.slice(rowIdx * 7, (rowIdx + 1) * 7).map((day, colIdx) => {
+                if (day === null) return <View key={`e-${colIdx}`} style={s.calCell} />;
+                const isCurrentMonth = day > 0;
+                const dateStr = isCurrentMonth
+                  ? `${pickerYear}-${String(pickerMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+                  : '';
+                const isToday = dateStr === todayStr;
+                const hasAssignments = monthHasAssignments.has(dateStr);
+                return (
+                  <TouchableOpacity
+                    key={`d-${day}`}
+                    style={[s.calCell, isToday && { borderWidth: 1.5, borderColor: c.primary, borderRadius: 8 }]}
+                    onPress={() => { if (dateStr && hasAssignments) handleDatePicked(dateStr); }}
+                    disabled={!isCurrentMonth || !hasAssignments}
+                  >
+                    <Text style={[s.calDayNum, {
+                      color: isCurrentMonth ? (hasAssignments ? c.primary : c.onSurface) : c.outline,
+                      fontWeight: isToday ? '900' : hasAssignments ? '700' : '400',
+                    }]}>
+                      {isCurrentMonth ? day : Math.abs(day)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ))}
+        </View>
+      );
+    }
+
+    if (monthSections.length === 0) {
+      return (
+        <ScrollView contentContainerStyle={s.scrollFlex} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}>
+          {renderCalendarGrid()}
+          {renderEmptyState('Tháng này không có ca trực')}
+        </ScrollView>
+      );
+    }
+    return (
+      <FlatList
+        data={monthSections}
+        keyExtractor={(item) => item.date}
+        renderItem={({ item, index }) => renderDaySection(item, index)}
+        ListHeaderComponent={
+          <View>
+            <View style={[s.monthNav, { backgroundColor: c.surface, borderBottomColor: c.divider }]}>
+              <TouchableOpacity onPress={() => { if (pickerMonth === 0) { setPickerMonth(11); setPickerYear(py => py - 1); } else setPickerMonth(pm => pm - 1); }} style={s.monthNavBtn}>
+                <MaterialCommunityIcons name="chevron-left" size={22} color={c.onSurface} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => { setShowDatePicker(true); }}>
+                <Text style={[s.monthNavTitle, { color: c.onSurface }]}>{VI_MONTHS[pickerMonth]} {pickerYear}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => { if (pickerMonth === 11) { setPickerMonth(0); setPickerYear(py => py + 1); } else setPickerMonth(pm => pm + 1); }} style={s.monthNavBtn}>
+                <MaterialCommunityIcons name="chevron-right" size={22} color={c.onSurface} />
+              </TouchableOpacity>
+            </View>
+            {renderCalendarGrid()}
+          </View>
+        }
+        ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+        contentContainerStyle={s.listContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
+      />
+    );
+  }
+
+  function renderWeekStrip(activeIdx: number, onSelect: (idx: number) => void) {
+    return (
+      <View style={[s.pillStrip, { backgroundColor: c.surface, borderBottomColor: c.divider }]}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.pillContent}>
+          {weekDays.map((date, idx) => {
+            const isSelected = idx === activeIdx;
+            const isTodayDate = date === todayStr;
+            const count = dayCounts[date] || 0;
             return (
-              <Chip
-                key={tab.key}
-                selected={isActive}
-                onPress={() => setActiveTab(tab.key)}
-                mode={isActive ? 'flat' : 'outlined'}
-                style={[s.tabChip, isActive && { backgroundColor: theme.colors.primaryContainer }]}
-                textStyle={[s.tabChipText, isActive && { color: theme.colors.primary }]}
-                compact
-              >
-                {tab.label} {count > 0 ? `(${count})` : ''}
-              </Chip>
-            );
-          }}
-        />
-      </View>
-
-      {/* Date Header */}
-      <View style={[s.dateNav, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.outlineVariant }]}>
-        <TouchableOpacity onPress={() => navRef.current.goPrev()} disabled={currentIndex <= 0} style={s.navBtn}>
-          <MaterialCommunityIcons
-            name="chevron-left"
-            size={26}
-            color={currentIndex <= 0 ? theme.colors.outlineVariant : theme.colors.onSurface}
-          />
-        </TouchableOpacity>
-
-        <TouchableOpacity activeOpacity={0.7} style={s.dateCenter}>
-          <Text style={[s.dateLabel, { color: theme.colors.onSurface }]}>{formatViDate(currentDate)}</Text>
-          <Text style={[s.dateSub, { color: theme.colors.onSurfaceVariant }]}>
-            {currentDate === todayStr ? 'Hôm nay' : currentDate}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => navRef.current.goNext()} disabled={currentIndex >= 6} style={s.navBtn}>
-          <MaterialCommunityIcons
-            name="chevron-right"
-            size={26}
-            color={currentIndex >= 6 ? theme.colors.outlineVariant : theme.colors.onSurface}
-          />
-        </TouchableOpacity>
-      </View>
-
-      {/* Week Indicator */}
-      <View style={[s.weekDots, { backgroundColor: theme.colors.surface }]}>
-        {weekDays.map((date, idx) => {
-          const isActive = idx === currentIndex;
-          const isToday = date === todayStr;
-          return (
-            <TouchableOpacity key={date} onPress={() => goToDay(idx)} activeOpacity={0.7} style={s.dotTouch}>
-              <View
+              <TouchableOpacity
+                key={date}
+                onPress={() => onSelect(idx)}
+                activeOpacity={0.7}
                 style={[
-                  s.dot,
+                  s.pill,
                   {
-                    backgroundColor: isActive
-                      ? theme.colors.primary
-                      : isToday
-                        ? theme.colors.primaryContainer
-                        : theme.colors.surfaceVariant,
-                    width: isActive ? 28 : 10,
-                    height: isActive ? 8 : 8,
-                    borderRadius: isActive ? 4 : 4,
+                    backgroundColor: isSelected ? c.primary : c.surfaceVariant,
+                    borderColor: isTodayDate && !isSelected ? c.primary : 'transparent',
                   },
                 ]}
-              />
-              <Text style={[s.dotLabel, { color: isActive ? theme.colors.primary : theme.colors.onSurfaceVariant }]}>
-                {DAY_LABELS[idx]}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+              >
+                <Text style={[s.pillLabel, { color: isSelected ? c.onPrimary : c.onSurfaceVariant }]}>
+                  {DAY_LABELS[idx]}
+                </Text>
+                <Text style={[s.pillDate, { color: isSelected ? c.onPrimary : c.onSurface }, isTodayDate && !isSelected && { color: c.primary, fontWeight: '900' }]}>
+                  {date.slice(8, 10)}
+                </Text>
+                {count > 0 && (
+                  <View style={[s.pillBadge, { backgroundColor: isSelected ? c.onPrimary : c.primary }]}>
+                    <Text style={[s.pillBadgeText, { color: isSelected ? c.primary : c.onPrimary }]}>{count}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+    );
+  }
+
+  return (
+    <SafeAreaView style={[s.container, { backgroundColor: c.background }]} edges={['bottom']}>
+      {/* App Bar
+      <View style={[s.appBar, { backgroundColor: c.primary }]}>
+        <TouchableOpacity style={s.appBarBtn}>
+          <MaterialCommunityIcons name="arrow-left" size={24} color={c.onPrimary} />
+        </TouchableOpacity>
+        <Text style={[s.appBarTitle, { color: c.onPrimary }]}>Lịch trực</Text>
+        <TouchableOpacity style={s.appBarBtn}>
+          <MaterialCommunityIcons name="dots-vertical" size={24} color={c.onPrimary} />
+        </TouchableOpacity>
+      </View> */}
+
+      {/* Segmented Control */}
+      <View style={[s.segmentedWrap, { backgroundColor: c.surface }]}>
+        <View style={[s.segmentedBg, { backgroundColor: c.surfaceVariant }]}>
+          {VIEW_MODES.map((mode) => {
+            const active = viewMode === mode;
+            return (
+              <TouchableOpacity key={mode} onPress={() => handleViewModeChange(mode)} style={[s.segmentedBtn, active && { backgroundColor: c.primary }]}>
+                <Text style={[s.segmentedText, { color: active ? c.onPrimary : c.onSurfaceVariant }, active && { fontWeight: '700' }]}>{mode}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </View>
 
-      {/* Error */}
-      {error ? (
-        <Card mode="outlined" style={[s.errorCard, { backgroundColor: theme.colors.errorContainer, borderColor: theme.colors.error }]}>
-          <Card.Content style={s.errorContent}>
-            <MaterialCommunityIcons name="alert-circle-outline" size={22} color={theme.colors.error} />
-            <Text style={[s.errorText, { color: theme.colors.error }]} selectable>{error}</Text>
-          </Card.Content>
-        </Card>
-      ) : null}
-
-      {/* Day Content */}
-      {loading ? (
-        <View style={s.loadingBox}>
-          <ActivityIndicator color={theme.colors.primary} />
+      {/* Date Dropdown */}
+      {viewMode !== 'Tháng' && (
+        <View style={[s.dateRow, { backgroundColor: c.surface, borderBottomColor: c.divider }]}>
+          <TouchableOpacity style={s.dateDropdown} onPress={() => { setShowDatePicker(true); const d = new Date(currentDate + 'T00:00:00'); setPickerMonth(d.getMonth()); setPickerYear(d.getFullYear()); }}>
+            <Text style={[s.dateText, { color: c.onSurface }]}>{currentDateFormatted}</Text>
+            <MaterialCommunityIcons name="chevron-down" size={20} color={c.onSurfaceVariant} />
+          </TouchableOpacity>
         </View>
-      ) : (
-        <Animated.View
-          style={[s.dayContainer, { opacity: fadeAnim, transform: [{ translateX: slideAnim.interpolate({ inputRange: [-1, 0, 1], outputRange: [SCREEN_WIDTH * 0.3, 0, -SCREEN_WIDTH * 0.3] }) }] }]}
-          {...panResponder.panHandlers}
-        >
-          <FlatList
-            data={currentAssignments}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <AssignmentCard
-                item={item}
-                onCheckIn={(id) => runAttendanceAction(id, 'check-in')}
-                onCheckOut={(id) => runAttendanceAction(id, 'check-out')}
-                actionLoadingId={actionLoadingId}
-              />
-            )}
-            contentContainerStyle={s.listContent}
-            ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-            ListEmptyComponent={
-              <View style={s.emptyBox}>
-                <MaterialCommunityIcons name="calendar-blank-outline" size={48} color={theme.colors.outlineVariant} />
-                <Text style={[s.emptyText, { color: theme.colors.onSurfaceVariant }]}>
-                  {activeTab === 'all' ? 'Ngày này không có ca trực.' : `Không có ca "${TABS.find((t) => t.key === activeTab)?.label}".`}
-                </Text>
-              </View>
-            }
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />
-            }
-          />
-        </Animated.View>
       )}
 
-      <Snackbar
-        visible={!!snackbar}
-        onDismiss={() => setSnackbar('')}
-        duration={3000}
-        style={s.snackbar}
-      >
-        {snackbar}
-      </Snackbar>
+      {/* Content */}
+      {loading ? (
+        <View style={s.loadingBox}><ActivityIndicator color={c.primary} /></View>
+      ) : error ? (
+        <View style={s.errorBox}><MaterialCommunityIcons name="alert-circle-outline" size={22} color={c.error} /><Text style={[s.errorText, { color: c.error }]} selectable>{error}</Text></View>
+      ) : viewMode === 'Ngày' ? (
+        <Animated.View style={[s.contentFlex, { opacity: fadeAnim, transform: [{ translateX: slideAnim.interpolate({ inputRange: [-1, 0, 1], outputRange: [SCREEN_WIDTH * 0.3, 0, -SCREEN_WIDTH * 0.3] }) }] }]} {...panResponder.panHandlers}>
+          {renderMainList()}
+        </Animated.View>
+      ) : viewMode === 'Tuần' ? (
+        renderWeekList()
+      ) : (
+        /* Tháng view */
+        renderMonthList()
+      )}
+
+      {/* Date Picker Modal */}
+      <Modal visible={showDatePicker} transparent animationType="fade" onRequestClose={() => setShowDatePicker(false)}>
+        <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={() => setShowDatePicker(false)}>
+          <View style={[s.modalContent, { backgroundColor: c.surface }]}>
+            <View style={[s.monthNav, { borderBottomColor: c.divider }]}>
+              <TouchableOpacity onPress={() => { if (pickerMonth === 0) { setPickerMonth(11); setPickerYear(py => py - 1); } else setPickerMonth(pm => pm - 1); }} style={s.monthNavBtn}>
+                <MaterialCommunityIcons name="chevron-left" size={22} color={c.onSurface} />
+              </TouchableOpacity>
+              <Text style={[s.monthNavTitle, { color: c.onSurface }]}>{VI_MONTHS[pickerMonth]} {pickerYear}</Text>
+              <TouchableOpacity onPress={() => { if (pickerMonth === 11) { setPickerMonth(0); setPickerYear(py => py + 1); } else setPickerMonth(pm => pm + 1); }} style={s.monthNavBtn}>
+                <MaterialCommunityIcons name="chevron-right" size={22} color={c.onSurface} />
+              </TouchableOpacity>
+            </View>
+            <View style={s.calendarGrid}>
+              <View style={s.calRow}>
+                {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((d) => (
+                  <View key={d} style={s.calCell}><Text style={[s.calDayHeader, { color: c.onSurfaceVariant }]}>{d}</Text></View>
+                ))}
+              </View>
+              {Array.from({ length: Math.ceil(monthGrid.length / 7) }, (_, rowIdx) => (
+                <View key={rowIdx} style={s.calRow}>
+                  {monthGrid.slice(rowIdx * 7, (rowIdx + 1) * 7).map((day, colIdx) => {
+                    if (day === null) return <View key={`e-${colIdx}`} style={s.calCell} />;
+                    const isCurrentMonth = day > 0;
+                    const dateStr = isCurrentMonth
+                      ? `${pickerYear}-${String(pickerMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+                      : '';
+                    const isToday = dateStr === todayStr;
+                    return (
+                      <TouchableOpacity
+                        key={`d-${day}`}
+                        style={[s.calCell, isToday && { borderWidth: 1, borderColor: c.primary, borderRadius: 8 }]}
+                        onPress={() => { if (dateStr) handleDatePicked(dateStr); }}
+                        disabled={!isCurrentMonth}
+                      >
+                        <Text style={[s.calDayNum, { color: isCurrentMonth ? c.onSurface : c.outline }, isToday && { color: c.primary, fontWeight: '900' }]}>
+                          {isCurrentMonth ? day : Math.abs(day)}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ))}
+            </View>
+            <TouchableOpacity style={[s.todayBtn, { borderColor: c.primary }]} onPress={() => handleDatePicked(todayStr)}>
+              <Text style={[s.todayBtnText, { color: c.primary }]}>Hôm nay</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Snackbar */}
+      {!!snackbar && (
+        <View style={[s.snackbar, { backgroundColor: c.onSurface }]}>
+          <Text style={[s.snackbarText, { color: c.surface }]}>{snackbar}</Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
 
-const s = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  headerTitle: {
-    fontWeight: '900',
-    fontSize: 18,
-  },
-  headerRange: {
-    fontSize: 12,
-  },
-  tabBar: {
-    borderBottomWidth: 1,
-  },
-  tabContent: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  tabChip: {
-    borderRadius: 20,
-  },
-  tabChipText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  dateNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 4,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-  },
-  navBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 22,
-  },
-  dateCenter: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  dateLabel: {
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  dateSub: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  weekDots: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-evenly',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-  },
-  dotTouch: {
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 4,
-    minWidth: 36,
-  },
-  dot: {
-    borderRadius: 4,
-  },
-  dotLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  errorCard: {
-    margin: 16,
-  },
-  errorContent: {
-    flexDirection: 'row',
-    gap: 10,
-    alignItems: 'flex-start',
-  },
-  errorText: {
-    flex: 1,
-  },
-  loadingBox: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dayContainer: {
-    flex: 1,
-  },
-  listContent: {
-    padding: 16,
-    paddingBottom: 32,
-  },
-  emptyBox: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-    gap: 12,
-  },
-  emptyText: {
-    fontSize: 15,
-    textAlign: 'center',
-  },
-  snackbar: {
-    top: 60,
-  },
-});
+

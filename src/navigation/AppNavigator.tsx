@@ -6,6 +6,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from 'react-native-paper';
 import { useAuth } from '../context/AuthContext';
+import { lightColors } from '../theme/LightTheme';
 
 import ChangePasswordScreen from '../screens/ChangePasswordScreen';
 import FaceCameraScreen from '../screens/FaceCameraScreen';
@@ -46,7 +47,7 @@ function AuthNavigator() {
           headerShown: true,
           headerTitle: 'Đăng nhập khuôn mặt',
           headerStyle: { backgroundColor: theme.colors.surface },
-          headerTintColor: theme.colors.onSurface,
+          headerTintColor: theme.colors.onPrimary,
         }}
       />
     </AuthStack.Navigator>
@@ -71,7 +72,7 @@ function MainTabNavigator() {
         headerStyle: {
           backgroundColor: theme.colors.surface,
         },
-        headerTintColor: theme.colors.onSurface,
+        headerTintColor: theme.colors.onPrimary,
       }}
     >
       <MainTab.Screen
@@ -154,7 +155,7 @@ function MainStackNavigator() {
     <MainStack.Navigator
       screenOptions={{
         headerStyle: { backgroundColor: theme.colors.surface },
-        headerTintColor: theme.colors.onSurface,
+        headerTintColor: lightColors.onPrimary,
         cardStyle: { backgroundColor: theme.colors.background },
       }}
     >

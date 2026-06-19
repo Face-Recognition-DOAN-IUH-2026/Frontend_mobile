@@ -2,13 +2,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 import { DarkTheme } from '../theme/DarkTheme';
 import { LightTheme } from '../theme/LightTheme';
+import { AppTheme } from '../theme/types';
 
 export type MobileThemeMode = 'dark' | 'light';
 
 interface ThemeContextType {
   mode: MobileThemeMode;
   isDark: boolean;
-  theme: typeof DarkTheme;
+  theme: AppTheme;
   toggleTheme: () => Promise<void>;
   setThemeMode: (mode: MobileThemeMode) => Promise<void>;
 }
@@ -40,7 +41,7 @@ export function MobileThemeProvider({ children }: { children: ReactNode }) {
     () => ({
       mode,
       isDark: mode === 'dark',
-      theme: mode === 'dark' ? DarkTheme : (LightTheme as typeof DarkTheme),
+      theme: mode === 'dark' ? DarkTheme : LightTheme,
       toggleTheme,
       setThemeMode,
     }),

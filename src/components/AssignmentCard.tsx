@@ -1,16 +1,16 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { Button, Card, Divider, Text, useTheme } from 'react-native-paper';
+import { Button, Card, Text, useTheme } from 'react-native-paper';
 import { AppTheme } from '../theme/DarkTheme';
 import { StaffScheduleAssignment } from '../types';
-import { toDateInput, normalizeTime } from '../utils/dateUtils';
+import { normalizeTime } from '../utils/dateUtils';
 
 type AssignmentTimeState = 'now' | 'today' | 'upcoming' | 'past';
 
 function getAssignmentTimeState(item: StaffScheduleAssignment): AssignmentTimeState {
   const now = new Date();
-  const today = toDateInput(now);
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   if (item.workDate < today) return 'past';
   if (item.workDate > today) return 'upcoming';
   const startTime = normalizeTime(item.shift?.startTime);
@@ -22,11 +22,11 @@ function getAssignmentTimeState(item: StaffScheduleAssignment): AssignmentTimeSt
   return 'today';
 }
 
-function displayZoneName(item: StaffScheduleAssignment) {
+function zoneLabel(item: StaffScheduleAssignment) {
   if (!item.zone) return item.zoneId;
   const zoneName = item.zone.zoneName || '';
   const compact = zoneName.match(/^(Tang|Tầng)\s*(\d+)/i);
-  return compact ? `Tầng ${compact[2]}` : zoneName || `Tầng ${item.zone.floor ?? '-'}`;
+  return compact ? compact[2] : zoneName || `${item.zone.floor ?? '-'}`;
 }
 
 interface AssignmentCardProps {
@@ -34,79 +34,71 @@ interface AssignmentCardProps {
   onCheckIn: (id: string) => void;
   onCheckOut: (id: string) => void;
   actionLoadingId: string | null;
+  shiftLabel?: string;
+  shiftTime?: string;
 }
 
-export default function AssignmentCard({ item, onCheckIn, onCheckOut, actionLoadingId }: AssignmentCardProps) {
-  const theme = useTheme() as AppTheme;
+export default function AssignmentCard({ item, onCheckIn, onCheckOut, actionLoadingId, shiftLabel, shiftTime }: AssignmentCardProps) {
+  const theme = useTheme<AppTheme>();
+  const c = theme.colors;
   const state = getAssignmentTimeState(item);
-  const today = toDateInput(new Date());
+  const today = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`;
   const isToday = item.workDate === today;
-  const canCheckIn = isToday && !item.attendance?.checkInAt;
+
+  const startTime = normalizeTime(item.shift?.startTime);
+  const endTime = normalizeTime(item.shift?.endTime);
+  const nowDate = new Date();
+  const nowMins = nowDate.getHours() * 60 + nowDate.getMinutes();
+  const startMins = startTime ? startTime.split(':').map(Number).reduce((h, m, i) => i === 0 ? h * 60 + m : h * 60 + m, 0) : null;
+  const endMins = endTime ? endTime.split(':').map(Number).reduce((h, m, i) => i === 0 ? h * 60 + m : h * 60 + m, 0) : null;
+  const withinShift = startMins !== null && endMins !== null && nowMins >= startMins && nowMins <= endMins;
+
+  const canCheckIn = isToday && !item.attendance?.checkInAt && withinShift;
   const canCheckOut = isToday && !!item.attendance?.checkInAt && !item.attendance?.checkOutAt;
   const isNow = state === 'now';
   const isPast = state === 'past';
 
-  const stateColors = {
-    now: theme.colors.primary,
-    today: theme.colors.tertiary,
-    upcoming: theme.colors.secondary,
-    past: theme.colors.outline,
-  };
+  const checkInTime = item.attendance?.checkInAt ? item.attendance.checkInAt.slice(11, 16) : null;
+  const checkOutTime = item.attendance?.checkOutAt ? item.attendance.checkOutAt.slice(11, 16) : null;
+
+  const staffName = item.staff?.email || item.staffId;
 
   return (
     <Card
       mode="outlined"
       style={[
         s.card,
-        { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant },
-        isNow && { borderColor: theme.colors.primary, borderWidth: 1.5 },
-        isPast && { opacity: 0.65 },
+        {
+          backgroundColor: c.surface,
+          borderColor: c.outlineVariant,
+        },
+        isPast && { opacity: 0.6 },
       ]}
     >
       <Card.Content style={s.content}>
-        <View style={s.topRow}>
-          <View style={[s.stateDot, { backgroundColor: stateColors[state] }]} />
-          <Text style={[s.stateText, { color: stateColors[state] }]}>
-            {isNow ? 'Đang trực' : isPast ? 'Đã qua' : isToday ? 'Hôm nay' : 'Sắp tới'}
+        {(shiftLabel || shiftTime) && (
+          <Text style={[s.shiftInfo, { color: c.onSurface }]}>
+            {shiftLabel}{shiftTime ? ` · ${shiftTime}` : ''}
           </Text>
-          {isNow && (
-            <View style={[s.liveBadge, { backgroundColor: theme.colors.primary }]}>
-              <MaterialCommunityIcons name="access-point" size={10} color="#fff" />
-            </View>
-          )}
-        </View>
-
-        <Text variant="titleMedium" style={[s.shiftName, { color: theme.colors.onSurface }]}>
-          {item.shift?.name || item.shiftId}
-        </Text>
-        <Text style={[s.timeRange, { color: theme.colors.onSurfaceVariant }]}>
-          {normalizeTime(item.shift?.startTime)} - {normalizeTime(item.shift?.endTime)}
-        </Text>
-
-        <Divider style={s.divider} />
-
-        <View style={s.detailRow}>
-          <MaterialCommunityIcons name="map-marker-outline" size={14} color={theme.colors.onSurfaceVariant} />
-          <Text style={[s.detailText, { color: theme.colors.onSurfaceVariant }]}>{displayZoneName(item)}</Text>
-        </View>
-        <View style={s.detailRow}>
-          <MaterialCommunityIcons name="calendar-outline" size={14} color={theme.colors.onSurfaceVariant} />
-          <Text style={[s.detailText, { color: theme.colors.onSurfaceVariant }]}>{item.workDate}</Text>
-        </View>
-        <View style={s.detailRow}>
-          <MaterialCommunityIcons name="login-variant" size={14} color={theme.colors.onSurfaceVariant} />
-          <Text style={[s.detailText, { color: theme.colors.onSurfaceVariant }]}>
-            {item.attendance?.checkInAt
-              ? `Vào lúc ${item.attendance.checkInAt.slice(11, 16)}`
-              : 'Chưa check-in'}
-          </Text>
-        </View>
-        {item.attendance?.checkOutAt && (
-          <View style={s.detailRow}>
-            <MaterialCommunityIcons name="logout-variant" size={14} color={theme.colors.onSurfaceVariant} />
-            <Text style={[s.detailText, { color: theme.colors.onSurfaceVariant }]}>Ra lúc {item.attendance.checkOutAt.slice(11, 16)}</Text>
-          </View>
         )}
+
+        <Text style={s.fieldRow}>
+          <Text style={[s.fieldLabel, { color: c.onSurface }]}>Tầng : </Text>
+          <Text style={[s.fieldValue, { color: c.onSurface }]}>{zoneLabel(item)}</Text>
+        </Text>
+
+        <Text style={s.fieldRow}>
+          <Text style={[s.fieldLabel, { color: c.onSurface }]}>Email : </Text>
+          <Text style={[s.fieldValue, { color: c.onSurface }]}>{staffName}</Text>
+        </Text>
+
+        <Text style={s.fieldRow}>
+          <Text style={[s.fieldLabel, { color: c.onSurface }]}>Vào : </Text>
+          <Text style={[s.fieldValue, { color: c.onSurface }]}>{checkInTime ?? '--'}</Text>
+          <Text style={[s.separator, { color: c.onSurface }]}>  -  </Text>
+          <Text style={[s.fieldLabel, { color: c.onSurface }]}>Ra : </Text>
+          <Text style={[s.fieldValue, { color: c.onSurface }]}>{checkOutTime ?? '--'}</Text>
+        </Text>
 
         {(canCheckIn || canCheckOut) && (
           <View style={s.actionRow}>
@@ -117,7 +109,9 @@ export default function AssignmentCard({ item, onCheckIn, onCheckOut, actionLoad
                 compact
                 loading={actionLoadingId === `${item.id}:check-in`}
                 onPress={() => onCheckIn(item.id)}
-                style={s.actionBtn}
+                style={[s.actionBtn, { backgroundColor: c.primary }]}
+                labelStyle={s.actionLabel}
+                textColor="#fff"
               >
                 Check-in
               </Button>
@@ -129,7 +123,9 @@ export default function AssignmentCard({ item, onCheckIn, onCheckOut, actionLoad
                 compact
                 loading={actionLoadingId === `${item.id}:check-out`}
                 onPress={() => onCheckOut(item.id)}
-                style={s.actionBtn}
+                style={[s.actionBtn, { borderColor: c.outline }]}
+                labelStyle={[s.actionLabel, { color: c.onSurface }]}
+                textColor={c.onSurface}
               >
                 Check-out
               </Button>
@@ -143,58 +139,43 @@ export default function AssignmentCard({ item, onCheckIn, onCheckOut, actionLoad
 
 const s = StyleSheet.create({
   card: {
-    borderRadius: 14,
+    borderRadius: 12,
   },
   content: {
-    gap: 6,
+    gap: 4,
   },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 2,
-  },
-  stateDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  stateText: {
-    fontSize: 11,
+  shiftInfo: {
+    fontSize: 14,
     fontWeight: '800',
-    flex: 1,
+    marginBottom: 4,
   },
-  liveBadge: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shiftName: {
-    fontWeight: '900',
-  },
-  timeRange: {
-    fontSize: 13,
-  },
-  divider: {
-    marginVertical: 4,
-  },
-  detailRow: {
+  fieldRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
   },
-  detailText: {
-    fontSize: 12,
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  separator: {
+    fontSize: 13,
+    fontWeight: '400',
+  },
+  fieldValue: {
+    fontSize: 13,
+    fontWeight: '400',
+    flex: 1,
   },
   actionRow: {
     flexDirection: 'row',
     gap: 8,
-    marginTop: 6,
+    marginTop: 8,
   },
   actionBtn: {
     flex: 1,
     borderRadius: 8,
+  },
+  actionLabel: {
+    fontSize: 13,
   },
 });
