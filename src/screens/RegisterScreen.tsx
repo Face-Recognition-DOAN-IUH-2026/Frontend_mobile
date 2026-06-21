@@ -15,7 +15,7 @@ interface RegisterScreenProps {
 export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   const theme = useTheme() as AppTheme;
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const [step, setStep] = useState<'scan' | 'form' | 'choice' | 'face'>('scan');
+  const [step, setStep] = useState<'scan' | 'form' | 'choice' | 'consent' | 'face'>('scan');
   const [studentCode, setStudentCode] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -27,6 +27,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   const [registeredUser, setRegisteredUser] = useState<any>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [snackbar, setSnackbar] = useState('');
+  const [consentGiven, setConsentGiven] = useState(false);
 
   const showError = (message: string) => setSnackbar(message);
 
@@ -125,7 +126,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
         type: 'image/jpeg',
         name: 'face_down.jpg',
       } as any);
-      formData.append('consent_given', 'true');
+      formData.append('consent_given', consentGiven ? 'true' : 'false');
 
       await api.post(`/patrons/${registeredUser.id}/enroll-batch`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -172,7 +173,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               <Text style={styles.choiceSubtitle}>
                 Bạn có muốn đăng ký khuôn mặt để đăng nhập nhanh tại cổng thư viện không?
               </Text>
-              <Button mode="contained" onPress={() => setStep('face')} contentStyle={styles.largeButton}>
+              <Button mode="contained" onPress={() => setStep('consent')} contentStyle={styles.largeButton}>
                 Đăng ký khuôn mặt
               </Button>
               <Button mode="text" onPress={() => navigation.replace('Login')}>
@@ -184,6 +185,41 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
         <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
           {snackbar}
         </Snackbar>
+      </SafeAreaView>
+    );
+  }
+
+  if (step === 'consent') {
+    return (
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <View style={styles.choiceContainer}>
+          <Card mode="outlined" style={styles.choiceCard}>
+            <Card.Content style={styles.choiceContent}>
+              <View style={[styles.checkCircle, { backgroundColor: `${theme.colors.primary}22` }]}>
+                <Text style={[styles.checkIcon, { color: theme.colors.primary }]}>?</Text>
+              </View>
+              <Text variant="headlineSmall" style={styles.choiceTitle}>Thu thap du lieu sinh hoc hoc</Text>
+              <Text style={styles.choiceSubtitle}>
+                Ung dung se thu thap hinh anh khuon mat cua ban de xac thuc danh tinh. Du lieu nay duoc bao mat va chi dung cho muc dich xac thuc.
+              </Text>
+              <View style={{ width: '100%', gap: 8 }}>
+                <Button
+                  mode={consentGiven ? 'contained' : 'outlined'}
+                  onPress={() => setConsentGiven(!consentGiven)}
+                  icon={consentGiven ? 'check' : undefined}
+                >
+                  {consentGiven ? 'Da dong y' : 'Toi dong y'}
+                </Button>
+                <Button mode="contained" onPress={() => setStep('face')} disabled={!consentGiven} contentStyle={styles.largeButton}>
+                  Tiep tuc
+                </Button>
+                <Button mode="text" onPress={() => setStep('choice')}>
+                  Tu choi
+                </Button>
+              </View>
+            </Card.Content>
+          </Card>
+        </View>
       </SafeAreaView>
     );
   }

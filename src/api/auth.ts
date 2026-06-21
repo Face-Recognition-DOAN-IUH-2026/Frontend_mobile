@@ -115,8 +115,9 @@ export const authApi = {
     return response.data;
   },
 
-  changePassword: async (patronId: string, newPassword: string): Promise<void> => {
+  changePassword: async (patronId: string, currentPassword: string, newPassword: string): Promise<void> => {
     await api.put(`/patrons/${patronId}/password`, {
+      current_password: currentPassword,
       new_password: newPassword,
     });
   },

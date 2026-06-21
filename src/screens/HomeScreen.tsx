@@ -67,10 +67,10 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 
   const staffActions: StaffAction[] = [
     {
-      title: 'Trả sách',
-      description: 'Nhập MSSV, xem sách đang mượn và xác nhận trả bằng ISBN.',
+      title: 'Tra sach',
+      description: 'Nhap MSSV, xem sach dang muon va xac nhan tra bang ISBN.',
       icon: 'barcode-scan',
-      route: 'Borrow',
+      route: 'StaffReturn',
     },
     {
       title: 'Nhập sách',
@@ -184,8 +184,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                 <Card mode="outlined" style={styles.stateCard}>
                   <Card.Content style={styles.stateContent}>
                     <MaterialCommunityIcons name="bookshelf" size={38} color={theme.colors.onSurfaceVariant} />
-                    <Text variant="titleSmall" style={styles.cardTitle}>Bạn chưa mượn cuốn sách nào</Text>
-                    <Button mode="contained" onPress={() => navigation.navigate('Borrow')}>Mượn sách ngay</Button>
+                    <Text variant="titleSmall" style={styles.cardTitle}>Ban chua muon cuon sach nao</Text>
                   </Card.Content>
                 </Card>
               ) : (

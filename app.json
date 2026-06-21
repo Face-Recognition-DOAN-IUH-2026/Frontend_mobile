@@ -21,7 +21,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "package": "com.library.app",
-      "usesCleartextTraffic": true,
+      "usesCleartextTraffic": false,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
