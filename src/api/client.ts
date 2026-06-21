@@ -27,7 +27,7 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 && !(error.config as any).__isRetry) {
       const refreshToken = await AsyncStorage.getItem('refreshToken');
       if (refreshToken) {
         try {
@@ -38,6 +38,7 @@ api.interceptors.response.use(
           await AsyncStorage.setItem('accessToken', access_token);
           if (error.config) {
             error.config.headers.Authorization = `Bearer ${access_token}`;
+            (error.config as any).__isRetry = true;
             return api.request(error.config);
           }
         } catch (refreshError) {

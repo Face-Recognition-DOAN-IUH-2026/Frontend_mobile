@@ -42,16 +42,25 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
       }
     } catch (err: any) {
       let message = 'Đăng nhập thất bại';
-      if (err.message && !err.response) {
-        message = err.message;
+      if (err.response?.data?.error) {
+        const backendError = err.response.data.error;
+        if (backendError === 'Invalid credentials') {
+          message = 'Sai tài khoản hoặc mật khẩu';
+        } else if (backendError === 'Account is disabled') {
+          message = 'Tài khoản đã bị khóa';
+        } else if (backendError === 'Membership has expired') {
+          message = 'Thẻ thư viện đã hết hạn';
+        } else {
+          message = backendError;
+        }
       } else if (err.response?.data?.detail) {
         message = err.response.data.detail;
-      } else if (err.response?.data?.error) {
-        message = err.response.data.error;
       } else if (err.code === 'ECONNABORTED') {
         message = 'Kết nối quá lâu. Vui lòng thử lại.';
       } else if (!err.response) {
         message = 'Không thể kết nối server. Vui lòng kiểm tra mạng.';
+      } else if (err.message) {
+        message = err.message;
       }
       setError(message);
     } finally {
