@@ -6,7 +6,8 @@ import { createStackNavigator } from '@react-navigation/stack';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from 'react-native-paper';
 import { useAuth } from '../context/AuthContext';
-import { lightColors } from '../theme/LightTheme';
+import { useNotification } from '../context/NotificationContext';
+
 
 import ChangePasswordScreen from '../screens/ChangePasswordScreen';
 import FaceCameraScreen from '../screens/FaceCameraScreen';
@@ -15,6 +16,8 @@ import HistoryScreen from '../screens/HistoryScreen';
 import HomeScreen from '../screens/HomeScreen';
 import ImportBooksScreen from '../screens/ImportBooksScreen';
 import LoginScreen from '../screens/LoginScreen';
+import NotificationScreen from '../screens/NotificationScreen';
+import NotificationDetailScreen from '../screens/NotificationDetailScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import ReturnScreen from '../screens/ReturnScreen';
@@ -54,6 +57,40 @@ function AuthNavigator() {
   );
 }
 
+function NotificationsTabIcon({ color, size }: { color: string; size: number }) {
+  const { unreadCount } = useNotification();
+  return (
+    <View>
+      <MaterialCommunityIcons name="bell" size={size} color={color} />
+      {unreadCount > 0 && (
+        <View style={tabBadgeStyles.badge}>
+          <Text style={tabBadgeStyles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+const tabBadgeStyles = StyleSheet.create({
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -8,
+    backgroundColor: '#C44E4E',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+});
+
 function MainTabNavigator() {
   const theme = useTheme();
   const { user } = useAuth();
@@ -83,6 +120,14 @@ function MainTabNavigator() {
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="home" size={size} color={color} />
           ),
+        }}
+      />
+      <MainTab.Screen
+        name="Notifications"
+        component={NotificationScreen}
+        options={{
+          title: 'Thông báo',
+          tabBarIcon: ({ color, size }) => <NotificationsTabIcon color={color} size={size} />,
         }}
       />
       {isStaffScanner && (
@@ -155,7 +200,7 @@ function MainStackNavigator() {
     <MainStack.Navigator
       screenOptions={{
         headerStyle: { backgroundColor: theme.colors.surface },
-        headerTintColor: lightColors.onPrimary,
+        headerTintColor: theme.colors.onSurface,
         cardStyle: { backgroundColor: theme.colors.background },
       }}
     >
@@ -163,6 +208,14 @@ function MainStackNavigator() {
         name="MainTabs"
         component={MainTabNavigator}
         options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="NotificationDetail"
+        component={NotificationDetailScreen}
+        options={{
+          title: 'Chi tiết thông báo',
+          presentation: 'card',
+        }}
       />
       <MainStack.Screen
         name="FaceCamera"

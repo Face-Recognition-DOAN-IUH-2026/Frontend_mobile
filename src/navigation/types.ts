@@ -1,4 +1,5 @@
 import { NavigatorScreenParams } from '@react-navigation/native';
+import { Notification } from '../types';
 
 export type AuthStackParamList = {
   Login: undefined;
@@ -8,6 +9,7 @@ export type AuthStackParamList = {
 
 export type MainTabParamList = {
   Home: undefined;
+  Notifications: undefined;
   StaffReturn: undefined;
   StaffBorrow: undefined;
   Schedule: undefined;
@@ -17,6 +19,7 @@ export type MainTabParamList = {
 
 export type MainStackParamList = {
   MainTabs: NavigatorScreenParams<MainTabParamList>;
+  NotificationDetail: { notification: Notification };
   FaceCamera: undefined;
   ChangePassword: undefined;
   ImportBooks: undefined;
