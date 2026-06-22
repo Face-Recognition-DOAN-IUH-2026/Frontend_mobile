@@ -101,12 +101,20 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       >
         <Card mode="contained" style={styles.heroCard}>
           <Card.Content style={styles.heroContent}>
-            <Avatar.Text
-              size={58}
-              label={displayName.slice(0, 1).toUpperCase()}
-              color={theme.colors.onPrimary}
-              style={styles.avatar}
-            />
+{user?.avatar_url ? (
+    <Avatar.Image
+      size={58}
+      source={{ uri: user.avatar_url }}
+      style={styles.avatar}
+    />
+  ) : (
+    <Avatar.Text
+      size={58}
+      label={displayName.slice(0, 1).toUpperCase()}
+      color={theme.colors.onPrimary}
+      style={styles.avatar}
+    />
+  )}
             <View style={styles.heroText}>
               <Text variant="labelLarge" style={styles.kicker}>Xin chào</Text>
               <Text variant="headlineSmall" style={styles.userName} numberOfLines={2}>

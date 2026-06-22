@@ -15,6 +15,10 @@ interface NotificationScreenProps {
 
 type FilterTab = 'all' | 'unread';
 
+interface ExpandedState {
+  [key: string]: boolean;
+}
+
 const FILTERS: { key: FilterTab; label: string }[] = [
   { key: 'all', label: 'Tất cả' },
   { key: 'unread', label: 'Chưa đọc' },
@@ -57,6 +61,7 @@ export default function NotificationScreen({ navigation }: NotificationScreenPro
   const { notifications, unreadCount, isLoading, fetchNotifications, markAsRead, markAllAsRead } = useNotification();
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
   const [refreshing, setRefreshing] = useState(false);
+  const [expanded, setExpanded] = useState<ExpandedState>({});
 
   useFocusEffect(
     useCallback(() => {
@@ -82,6 +87,10 @@ export default function NotificationScreen({ navigation }: NotificationScreenPro
     navigation.navigate('NotificationDetail', { notification: { ...item, isRead: true } });
   };
 
+  const toggleExpand = (id: string) => {
+    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
   const renderItem = ({ item }: { item: Notification }) => {
     const icon = getNotificationIcon(item.type);
     const spineColor = getSpineColor(item.type, c);
@@ -98,9 +107,16 @@ export default function NotificationScreen({ navigation }: NotificationScreenPro
             <Text style={[styles.title, { color: item.isRead ? c.onSurfaceVariant : c.onSurface }]} numberOfLines={1}>
               {item.title}
             </Text>
-            <Text style={[styles.body, { color: c.onSurfaceVariant }]} numberOfLines={2}>
+            <Text style={[styles.body, { color: c.onSurfaceVariant }]} numberOfLines={expanded[item.id] ? undefined : 2}>
               {item.body}
             </Text>
+            {item.body && item.body.length > 100 && (
+              <TouchableOpacity onPress={() => toggleExpand(item.id)} style={styles.expandBtn}>
+                <Text style={[styles.expandText, { color: c.primary }]}>
+                  {expanded[item.id] ? 'Thu gọn' : 'Xem thêm'}
+                </Text>
+              </TouchableOpacity>
+            )}
             <Text style={[styles.time, { color: c.custom.textDisabled }]}>
               {formatRelativeTime(item.createdAt)}
             </Text>
@@ -233,6 +249,8 @@ function createStyles(theme: AppTheme) {
     content: { flex: 1, padding: 10, paddingRight: 14 },
     title: { fontWeight: '600', fontSize: 14, lineHeight: 18 },
     body: { fontSize: 12, marginTop: 2, lineHeight: 16 },
+    expandBtn: { marginTop: 4 },
+    expandText: { fontSize: 12, fontWeight: '600' },
     time: { fontSize: 11, marginTop: 4 },
     emptyContainer: {
       alignItems: 'center',

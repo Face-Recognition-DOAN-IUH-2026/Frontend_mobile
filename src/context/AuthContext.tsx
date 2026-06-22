@@ -35,16 +35,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (token && patronDataStr) {
         const patronData = JSON.parse(patronDataStr);
         setPatron(patronData);
-        setUser({ id: patronData.id, email: patronData.email || '', full_name: getFullName(patronData), role: 'patron' });
+setUser({ id: patronData.id, email: patronData.email || '', full_name: getFullName(patronData), role: 'patron', avatar_url: patronData.avatar_url });
       } else if (token && userDataStr) {
         const userData = JSON.parse(userDataStr);
         setPatron(null);
-        setUser({
-          id: userData.id,
-          email: userData.email || '',
-          full_name: getFullName(userData),
-          role: userData.role,
-        });
+setUser({
+    id: userData.id,
+    email: userData.email || '',
+    full_name: getFullName(userData),
+    role: userData.role,
+    avatar_url: userData.avatar_url,
+  });
       }
     } catch (error) {
       devError('Auth check failed:', error);
@@ -63,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const response = await authApi.patronLogin({ student_code: studentCode, password });
       setPatron(response.user);
-      setUser({ id: response.user.id, email: response.user.email || '', full_name: getFullName(response.user), role: 'patron' });
+      setUser({ id: response.user.id, email: response.user.email || '', full_name: getFullName(response.user), role: 'patron', avatar_url: response.user.avatar_url });
     } finally {
       setIsLoading(false);
     }
@@ -79,12 +80,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error('Tài khoản này không có quyền dùng máy quét trả sách');
       }
       setPatron(null);
-      setUser({
-        id: userData.id,
-        email: userData.email || email,
-        full_name: getFullName(userData),
-        role: userData.role,
-      });
+setUser({
+  id: userData.id,
+  email: userData.email || email,
+  full_name: getFullName(userData),
+  role: userData.role,
+  avatar_url: userData.avatar_url,
+});
     } finally {
       setIsLoading(false);
     }
@@ -97,7 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const patronData = await authApi.getCurrentPatron();
       await AsyncStorage.setItem('patronData', JSON.stringify(patronData));
       setPatron(patronData);
-      setUser({ id: patronData.id, email: patronData.email || '', full_name: getFullName(patronData), role: 'patron' });
+      setUser({ id: patronData.id, email: patronData.email || '', full_name: getFullName(patronData), role: 'patron', avatar_url: patronData.avatar_url });
     } catch (error) {
       await authApi.logout();
       throw error;

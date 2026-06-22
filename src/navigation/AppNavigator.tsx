@@ -12,6 +12,7 @@ import { useNotification } from '../context/NotificationContext';
 import ChangePasswordScreen from '../screens/ChangePasswordScreen';
 import FaceCameraScreen from '../screens/FaceCameraScreen';
 import FaceLoginScreen from '../screens/FaceLoginScreen';
+import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 import HistoryScreen from '../screens/HistoryScreen';
 import HomeScreen from '../screens/HomeScreen';
 import ImportBooksScreen from '../screens/ImportBooksScreen';
@@ -51,6 +52,13 @@ function AuthNavigator() {
           headerTitle: 'Đăng nhập khuôn mặt',
           headerStyle: { backgroundColor: theme.colors.surface },
           headerTintColor: theme.colors.onPrimary,
+        }}
+      />
+      <AuthStack.Screen
+        name="ForgotPassword"
+        component={ForgotPasswordScreen}
+        options={{
+          headerShown: false,
         }}
       />
     </AuthStack.Navigator>

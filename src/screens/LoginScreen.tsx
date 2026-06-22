@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, Card, SegmentedButtons, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
+import { Button, Card, Divider, SegmentedButtons, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
 import { useAuth } from '../context/AuthContext';
 import { AppTheme } from '../theme/DarkTheme';
 
@@ -152,27 +152,29 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
                 {loginMode === 'staff' ? 'Đăng nhập nhân viên' : 'Đăng nhập'}
               </Button>
 
+              <Button mode="text" onPress={() => navigation.navigate('ForgotPassword')} compact style={{ marginTop: -4 }}>
+                Quên mật khẩu?
+              </Button>
+
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text variant="bodySmall" style={styles.dividerText}>hoặc</Text>
+                <View style={styles.dividerLine} />
+              </View>
+
+              <Button
+                mode="outlined"
+                onPress={() => navigation.navigate('FaceLogin')}
+                icon="face-recognition"
+                contentStyle={styles.mediumButton}
+              >
+                Đăng nhập bằng khuôn mặt
+              </Button>
+
               {loginMode === 'patron' ? (
-                <>
-                  <View style={styles.divider}>
-                    <View style={styles.dividerLine} />
-                    <Text variant="bodySmall" style={styles.dividerText}>hoặc</Text>
-                    <View style={styles.dividerLine} />
-                  </View>
-
-                  <Button
-                    mode="outlined"
-                    onPress={() => navigation.navigate('FaceLogin')}
-                    icon="face-recognition"
-                    contentStyle={styles.mediumButton}
-                  >
-                    Đăng nhập bằng khuôn mặt
-                  </Button>
-
-                  <Button mode="text" onPress={() => navigation.navigate('Register')}>
-                    Chưa có tài khoản? Đăng ký ngay
-                  </Button>
-                </>
+                <Button mode="text" onPress={() => navigation.navigate('Register')}>
+                  Chưa có tài khoản? Đăng ký ngay
+                </Button>
               ) : null}
             </Card.Content>
           </Card>
