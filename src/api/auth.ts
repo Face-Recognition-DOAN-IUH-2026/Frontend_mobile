@@ -115,8 +115,25 @@ export const authApi = {
     return response.data;
   },
 
-  changePassword: async (patronId: string, newPassword: string): Promise<void> => {
+  changePassword: async (patronId: string, currentPassword: string, newPassword: string): Promise<void> => {
     await api.put(`/patrons/${patronId}/password`, {
+      current_password: currentPassword,
+      new_password: newPassword,
+    });
+  },
+
+  forgotPassword: async (email: string): Promise<void> => {
+    await api.post('/auth/forgot-password', { email });
+  },
+
+  verifyResetCode: async (email: string, code: string): Promise<void> => {
+    await api.post('/auth/verify-reset-code', { email, code });
+  },
+
+  resetPassword: async (email: string, code: string, newPassword: string): Promise<void> => {
+    await api.post('/auth/reset-password', {
+      email,
+      code,
       new_password: newPassword,
     });
   },

@@ -86,7 +86,7 @@ export default function ChangePasswordScreen({ navigation }: ChangePasswordScree
         return;
       }
 
-      await authApi.changePassword(patronData.id, newPassword);
+      await authApi.changePassword(patronData.id, currentPassword, newPassword);
       Alert.alert('Thành công', 'Mật khẩu đã được thay đổi', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);

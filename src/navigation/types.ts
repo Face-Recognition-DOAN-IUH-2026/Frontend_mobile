@@ -5,6 +5,7 @@ export type AuthStackParamList = {
   Login: undefined;
   Register: undefined;
   FaceLogin: undefined;
+  ForgotPassword: undefined;
 };
 
 export type MainTabParamList = {

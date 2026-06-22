@@ -100,12 +100,20 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
         <Card mode="contained" style={styles.header}>
           <Card.Content style={styles.headerContent}>
-            <Avatar.Text
-              size={74}
-              label={(displayName || user?.email || 'U').slice(0, 1).toUpperCase()}
-              color={theme.colors.onPrimary}
-              style={styles.avatar}
-            />
+{user?.avatar_url ? (
+    <Avatar.Image
+      size={74}
+      source={{ uri: user.avatar_url }}
+      style={styles.avatar}
+    />
+  ) : (
+    <Avatar.Text
+      size={74}
+      label={(displayName || user?.email || 'U').slice(0, 1).toUpperCase()}
+      color={theme.colors.onPrimary}
+      style={styles.avatar}
+    />
+  )}
             <Text variant="headlineSmall" style={styles.name} numberOfLines={2}>
               {displayName}
             </Text>

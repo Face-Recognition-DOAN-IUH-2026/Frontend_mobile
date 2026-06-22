@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, Card, SegmentedButtons, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
+import { Button, Card, Divider, SegmentedButtons, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
 import { useAuth } from '../context/AuthContext';
 import { AppTheme } from '../theme/DarkTheme';
 
@@ -42,25 +42,34 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
       }
     } catch (err: any) {
       let message = 'Đăng nhập thất bại';
-      if (err.response?.data?.error) {
-        const backendError = err.response.data.error;
-        if (backendError === 'Invalid credentials') {
-          message = 'Sai tài khoản hoặc mật khẩu';
-        } else if (backendError === 'Account is disabled') {
-          message = 'Tài khoản đã bị khóa';
-        } else if (backendError === 'Membership has expired') {
-          message = 'Thẻ thư viện đã hết hạn';
-        } else {
-          message = backendError;
+      if (err.response?.data) {
+        const data = err.response.data;
+        if (typeof data === 'string' && data.trim()) {
+          message = data;
+        } else if (data.error) {
+          const backendError = data.error;
+          if (backendError === 'Invalid credentials') {
+            message = 'Sai tài khoản hoặc mật khẩu';
+          } else if (backendError === 'Account is disabled') {
+            message = 'Tài khoản đã bị khóa';
+          } else if (backendError === 'Membership has expired') {
+            message = 'Thẻ thư viện đã hết hạn';
+          } else if (typeof backendError === 'string' && backendError.trim()) {
+            message = backendError;
+          }
+        } else if (data.detail) {
+          message = typeof data.detail === 'string' ? data.detail : data.detail[0] || 'Lỗi từ server';
+        } else if (Array.isArray(data.message)) {
+          message = data.message[0];
+        } else if (data.message) {
+          message = data.message;
         }
-      } else if (err.response?.data?.detail) {
-        message = err.response.data.detail;
       } else if (err.code === 'ECONNABORTED') {
         message = 'Kết nối quá lâu. Vui lòng thử lại.';
-      } else if (!err.response) {
-        message = 'Không thể kết nối server. Vui lòng kiểm tra mạng.';
       } else if (err.message) {
         message = err.message;
+      } else if (!err.response) {
+        message = 'Không thể kết nối server. Vui lòng kiểm tra mạng.';
       }
       setError(message);
     } finally {
@@ -143,27 +152,29 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
                 {loginMode === 'staff' ? 'Đăng nhập nhân viên' : 'Đăng nhập'}
               </Button>
 
+              <Button mode="text" onPress={() => navigation.navigate('ForgotPassword')} compact style={{ marginTop: -4 }}>
+                Quên mật khẩu?
+              </Button>
+
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text variant="bodySmall" style={styles.dividerText}>hoặc</Text>
+                <View style={styles.dividerLine} />
+              </View>
+
+              <Button
+                mode="outlined"
+                onPress={() => navigation.navigate('FaceLogin')}
+                icon="face-recognition"
+                contentStyle={styles.mediumButton}
+              >
+                Đăng nhập bằng khuôn mặt
+              </Button>
+
               {loginMode === 'patron' ? (
-                <>
-                  <View style={styles.divider}>
-                    <View style={styles.dividerLine} />
-                    <Text variant="bodySmall" style={styles.dividerText}>hoặc</Text>
-                    <View style={styles.dividerLine} />
-                  </View>
-
-                  <Button
-                    mode="outlined"
-                    onPress={() => navigation.navigate('FaceLogin')}
-                    icon="face-recognition"
-                    contentStyle={styles.mediumButton}
-                  >
-                    Đăng nhập bằng khuôn mặt
-                  </Button>
-
-                  <Button mode="text" onPress={() => navigation.navigate('Register')}>
-                    Chưa có tài khoản? Đăng ký ngay
-                  </Button>
-                </>
+                <Button mode="text" onPress={() => navigation.navigate('Register')}>
+                  Chưa có tài khoản? Đăng ký ngay
+                </Button>
               ) : null}
             </Card.Content>
           </Card>
