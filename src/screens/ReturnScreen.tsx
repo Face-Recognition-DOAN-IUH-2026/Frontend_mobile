@@ -900,7 +900,6 @@ function createStyles(theme: AppTheme) {
     },
     multiLineSnackbar: {
       flexWrap: 'wrap',
-      whiteSpace: 'pre-wrap',
     },
     topSnackbarContainer: {
       position: 'absolute',

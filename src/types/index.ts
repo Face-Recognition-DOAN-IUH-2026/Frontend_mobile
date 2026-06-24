@@ -5,6 +5,7 @@ export interface User {
   role: string;
   student_code?: string;
   password_auto_generated?: boolean;
+  avatar_url?: string;
 }
 
 export interface AuthTokens {
