@@ -1,9 +1,36 @@
 import api from './client';
 import { BorrowResponse, ReturnResponse, BorrowRecord, Book, BookWithStats, BookImportResponse, StaffPatronActiveBorrowsResponse, CreateBorrowSlipRequest, CreateBorrowSlipResponse, LookupBorrowSlipRequest, LookupBorrowSlipResponse, ConfirmBorrowSlipRequest } from '../types';
 
-export interface BorrowRequest {
-  barcode: string;
+export interface BookReservation {
+  id: string;
+  book_id: string;
+  patron_id: string;
+  reserved_at: string;
+  expires_at: string;
+  status: string;
+  notified_at: string | null;
+  book: {
+    id: string;
+    isbn: string;
+    title: string;
+    author?: string;
+    cover_url?: string;
+  };
 }
+
+export const getMyReservations = async (): Promise<{ items: BookReservation[]; total: number }> => {
+  const response = await api.get<{ items: BookReservation[]; total: number }>('/borrow/reservations');
+  return response.data;
+};
+
+export const reserveBook = async (bookId: string): Promise<{ message: string; reservation: BookReservation }> => {
+  const response = await api.post<{ message: string; reservation: BookReservation }>('/borrow/reserve', { book_id: bookId });
+  return response.data;
+};
+
+export const cancelReservation = async (reservationId: string): Promise<void> => {
+  await api.delete(`/borrow/reservations/${reservationId}`);
+};
 
 export const borrowApi = {
   borrowBook: async (barcode: string): Promise<BorrowResponse> => {

@@ -30,6 +30,8 @@ export type MainStackParamList = {
   AIChat: undefined;
   AIHealth: undefined;
   BookRecommendations: undefined;
+  MyReservations: undefined;
+  BookCatalog: undefined;
 };
 
 export type RootStackParamList = {

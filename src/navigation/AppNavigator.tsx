@@ -27,6 +27,8 @@ import StaffBorrowScreen from '../screens/StaffBorrowScreen';
 import AIChatScreen from '../screens/AIChatScreen';
 import AIHealthScreen from '../screens/AIHealthScreen';
 import BookRecommendationsScreen from '../screens/BookRecommendationsScreen';
+import MyReservationsScreen from '../screens/MyReservationsScreen';
+import BookCatalogScreen from '../screens/BookCatalogScreen';
 
 import { AuthStackParamList, MainStackParamList, MainTabParamList } from './types';
 
@@ -300,6 +302,22 @@ function MainStackNavigator() {
         component={BookRecommendationsScreen}
         options={{
           title: 'Gợi sách AI',
+          presentation: 'card',
+        }}
+      />
+      <MainStack.Screen
+        name="MyReservations"
+        component={MyReservationsScreen}
+        options={{
+          title: 'Đặt chỗ của tôi',
+          presentation: 'card',
+        }}
+      />
+      <MainStack.Screen
+        name="BookCatalog"
+        component={BookCatalogScreen}
+        options={{
+          title: 'Mượn sách',
           presentation: 'card',
         }}
       />
