@@ -238,26 +238,27 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
       <KeyboardAvoidingView
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-        {showWelcome && renderEmpty()}
-
-        {!showWelcome && messages.length > 0 && (
-          <QuickActions onSelect={sendMessage} isStaff={isStaff} />
+        {showWelcome ? (
+          renderEmpty()
+        ) : (
+          <View style={styles.chatArea}>
+            {messages.length > 0 && (
+              <QuickActions onSelect={sendMessage} isStaff={isStaff} />
+            )}
+            <FlatList
+              ref={flatListRef}
+              data={messages}
+              renderItem={renderItem}
+              keyExtractor={item => item.id}
+              style={styles.flatList}
+              contentContainerStyle={styles.messageList}
+              onContentSizeChange={scrollToBottom}
+              ListEmptyComponent={null}
+            />
+          </View>
         )}
-
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          renderItem={renderItem}
-          keyExtractor={item => item.id}
-          contentContainerStyle={[
-            styles.messageList,
-            showWelcome && styles.messageListEmpty,
-          ]}
-          onContentSizeChange={scrollToBottom}
-          ListEmptyComponent={null}
-        />
 
         {loading && !showWelcome && (
           <View style={styles.typingRow}>
@@ -284,6 +285,7 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
               mode="flat"
               underlineColor="transparent"
               activeUnderlineColor="transparent"
+              textColor={theme.colors.onSurface}
             />
             <IconButton
               icon="send-circle"
@@ -312,7 +314,7 @@ function createStyles(theme: AppTheme) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: '#0D1117',
+      backgroundColor: theme.colors.background,
     },
     header: {
       flexDirection: 'row',
@@ -320,9 +322,9 @@ function createStyles(theme: AppTheme) {
       justifyContent: 'space-between',
       paddingHorizontal: 12,
       paddingVertical: 8,
-      backgroundColor: '#161B22',
+      backgroundColor: theme.colors.surface,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: '#21262D',
+      borderBottomColor: theme.colors.outlineVariant,
     },
     headerLeft: {
       flexDirection: 'row',
@@ -333,22 +335,28 @@ function createStyles(theme: AppTheme) {
       width: 32,
       height: 32,
       borderRadius: 16,
-      backgroundColor: '#1A73E8',
+      backgroundColor: theme.colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
     },
     headerTitle: {
-      color: '#FFFFFF',
+      color: theme.colors.onSurface,
       fontWeight: '700',
       fontSize: 15,
     },
     headerSubtitle: {
-      color: '#8B949E',
+      color: theme.colors.onSurfaceVariant,
       fontSize: 11,
     },
     keyboardView: {
       flex: 1,
-      backgroundColor: '#0D1117',
+      backgroundColor: theme.colors.background,
+    },
+    chatArea: {
+      flex: 1,
+    },
+    flatList: {
+      flex: 1,
     },
     emptyContainer: {
       flex: 1,
@@ -360,7 +368,7 @@ function createStyles(theme: AppTheme) {
       width: 88,
       height: 88,
       borderRadius: 44,
-      backgroundColor: 'rgba(26, 115, 232, 0.15)',
+      backgroundColor: theme.colors.primary + '25', // 15% opacity primary
       alignItems: 'center',
       justifyContent: 'center',
       marginBottom: 20,
@@ -369,22 +377,23 @@ function createStyles(theme: AppTheme) {
       width: 64,
       height: 64,
       borderRadius: 32,
-      backgroundColor: '#1A73E8',
+      backgroundColor: theme.colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
     },
     welcomeTitle: {
-      color: '#FFFFFF',
+      color: theme.colors.onSurface,
       fontWeight: '700',
       marginBottom: 4,
     },
     welcomeSubtitle: {
-      color: '#C9D1D9',
+      color: theme.colors.onSurfaceVariant,
       textAlign: 'center',
       marginBottom: 4,
     },
     welcomeHint: {
-      color: '#8B949E',
+      color: theme.colors.onSurfaceVariant,
+      opacity: 0.8,
       textAlign: 'center',
       marginBottom: 32,
       paddingHorizontal: 16,
@@ -398,17 +407,17 @@ function createStyles(theme: AppTheme) {
     welcomeActionChip: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: '#161B22',
+      backgroundColor: theme.colors.surfaceVariant,
       borderRadius: 20,
       borderWidth: 1,
-      borderColor: '#21262D',
+      borderColor: theme.colors.outlineVariant,
     },
     chipIcon: {
       margin: 0,
       marginRight: -4,
     },
     welcomeActionText: {
-      color: '#C9D1D9',
+      color: theme.colors.onSurfaceVariant,
       marginRight: 12,
     },
     messageList: {
@@ -432,12 +441,12 @@ function createStyles(theme: AppTheme) {
       width: 24,
       height: 24,
       borderRadius: 12,
-      backgroundColor: '#1A73E8',
+      backgroundColor: theme.colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
     },
     typingBubble: {
-      backgroundColor: '#161B22',
+      backgroundColor: theme.colors.surfaceVariant,
       borderRadius: 16,
       borderBottomLeftRadius: 4,
       paddingHorizontal: 12,
@@ -446,24 +455,24 @@ function createStyles(theme: AppTheme) {
     inputContainer: {
       paddingHorizontal: 12,
       paddingVertical: 8,
-      backgroundColor: '#0D1117',
+      backgroundColor: theme.colors.background,
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: '#21262D',
+      borderTopColor: theme.colors.outlineVariant,
     },
     inputWrapper: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: '#161B22',
+      backgroundColor: theme.colors.surfaceVariant,
       borderRadius: 24,
       borderWidth: 1,
-      borderColor: '#21262D',
+      borderColor: theme.colors.outlineVariant,
       paddingLeft: 16,
     },
     input: {
       flex: 1,
       backgroundColor: 'transparent',
       fontSize: 14,
-      color: '#C9D1D9',
+      color: theme.colors.onSurface,
       minHeight: 40,
     },
     sendButton: {
