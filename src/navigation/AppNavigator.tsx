@@ -24,6 +24,11 @@ import RegisterScreen from '../screens/RegisterScreen';
 import ReturnScreen from '../screens/ReturnScreen';
 import ScheduleScreen from '../screens/ScheduleScreen';
 import StaffBorrowScreen from '../screens/StaffBorrowScreen';
+import AIChatScreen from '../screens/AIChatScreen';
+import AIHealthScreen from '../screens/AIHealthScreen';
+import BookRecommendationsScreen from '../screens/BookRecommendationsScreen';
+import MyReservationsScreen from '../screens/MyReservationsScreen';
+import BookCatalogScreen from '../screens/BookCatalogScreen';
 
 import { AuthStackParamList, MainStackParamList, MainTabParamList } from './types';
 
@@ -174,6 +179,41 @@ function MainTabNavigator() {
           }}
         />
       )}
+      <MainTab.Screen
+        name="AIChat"
+        component={AIChatScreen}
+        options={{
+          title: 'AI Chat',
+          headerShown: false,
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="robot" size={size} color={color} />
+          ),
+        }}
+      />
+      {isStaffScanner && (
+        <MainTab.Screen
+          name="AIHealth"
+          component={AIHealthScreen}
+          options={{
+            title: 'AI Health',
+            tabBarIcon: ({ color, size }) => (
+              <MaterialCommunityIcons name="chart-line" size={size} color={color} />
+            ),
+          }}
+        />
+      )}
+      {!isStaffScanner && (
+        <MainTab.Screen
+          name="BookRecommendations"
+          component={BookRecommendationsScreen}
+          options={{
+            title: 'Gợi ý',
+            tabBarIcon: ({ color, size }) => (
+              <MaterialCommunityIcons name="lightbulb" size={size} color={color} />
+            ),
+          }}
+        />
+      )}
       {/* Patron tab - hidden for admin/staff */}
       {!isStaffScanner && (
         <MainTab.Screen
@@ -246,6 +286,38 @@ function MainStackNavigator() {
         component={ImportBooksScreen}
         options={{
           title: 'Nhập sách từ ISBN',
+          presentation: 'card',
+        }}
+      />
+      <MainStack.Screen
+        name="AIHealth"
+        component={AIHealthScreen}
+        options={{
+          title: 'AI Command Center',
+          presentation: 'card',
+        }}
+      />
+      <MainStack.Screen
+        name="BookRecommendations"
+        component={BookRecommendationsScreen}
+        options={{
+          title: 'Gợi sách AI',
+          presentation: 'card',
+        }}
+      />
+      <MainStack.Screen
+        name="MyReservations"
+        component={MyReservationsScreen}
+        options={{
+          title: 'Đặt chỗ của tôi',
+          presentation: 'card',
+        }}
+      />
+      <MainStack.Screen
+        name="BookCatalog"
+        component={BookCatalogScreen}
+        options={{
+          title: 'Mượn sách',
           presentation: 'card',
         }}
       />

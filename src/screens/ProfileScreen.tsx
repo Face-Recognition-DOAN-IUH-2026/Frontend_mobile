@@ -238,6 +238,31 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
 
         <Card mode="outlined" style={styles.section}>
           <List.Section>
+            <List.Subheader style={styles.subheader}>Sách</List.Subheader>
+            <List.Item
+              title="Mượn sách"
+              description="Duyệt và mượn sách từ thư viện"
+              titleStyle={styles.itemTitle}
+              descriptionStyle={styles.itemDescription}
+              left={(props) => <List.Icon {...props} icon="book-search" color={theme.colors.primary} />}
+              right={(props) => <List.Icon {...props} icon="chevron-right" color={theme.colors.onSurfaceVariant} />}
+              onPress={() => navigation.navigate('BookCatalog')}
+            />
+            <Divider />
+            <List.Item
+              title="Đặt chỗ của tôi"
+              description="Xem và quản lý đặt chỗ sách"
+              titleStyle={styles.itemTitle}
+              descriptionStyle={styles.itemDescription}
+              left={(props) => <List.Icon {...props} icon="book-check" color={theme.colors.primary} />}
+              right={(props) => <List.Icon {...props} icon="chevron-right" color={theme.colors.onSurfaceVariant} />}
+              onPress={() => navigation.navigate('MyReservations')}
+            />
+          </List.Section>
+        </Card>
+
+        <Card mode="outlined" style={styles.section}>
+          <List.Section>
             <List.Subheader style={styles.subheader}>Bảo mật</List.Subheader>
             <List.Item
               title="Đổi mật khẩu"

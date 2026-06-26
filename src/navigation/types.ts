@@ -14,6 +14,9 @@ export type MainTabParamList = {
   StaffReturn: undefined;
   StaffBorrow: undefined;
   Schedule: undefined;
+  AIChat: undefined;
+  AIHealth: undefined;
+  BookRecommendations: undefined;
   History: undefined;
   Profile: undefined;
 };
@@ -24,6 +27,11 @@ export type MainStackParamList = {
   FaceCamera: undefined;
   ChangePassword: undefined;
   ImportBooks: undefined;
+  AIChat: undefined;
+  AIHealth: undefined;
+  BookRecommendations: undefined;
+  MyReservations: undefined;
+  BookCatalog: undefined;
 };
 
 export type RootStackParamList = {
