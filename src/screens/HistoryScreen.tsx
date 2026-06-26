@@ -9,6 +9,8 @@ import { BorrowRecord } from '../types';
 import { AppTheme } from '../theme/DarkTheme';
 import { formatDate, getDaysUntil } from '../utils/dateUtils';
 import { devError } from '../utils/logger';
+import CacheManager from '../utils/cache/CacheManager';
+import { CACHE_KEYS, CACHE_TTL } from '../utils/cache/CacheKeys';
 
 interface HistoryScreenProps {
   navigation: any;
@@ -34,8 +36,23 @@ export default function HistoryScreen({ navigation }: HistoryScreenProps) {
   const loadHistory = async () => {
     try {
       setLoadError(null);
-      const data = await borrowApi.getHistory();
-      setRecords(data);
+      
+      const cache = CacheManager.getInstance();
+      const cached = await cache.get<BorrowRecord[]>(CACHE_KEYS.BORROW_HISTORY);
+      if (cached) {
+        setRecords(cached);
+      }
+
+      try {
+        const data = await borrowApi.getHistory();
+        setRecords(data);
+        await cache.set(CACHE_KEYS.BORROW_HISTORY, data, CACHE_TTL.BORROW_HISTORY);
+      } catch (error: any) {
+        if (!cached) {
+          devError('Failed to load history:', error);
+          setLoadError(error?.response?.data?.detail || error?.message || 'Không thể tải lịch sử');
+        }
+      }
     } catch (error: any) {
       devError('Failed to load history:', error);
       setLoadError(error?.response?.data?.detail || error?.message || 'Không thể tải lịch sử');

@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User } from '../types';
 import { authApi } from '../api/auth';
 import { devError } from '../utils/logger';
+import CacheManager from '../utils/cache/CacheManager';
 
 interface AuthContextType {
   user: User | null;
@@ -20,6 +21,16 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function getFullName(data: any): string {
   return data?.fullName || data?.full_name || '';
+}
+
+function decodeJwtPayload(token: string): any {
+  try {
+    const base64 = token.split('.')[1];
+    const json = atob(base64.replace(/-/g, '+').replace(/_/g, '/'));
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -95,11 +106,22 @@ setUser({
   const faceLogin = async (imageUri: string) => {
     setIsLoading(true);
     try {
-      await authApi.faceLogin(imageUri);
-      const patronData = await authApi.getCurrentPatron();
-      await AsyncStorage.setItem('patronData', JSON.stringify(patronData));
-      setPatron(patronData);
-      setUser({ id: patronData.id, email: patronData.email || '', full_name: getFullName(patronData), role: 'patron', avatar_url: patronData.avatar_url });
+      const tokenRes = await authApi.faceLogin(imageUri);
+      const payload = decodeJwtPayload(tokenRes.access_token);
+      const role: string = payload?.roles?.[0] || payload?.role || 'patron';
+
+      if (role === 'admin' || role === 'staff') {
+        const userData = await authApi.getCurrentUser();
+        await AsyncStorage.setItem('userData', JSON.stringify(userData));
+        await AsyncStorage.removeItem('patronData');
+        setPatron(null);
+        setUser({ id: userData.id, email: userData.email || '', full_name: getFullName(userData), role: userData.role, avatar_url: userData.avatar_url });
+      } else {
+        const patronData = await authApi.getCurrentPatron();
+        await AsyncStorage.setItem('patronData', JSON.stringify(patronData));
+        setPatron(patronData);
+        setUser({ id: patronData.id, email: patronData.email || '', full_name: getFullName(patronData), role: 'patron', avatar_url: patronData.avatar_url });
+      }
     } catch (error) {
       await authApi.logout();
       throw error;
@@ -110,6 +132,8 @@ setUser({
 
   const logout = async () => {
     await authApi.logout();
+    const cache = CacheManager.getInstance();
+    await cache.invalidateAll();
     setUser(null);
     setPatron(null);
   };

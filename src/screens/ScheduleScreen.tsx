@@ -10,6 +10,8 @@ import { StaffScheduleAssignment } from '../types';
 import { DAY_LABELS, startOfWeek, toDateInput } from '../utils/dateUtils';
 import { AppTheme } from '../theme/DarkTheme';
 import { devError } from '../utils/logger';
+import CacheManager from '../utils/cache/CacheManager';
+import { CACHE_KEYS, CACHE_TTL } from '../utils/cache/CacheKeys';
 
 type AssignmentTimeState = 'now' | 'today' | 'upcoming' | 'past';
 
@@ -326,9 +328,30 @@ export default function ScheduleScreen() {
   const loadSchedules = useCallback(async (isRefresh?: boolean) => {
     if (!isRefresh) { setLoading(true); }
     setError(null);
+    
+    const cache = CacheManager.getInstance();
+    const cacheKey = `${CACHE_KEYS.SCHEDULE}_${weekRange.from}_${weekRange.to}`;
+    
     try {
-      const result = await scheduleApi.getMySchedules(weekRange.from, weekRange.to);
-      setAssignments(result.items);
+      const cached = await cache.get<{ items: StaffScheduleAssignment[] }>(cacheKey);
+      if (cached) {
+        setAssignments(cached.items);
+        setLoading(false);
+      }
+
+      try {
+        const result = await scheduleApi.getMySchedules(weekRange.from, weekRange.to);
+        setAssignments(result.items);
+        await cache.set(cacheKey, result, CACHE_TTL.SCHEDULE);
+      } catch (err: any) {
+        if (!cached) {
+          const msg = getErrorMessage(err, 'Không thể tải lịch trực');
+          devError('[Schedule] loadSchedules error:', msg, err?.response?.status, err?.message);
+          setError(msg);
+        }
+      } finally {
+        if (!isRefresh) { setLoading(false); }
+      }
     } catch (err: any) {
       const msg = getErrorMessage(err, 'Không thể tải lịch trực');
       devError('[Schedule] loadSchedules error:', msg, err?.response?.status, err?.message);
