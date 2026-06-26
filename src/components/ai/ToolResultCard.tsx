@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 import { Card, Text, Chip, useTheme } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { AIToolResult } from '../../types/ai';
@@ -11,6 +11,7 @@ interface ToolResultCardProps {
 
 export default function ToolResultCard({ toolResult }: ToolResultCardProps) {
   const theme = useTheme() as AppTheme;
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const { name, result } = toolResult;
 
   if (!result.success) {
@@ -71,6 +72,42 @@ export default function ToolResultCard({ toolResult }: ToolResultCardProps) {
   }
 }
 
+function SearchBookItem({ book, theme, styles }: { book: any; theme: AppTheme; styles: any }) {
+  const [imageError, setImageError] = React.useState(false);
+
+  return (
+    <View style={styles.bookItem}>
+      <View style={styles.bookRow}>
+        {book.cover_url && !imageError ? (
+          <Image
+            source={{ uri: book.cover_url }}
+            style={styles.coverThumbImage}
+            onError={() => setImageError(true)}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={[styles.coverThumbPlaceholder, { backgroundColor: theme.colors.surfaceVariant }]}>
+            <MaterialCommunityIcons name="book" size={16} color={theme.colors.primary} />
+          </View>
+        )}
+        <View style={styles.bookInfo}>
+          <Text variant="bodyMedium" style={styles.bookTitle}>{book.title}</Text>
+          {book.author && <Text variant="bodySmall" style={styles.bookMeta}>{book.author}</Text>}
+        </View>
+      </View>
+      <View style={styles.bookMetaRow}>
+        {book.isbn && <Chip compact style={styles.metaChip} textStyle={styles.chipText}>ISBN: {book.isbn}</Chip>}
+        {book.shelf_location && <Chip compact style={styles.metaChip} textStyle={styles.chipText}>📍 {book.shelf_location}</Chip>}
+        {book.available_copies !== undefined && (
+          <Chip compact style={[styles.metaChip, book.available_copies > 0 ? styles.chipSuccess : styles.chipError]} textStyle={styles.chipText}>
+            {book.available_copies > 0 ? `Còn ${book.available_copies} cuốn` : 'Hết'}
+          </Chip>
+        )}
+      </View>
+    </View>
+  );
+}
+
 function BookSearchCard({ data, theme, styles }: { data: any; theme: AppTheme; styles: any }) {
   const books = data?.books || data || [];
   const items = Array.isArray(books) ? books.slice(0, 5) : [];
@@ -89,28 +126,7 @@ function BookSearchCard({ data, theme, styles }: { data: any; theme: AppTheme; s
           <Text variant="bodySmall" style={styles.noData}>Không tìm thấy sách</Text>
         ) : (
           items.map((book: any, idx: number) => (
-            <View key={idx} style={styles.bookItem}>
-              <View style={styles.bookRow}>
-                {book.cover_url ? (
-                  <View style={styles.coverThumb}>
-                    <MaterialCommunityIcons name="book" size={20} color={theme.colors.primary} />
-                  </View>
-                ) : null}
-                <View style={styles.bookInfo}>
-                  <Text variant="bodyMedium" style={styles.bookTitle}>{book.title}</Text>
-                  {book.author && <Text variant="bodySmall" style={styles.bookMeta}>{book.author}</Text>}
-                </View>
-              </View>
-              <View style={styles.bookMetaRow}>
-                {book.isbn && <Chip compact style={styles.metaChip} textStyle={styles.chipText}>ISBN: {book.isbn}</Chip>}
-                {book.shelf_location && <Chip compact style={styles.metaChip} textStyle={styles.chipText}>📍 {book.shelf_location}</Chip>}
-                {book.available_copies !== undefined && (
-                  <Chip compact style={[styles.metaChip, book.available_copies > 0 ? styles.chipSuccess : styles.chipError]} textStyle={styles.chipText}>
-                    {book.available_copies > 0 ? `Còn ${book.available_copies} cuốn` : 'Hết'}
-                  </Chip>
-                )}
-              </View>
-            </View>
+            <SearchBookItem key={idx} book={book} theme={theme} styles={styles} />
           ))
         )}
       </Card.Content>
@@ -261,11 +277,11 @@ function PatronInfoCard({ data, theme, styles }: { data: any; theme: AppTheme; s
           <Text variant="labelSmall" style={styles.toolLabel}>Thông tin thẻ</Text>
         </View>
         <View style={styles.infoGrid}>
-          <InfoRow label="Họ tên" value={d.full_name || d.fullName || 'N/A'} />
-          <InfoRow label="MSSV" value={d.student_code || d.studentCode || 'N/A'} />
-          <InfoRow label="Email" value={d.email || 'N/A'} />
-          {d.phone && <InfoRow label="Điện thoại" value={d.phone} />}
-          {d.card_number && <InfoRow label="Số thẻ" value={d.card_number} />}
+          <InfoRow label="Họ tên" value={d.full_name || d.fullName || 'N/A'} styles={styles} />
+          <InfoRow label="MSSV" value={d.student_code || d.studentCode || 'N/A'} styles={styles} />
+          <InfoRow label="Email" value={d.email || 'N/A'} styles={styles} />
+          {d.phone && <InfoRow label="Điện thoại" value={d.phone} styles={styles} />}
+          {d.card_number && <InfoRow label="Số thẻ" value={d.card_number} styles={styles} />}
           <View style={styles.infoRow}>
             <Text variant="bodySmall" style={styles.infoLabel}>Trạng thái</Text>
             <Chip compact style={[styles.statusChip, { backgroundColor: statusColor + '20' }]} textStyle={[styles.chipText, { color: statusColor }]}>
@@ -273,7 +289,7 @@ function PatronInfoCard({ data, theme, styles }: { data: any; theme: AppTheme; s
             </Chip>
           </View>
           {d.membership_expiry && (
-            <InfoRow label="Hạn thẻ" value={new Date(d.membership_expiry).toLocaleDateString('vi-VN')} />
+            <InfoRow label="Hạn thẻ" value={new Date(d.membership_expiry).toLocaleDateString('vi-VN')} styles={styles} />
           )}
         </View>
       </Card.Content>
@@ -312,6 +328,7 @@ function LibraryHoursCard({ data, theme, styles }: { data: any; theme: AppTheme;
 function BookLookupCard({ data, theme, styles }: { data: any; theme: AppTheme; styles: any }) {
   if (!data) return null;
   const book = Array.isArray(data) ? data[0] : data;
+  const [imageError, setImageError] = React.useState(false);
 
   return (
     <Card style={styles.card}>
@@ -321,8 +338,15 @@ function BookLookupCard({ data, theme, styles }: { data: any; theme: AppTheme; s
           <Text variant="labelSmall" style={styles.toolLabel}>Thông tin sách</Text>
         </View>
         <View style={styles.bookLookup}>
-          {book.cover_url && (
-            <View style={styles.coverLarge}>
+          {book.cover_url && !imageError ? (
+            <Image
+              source={{ uri: book.cover_url }}
+              style={styles.coverLargeImage}
+              onError={() => setImageError(true)}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={[styles.coverLargePlaceholder, { backgroundColor: theme.colors.surfaceVariant }]}>
               <MaterialCommunityIcons name="book" size={32} color={theme.colors.primary} />
             </View>
           )}
@@ -435,7 +459,7 @@ function BorrowSlipCard({ data, theme, styles }: { data: any; theme: AppTheme; s
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function InfoRow({ label, value, styles }: { label: string; value: string; styles: any }) {
   return (
     <View style={styles.infoRow}>
       <Text variant="bodySmall" style={styles.infoLabel}>{label}</Text>
@@ -444,146 +468,176 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    marginVertical: 4,
-    backgroundColor: '#161B22',
-    borderWidth: 1,
-    borderColor: '#21262D',
-  },
-  errorCard: {
-    marginVertical: 4,
-    backgroundColor: '#3D1111',
-    borderWidth: 1,
-    borderColor: '#5C1D1D',
-  },
-  successCard: {
-    marginVertical: 4,
-    backgroundColor: '#0D2818',
-    borderWidth: 1,
-    borderColor: '#1A4D2E',
-  },
-  cardContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  toolHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  toolLabel: {
-    fontWeight: '600',
-    marginLeft: 6,
-    color: '#C9D1D9',
-  },
-  noData: {
-    opacity: 0.6,
-    color: '#8B949E',
-  },
-  bookItem: {
-    paddingVertical: 6,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#21262D',
-  },
-  bookRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  coverThumb: {
-    width: 32,
-    height: 42,
-    borderRadius: 4,
-    backgroundColor: '#0D1117',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  coverLarge: {
-    width: 60,
-    height: 80,
-    borderRadius: 6,
-    backgroundColor: '#0D1117',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bookInfo: {
-    flex: 1,
-  },
-  bookTitle: {
-    fontWeight: '500',
-    color: '#C9D1D9',
-  },
-  bookMeta: {
-    color: '#8B949E',
-    marginTop: 2,
-  },
-  bookMetaRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 4,
-    gap: 4,
-  },
-  metaChip: {
-    height: 24,
-    backgroundColor: '#21262D',
-  },
-  chipText: {
-    fontSize: 11,
-    color: '#C9D1D9',
-  },
-  chipSuccess: {
-    backgroundColor: '#0D2818',
-  },
-  chipError: {
-    backgroundColor: '#3D1111',
-  },
-  chipWarning: {
-    backgroundColor: '#3D2E00',
-  },
-  overdueItem: {
-    paddingVertical: 6,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#21262D',
-  },
-  overdueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 2,
-  },
-  overdueDate: {
-    color: '#F85149',
-  },
-  bookLookup: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  bookLookupInfo: {
-    flex: 1,
-  },
-  infoGrid: {
-    gap: 4,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  infoLabel: {
-    color: '#8B949E',
-  },
-  infoValue: {
-    color: '#C9D1D9',
-    fontWeight: '500',
-  },
-  statusChip: {
-    height: 24,
-  },
-  jsonText: {
-    color: '#8B949E',
-    fontFamily: 'monospace',
-    fontSize: 11,
-  },
-});
+function createStyles(theme: AppTheme) {
+  const successColor = theme.colors.custom?.success || '#4CAF50';
+  const errorColor = theme.colors.error || '#F44336';
+  const warningColor = theme.colors.custom?.warning || '#FFB74D';
+
+  return StyleSheet.create({
+    card: {
+      marginVertical: 4,
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.outlineVariant,
+    },
+    errorCard: {
+      marginVertical: 4,
+      backgroundColor: theme.dark ? '#3D1111' : '#FCE8E6',
+      borderWidth: 1,
+      borderColor: theme.dark ? '#5C1D1D' : '#FAD2CF',
+    },
+    successCard: {
+      marginVertical: 4,
+      backgroundColor: theme.dark ? '#0D2818' : '#E6F4EA',
+      borderWidth: 1,
+      borderColor: theme.dark ? '#1A4D2E' : '#CEEAD6',
+    },
+    cardContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    toolHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    toolLabel: {
+      fontWeight: '600',
+      marginLeft: 6,
+      color: theme.colors.onSurface,
+    },
+    noData: {
+      opacity: 0.6,
+      color: theme.colors.onSurfaceVariant,
+    },
+    bookItem: {
+      paddingVertical: 8,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.colors.outlineVariant,
+    },
+    bookRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    coverThumb: {
+      width: 32,
+      height: 42,
+      borderRadius: 4,
+      backgroundColor: theme.colors.surfaceVariant,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    coverThumbImage: {
+      width: 32,
+      height: 42,
+      borderRadius: 4,
+    },
+    coverThumbPlaceholder: {
+      width: 32,
+      height: 42,
+      borderRadius: 4,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    coverLarge: {
+      width: 60,
+      height: 80,
+      borderRadius: 6,
+      backgroundColor: theme.colors.surfaceVariant,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    coverLargeImage: {
+      width: 60,
+      height: 80,
+      borderRadius: 6,
+    },
+    coverLargePlaceholder: {
+      width: 60,
+      height: 80,
+      borderRadius: 6,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    bookInfo: {
+      flex: 1,
+    },
+    bookTitle: {
+      fontWeight: '600',
+      color: theme.colors.onSurface,
+    },
+    bookMeta: {
+      color: theme.colors.onSurfaceVariant,
+      marginTop: 2,
+    },
+    bookMetaRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      marginTop: 4,
+      gap: 4,
+    },
+    metaChip: {
+      height: 24,
+      backgroundColor: theme.colors.surfaceVariant,
+    },
+    chipText: {
+      fontSize: 11,
+      color: theme.colors.onSurfaceVariant,
+    },
+    chipSuccess: {
+      backgroundColor: theme.dark ? '#0D2818' : '#CEEAD6',
+    },
+    chipError: {
+      backgroundColor: theme.dark ? '#3D1111' : '#FAD2CF',
+    },
+    chipWarning: {
+      backgroundColor: theme.dark ? '#3D2E00' : '#FEF7E0',
+    },
+    overdueItem: {
+      paddingVertical: 8,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.colors.outlineVariant,
+    },
+    overdueRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 2,
+    },
+    overdueDate: {
+      color: theme.colors.error,
+    },
+    bookLookup: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    bookLookupInfo: {
+      flex: 1,
+    },
+    infoGrid: {
+      gap: 4,
+    },
+    infoRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 4,
+    },
+    infoLabel: {
+      color: theme.colors.onSurfaceVariant,
+    },
+    infoValue: {
+      color: theme.colors.onSurface,
+      fontWeight: '500',
+    },
+    statusChip: {
+      height: 24,
+    },
+    jsonText: {
+      color: theme.colors.onSurfaceVariant,
+      fontFamily: 'monospace',
+      fontSize: 11,
+    },
+  });
+}

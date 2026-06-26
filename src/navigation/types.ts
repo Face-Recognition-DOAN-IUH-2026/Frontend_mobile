@@ -10,14 +10,8 @@ export type AuthStackParamList = {
 
 export type MainTabParamList = {
   Home: undefined;
-  Notifications: undefined;
-  StaffReturn: undefined;
-  StaffBorrow: undefined;
-  Schedule: undefined;
   AIChat: undefined;
-  AIHealth: undefined;
   BookRecommendations: undefined;
-  History: undefined;
   Profile: undefined;
 };
 
@@ -32,6 +26,11 @@ export type MainStackParamList = {
   BookRecommendations: undefined;
   MyReservations: undefined;
   BookCatalog: undefined;
+  Notifications: undefined;
+  StaffReturn: undefined;
+  StaffBorrow: undefined;
+  Schedule: undefined;
+  History: undefined;
 };
 
 export type RootStackParamList = {

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { NavigationContainer, DarkTheme as NavigationDarkTheme, DefaultTheme as NavigationDefaultTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -104,6 +104,32 @@ const tabBadgeStyles = StyleSheet.create({
   },
 });
 
+function HeaderNotificationButton({ navigation }: { navigation: any }) {
+  const { unreadCount } = useNotification();
+  const theme = useTheme();
+
+  return (
+    <Pressable
+      onPress={() => navigation.navigate('Notifications')}
+      style={({ pressed }) => [
+        {
+          marginRight: 16,
+          opacity: pressed ? 0.7 : 1,
+        },
+      ]}
+    >
+      <View>
+        <MaterialCommunityIcons name="bell" size={24} color={theme.colors.onSurface} />
+        {unreadCount > 0 && (
+          <View style={tabBadgeStyles.badge}>
+            <Text style={tabBadgeStyles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+          </View>
+        )}
+      </View>
+    </Pressable>
+  );
+}
+
 function MainTabNavigator() {
   const theme = useTheme();
   const { user } = useAuth();
@@ -111,7 +137,7 @@ function MainTabNavigator() {
 
   return (
     <MainTab.Navigator
-      screenOptions={{
+      screenOptions={({ navigation }) => ({
         tabBarStyle: {
           backgroundColor: theme.colors.surface,
           borderTopColor: theme.colors.outlineVariant,
@@ -123,7 +149,8 @@ function MainTabNavigator() {
           backgroundColor: theme.colors.surface,
         },
         headerTintColor: theme.colors.onPrimary,
-      }}
+        headerRight: () => <HeaderNotificationButton navigation={navigation} />,
+      })}
     >
       <MainTab.Screen
         name="Home"
@@ -136,50 +163,6 @@ function MainTabNavigator() {
         }}
       />
       <MainTab.Screen
-        name="Notifications"
-        component={NotificationScreen}
-        options={{
-          title: 'Thông báo',
-          tabBarIcon: ({ color, size }) => <NotificationsTabIcon color={color} size={size} />,
-        }}
-      />
-      {isStaffScanner && (
-        <>
-          <MainTab.Screen
-            name="StaffReturn"
-            component={ReturnScreen}
-            options={{
-              title: 'Trả sách',
-              tabBarIcon: ({ color, size }) => (
-                <MaterialCommunityIcons name="barcode-scan" size={size} color={color} />
-              ),
-            }}
-          />
-          <MainTab.Screen
-            name="StaffBorrow"
-            component={StaffBorrowScreen}
-            options={{
-              title: 'Tạo phiếu mượn',
-              tabBarIcon: ({ color, size }) => (
-                <MaterialCommunityIcons name="book-plus-multiple" size={size} color={color} />
-              ),
-            }}
-          />
-        </>
-      )}
-      {isStaffScanner && (
-        <MainTab.Screen
-          name="Schedule"
-          component={ScheduleScreen}
-          options={{
-            title: 'Lịch trực',
-            tabBarIcon: ({ color, size }) => (
-              <MaterialCommunityIcons name="calendar-clock" size={size} color={color} />
-            ),
-          }}
-        />
-      )}
-      <MainTab.Screen
         name="AIChat"
         component={AIChatScreen}
         options={{
@@ -190,18 +173,6 @@ function MainTabNavigator() {
           ),
         }}
       />
-      {isStaffScanner && (
-        <MainTab.Screen
-          name="AIHealth"
-          component={AIHealthScreen}
-          options={{
-            title: 'AI Health',
-            tabBarIcon: ({ color, size }) => (
-              <MaterialCommunityIcons name="chart-line" size={size} color={color} />
-            ),
-          }}
-        />
-      )}
       {!isStaffScanner && (
         <MainTab.Screen
           name="BookRecommendations"
@@ -210,19 +181,6 @@ function MainTabNavigator() {
             title: 'Gợi ý',
             tabBarIcon: ({ color, size }) => (
               <MaterialCommunityIcons name="lightbulb" size={size} color={color} />
-            ),
-          }}
-        />
-      )}
-      {/* Patron tab - hidden for admin/staff */}
-      {!isStaffScanner && (
-        <MainTab.Screen
-          name="History"
-          component={HistoryScreen}
-          options={{
-            title: 'Lịch sử',
-            tabBarIcon: ({ color, size }) => (
-              <MaterialCommunityIcons name="history" size={size} color={color} />
             ),
           }}
         />
@@ -318,6 +276,46 @@ function MainStackNavigator() {
         component={BookCatalogScreen}
         options={{
           title: 'Mượn sách',
+          presentation: 'card',
+        }}
+      />
+      <MainStack.Screen
+        name="Notifications"
+        component={NotificationScreen}
+        options={{
+          title: 'Thông báo',
+          presentation: 'card',
+        }}
+      />
+      <MainStack.Screen
+        name="StaffReturn"
+        component={ReturnScreen}
+        options={{
+          title: 'Trả sách',
+          presentation: 'card',
+        }}
+      />
+      <MainStack.Screen
+        name="StaffBorrow"
+        component={StaffBorrowScreen}
+        options={{
+          title: 'Tạo phiếu mượn',
+          presentation: 'card',
+        }}
+      />
+      <MainStack.Screen
+        name="Schedule"
+        component={ScheduleScreen}
+        options={{
+          title: 'Lịch trực',
+          presentation: 'card',
+        }}
+      />
+      <MainStack.Screen
+        name="History"
+        component={HistoryScreen}
+        options={{
+          title: 'Lịch sử mượn sách',
           presentation: 'card',
         }}
       />

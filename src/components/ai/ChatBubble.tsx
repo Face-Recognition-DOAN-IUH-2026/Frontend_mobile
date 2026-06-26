@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 import { Text, useTheme } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { AIMessage } from '../../types/ai';
@@ -38,32 +38,45 @@ function parseBookCards(content: string): Array<{ type: 'text' | 'book_card'; te
 }
 
 function BookCardInline({ book, theme }: { book: any; theme: AppTheme }) {
+  const [imageError, setImageError] = React.useState(false);
+
   return (
-    <View style={inlineStyles.card}>
+    <View style={[inlineStyles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}>
       <View style={inlineStyles.header}>
-        <MaterialCommunityIcons name="book-open-variant" size={16} color="#1A73E8" />
-        <Text style={inlineStyles.headerLabel}>Thông tin sách</Text>
+        <MaterialCommunityIcons name="book-open-variant" size={16} color={theme.colors.primary} />
+        <Text style={[inlineStyles.headerLabel, { color: theme.colors.primary }]}>Thông tin sách</Text>
       </View>
       <View style={inlineStyles.body}>
-        {book.cover_url && (
-          <View style={inlineStyles.cover}>
-            <MaterialCommunityIcons name="book" size={24} color="#1A73E8" />
+        {book.cover_url && !imageError ? (
+          <Image
+            source={{ uri: book.cover_url }}
+            style={inlineStyles.coverImage}
+            onError={() => setImageError(true)}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={[inlineStyles.cover, { backgroundColor: theme.colors.surfaceVariant }]}>
+            <MaterialCommunityIcons name="book" size={24} color={theme.colors.primary} />
           </View>
         )}
         <View style={inlineStyles.info}>
-          <Text style={inlineStyles.title}>{book.title}</Text>
-          {book.author && <Text style={inlineStyles.meta}>{book.author}</Text>}
-          {book.isbn && <Text style={inlineStyles.meta}>ISBN: {book.isbn}</Text>}
-          {book.categories && <Text style={inlineStyles.meta}>{book.categories}</Text>}
+          <Text style={[inlineStyles.title, { color: theme.colors.onSurface }]}>{book.title}</Text>
+          {book.author && <Text style={[inlineStyles.meta, { color: theme.colors.onSurfaceVariant }]}>{book.author}</Text>}
+          {book.isbn && <Text style={[inlineStyles.meta, { color: theme.colors.onSurfaceVariant }]}>ISBN: {book.isbn}</Text>}
+          {book.categories && <Text style={[inlineStyles.meta, { color: theme.colors.onSurfaceVariant }]}>{book.categories}</Text>}
           {book.source && (
-            <View style={inlineStyles.sourceChip}>
-              <Text style={inlineStyles.sourceText}>{book.source === 'database' ? 'Cơ sở dữ liệu' : 'Google Books'}</Text>
+            <View style={[inlineStyles.sourceChip, { backgroundColor: theme.colors.surfaceVariant }]}>
+              <Text style={[inlineStyles.sourceText, { color: theme.colors.onSurfaceVariant }]}>
+                {book.source === 'database' ? 'Cơ sở dữ liệu' : 'Google Books'}
+              </Text>
             </View>
           )}
         </View>
       </View>
       {book.description && (
-        <Text style={inlineStyles.description} numberOfLines={3}>{book.description}</Text>
+        <Text style={[inlineStyles.description, { color: theme.colors.onSurfaceVariant }]} numberOfLines={3}>
+          {book.description}
+        </Text>
       )}
     </View>
   );
@@ -71,10 +84,8 @@ function BookCardInline({ book, theme }: { book: any; theme: AppTheme }) {
 
 const inlineStyles = StyleSheet.create({
   card: {
-    backgroundColor: '#161B22',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#21262D',
     marginVertical: 6,
     overflow: 'hidden',
   },
@@ -87,7 +98,6 @@ const inlineStyles = StyleSheet.create({
     gap: 6,
   },
   headerLabel: {
-    color: '#1A73E8',
     fontSize: 12,
     fontWeight: '600',
   },
@@ -100,37 +110,36 @@ const inlineStyles = StyleSheet.create({
     width: 48,
     height: 64,
     borderRadius: 6,
-    backgroundColor: '#0D1117',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  coverImage: {
+    width: 48,
+    height: 64,
+    borderRadius: 6,
   },
   info: {
     flex: 1,
   },
   title: {
-    color: '#C9D1D9',
     fontSize: 14,
     fontWeight: '600',
   },
   meta: {
-    color: '#8B949E',
     fontSize: 12,
     marginTop: 2,
   },
   sourceChip: {
     alignSelf: 'flex-start',
-    backgroundColor: '#21262D',
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 2,
     marginTop: 4,
   },
   sourceText: {
-    color: '#8B949E',
     fontSize: 10,
   },
   description: {
-    color: '#8B949E',
     fontSize: 12,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -192,14 +201,14 @@ function createStyles(theme: AppTheme) {
       maxWidth: '82%',
     },
     userBubble: {
-      backgroundColor: '#1A73E8',
+      backgroundColor: theme.colors.primary,
       borderRadius: 18,
       borderBottomRightRadius: 4,
       paddingHorizontal: 14,
       paddingVertical: 10,
     },
     userText: {
-      color: '#FFFFFF',
+      color: theme.colors.onPrimary,
       fontSize: 14,
       lineHeight: 20,
     },
@@ -213,14 +222,14 @@ function createStyles(theme: AppTheme) {
       flex: 1,
     },
     assistantBubble: {
-      backgroundColor: '#161B22',
+      backgroundColor: theme.colors.surfaceVariant,
       borderRadius: 18,
       borderBottomLeftRadius: 4,
       paddingHorizontal: 14,
       paddingVertical: 10,
     },
     assistantText: {
-      color: '#C9D1D9',
+      color: theme.colors.onSurfaceVariant,
       fontSize: 14,
       lineHeight: 20,
     },
@@ -228,7 +237,7 @@ function createStyles(theme: AppTheme) {
       width: 24,
       height: 24,
       borderRadius: 12,
-      backgroundColor: '#1A73E8',
+      backgroundColor: theme.colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
     },

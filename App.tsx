@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 
 import { AuthProvider } from './src/context/AuthContext';
+import { NetworkProvider } from './src/context/NetworkContext';
 import { NotificationProvider } from './src/context/NotificationContext';
 import { MobileThemeProvider, useMobileTheme } from './src/context/ThemeContext';
 import AppNavigator from './src/navigation/AppNavigator';
@@ -87,12 +88,14 @@ function AppContent() {
 
   return (
     <PaperProvider theme={theme}>
-      <AuthProvider>
-        <NotificationProvider>
-          <StatusBar style={isDark ? 'light' : 'dark'} />
-          <AppNavigator />
-        </NotificationProvider>
-      </AuthProvider>
+      <NetworkProvider>
+        <AuthProvider>
+          <NotificationProvider>
+            <StatusBar style={isDark ? 'light' : 'dark'} />
+            <AppNavigator />
+          </NotificationProvider>
+        </AuthProvider>
+      </NetworkProvider>
     </PaperProvider>
   );
 }

@@ -9,6 +9,8 @@ import { useAuth } from '../context/AuthContext';
 import { AppTheme } from '../theme/DarkTheme';
 import { BorrowRecord } from '../types';
 import { formatDate, getDaysUntil, isOverdue } from '../utils/dateUtils';
+import CacheManager from '../utils/cache/CacheManager';
+import { CACHE_KEYS, CACHE_TTL } from '../utils/cache/CacheKeys';
 
 interface HomeScreenProps {
   navigation: any;
@@ -39,8 +41,24 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 
     try {
       setLoadError(null);
-      const history = await borrowApi.getHistory('borrowed');
-      setBorrows(history);
+      
+      const cache = CacheManager.getInstance();
+      const cached = await cache.get<BorrowRecord[]>(CACHE_KEYS.ACTIVE_BORROWS);
+      if (cached) {
+        setBorrows(cached);
+      }
+
+      try {
+        const history = await borrowApi.getHistory('borrowed');
+        setBorrows(history);
+        await cache.set(CACHE_KEYS.ACTIVE_BORROWS, history, CACHE_TTL.ACTIVE_BORROWS);
+      } catch (error: any) {
+        if (!cached) {
+          const message = error?.response?.data?.detail || error?.message || 'Không thể tải danh sách sách đang mượn';
+          setLoadError(message);
+          setBorrows([]);
+        }
+      }
     } catch (error: any) {
       const message = error?.response?.data?.detail || error?.message || 'Không thể tải danh sách sách đang mượn';
       setLoadError(message);
@@ -67,10 +85,16 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 
   const staffActions: StaffAction[] = [
     {
-      title: 'Tra sach',
-      description: 'Nhap MSSV, xem sach dang muon va xac nhan tra bang ISBN.',
+      title: 'Trả sách',
+      description: 'Nhập MSSV, xem sách đang mượn và xác nhận trả.',
       icon: 'barcode-scan',
       route: 'StaffReturn',
+    },
+    {
+      title: 'Tạo phiếu mượn',
+      description: 'Quét thẻ sinh viên và sách để tạo phiếu mượn mới.',
+      icon: 'book-plus-multiple',
+      route: 'StaffBorrow',
     },
     {
       title: 'Nhập sách',
@@ -80,9 +104,15 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
     },
     {
       title: 'Lịch trực',
-      description: 'Xem ca hôm nay và lịch làm việc trong tuần.',
+      description: 'Xem ca làm việc và lịch trực của bạn.',
       icon: 'calendar-clock',
       route: 'Schedule',
+    },
+    {
+      title: 'AI Health',
+      description: 'Xem báo cáo sức khỏe hệ thống và phân tích dữ liệu AI.',
+      icon: 'chart-line',
+      route: 'AIHealth',
     },
     {
       title: 'Hồ sơ',

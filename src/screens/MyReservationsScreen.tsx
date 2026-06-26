@@ -7,6 +7,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import { getMyReservations, cancelReservation, BookReservation } from '../api/borrow';
 import { AppTheme } from '../theme/DarkTheme';
 import { devError } from '../utils/logger';
+import CacheManager from '../utils/cache/CacheManager';
+import { CACHE_KEYS, CACHE_TTL } from '../utils/cache/CacheKeys';
+import { useNetwork } from '../context/NetworkContext';
 
 interface MyReservationsScreenProps {
   navigation: any;
@@ -22,13 +25,32 @@ export default function MyReservationsScreen({ navigation }: MyReservationsScree
   const [snackMsg, setSnackMsg] = useState('');
   const [snackVisible, setSnackVisible] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const { isOnline } = useNetwork();
 
   const loadReservations = useCallback(async (showRefresh = false) => {
     if (showRefresh) setRefreshing(true);
     try {
       setLoadError(null);
-      const data = await getMyReservations();
-      setReservations(data.items);
+      
+      const cache = CacheManager.getInstance();
+      const cached = await cache.get<{ items: BookReservation[] }>(CACHE_KEYS.RESERVATIONS);
+      if (cached) {
+        setReservations(cached.items);
+        setRefreshing(false);
+      }
+
+      try {
+        const data = await getMyReservations();
+        setReservations(data.items);
+        await cache.set(CACHE_KEYS.RESERVATIONS, data, CACHE_TTL.RESERVATIONS);
+      } catch (error: any) {
+        if (!cached) {
+          devError('Failed to load reservations:', error);
+          setLoadError(error?.response?.data?.detail || error?.message || 'Không thể tải danh sách đặt chỗ');
+        }
+      } finally {
+        setRefreshing(false);
+      }
     } catch (error: any) {
       devError('Failed to load reservations:', error);
       setLoadError(error?.response?.data?.detail || error?.message || 'Không thể tải danh sách đặt chỗ');
@@ -44,6 +66,11 @@ export default function MyReservationsScreen({ navigation }: MyReservationsScree
   );
 
   const handleCancel = useCallback((reservation: BookReservation) => {
+    if (!isOnline) {
+      Alert.alert('Requires Network', 'Cancelling reservations requires an internet connection.');
+      return;
+    }
+    
     Alert.alert(
       'Hủy đặt chỗ?',
       `Bạn có chắc muốn hủy đặt chỗ "${reservation.book?.title || 'sách này'}"?`,

@@ -8,6 +8,9 @@ import { borrowApi, reserveBook } from '../api/borrow';
 import { Book, BookWithStats } from '../types';
 import { AppTheme } from '../theme/DarkTheme';
 import { devError } from '../utils/logger';
+import CacheManager from '../utils/cache/CacheManager';
+import { CACHE_KEYS, CACHE_TTL } from '../utils/cache/CacheKeys';
+import { useNetwork } from '../context/NetworkContext';
 
 interface BookCatalogScreenProps {
   navigation: any;
@@ -24,6 +27,7 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
   const [snackMsg, setSnackMsg] = useState('');
   const [snackVisible, setSnackVisible] = useState(false);
   const [reservingId, setReservingId] = useState<string | null>(null);
+  const { isOnline } = useNetwork();
 
   const [detailVisible, setDetailVisible] = useState(false);
   const [detailBook, setDetailBook] = useState<BookWithStats | null>(null);
@@ -32,8 +36,23 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
   const loadBooks = useCallback(async () => {
     try {
       setLoadError(null);
-      const data = await borrowApi.getBooks(0, 200);
-      setBooks(data);
+      
+      const cache = CacheManager.getInstance();
+      const cached = await cache.get<Book[]>(CACHE_KEYS.BOOKS);
+      if (cached) {
+        setBooks(cached);
+      }
+
+      try {
+        const data = await borrowApi.getBooks(0, 200);
+        setBooks(data);
+        await cache.set(CACHE_KEYS.BOOKS, data, CACHE_TTL.BOOKS);
+      } catch (error: any) {
+        if (!cached) {
+          devError('Failed to load books:', error);
+          setLoadError(error?.response?.data?.detail || error?.message || 'Không thể tải danh sách sách');
+        }
+      }
     } catch (error: any) {
       devError('Failed to load books:', error);
       setLoadError(error?.response?.data?.detail || error?.message || 'Không thể tải danh sách sách');
@@ -77,6 +96,11 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
   };
 
   const handleReserve = async (bookId: string, title: string) => {
+    if (!isOnline) {
+      Alert.alert('Requires Network', 'Reserving books requires an internet connection.');
+      return;
+    }
+    
     Alert.alert(
       'Đặt chỗ',
       `Bạn muốn đặt chỗ "${title}"?`,

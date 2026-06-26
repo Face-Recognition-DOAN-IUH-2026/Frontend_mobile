@@ -72,6 +72,8 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         ? 'Nhân viên'
         : 'Độc giả';
 
+  const isStaffScanner = user?.role === 'admin' || user?.role === 'staff';
+
   const displayName = user?.full_name || 'Người dùng';
 
   const handleLogout = async () => {
@@ -258,6 +260,20 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
               right={(props) => <List.Icon {...props} icon="chevron-right" color={theme.colors.onSurfaceVariant} />}
               onPress={() => navigation.navigate('MyReservations')}
             />
+            {!isStaffScanner && (
+              <>
+                <Divider />
+                <List.Item
+                  title="Lịch sử mượn sách"
+                  description="Xem lịch sử sách đã mượn và đã trả"
+                  titleStyle={styles.itemTitle}
+                  descriptionStyle={styles.itemDescription}
+                  left={(props) => <List.Icon {...props} icon="history" color={theme.colors.primary} />}
+                  right={(props) => <List.Icon {...props} icon="chevron-right" color={theme.colors.onSurfaceVariant} />}
+                  onPress={() => navigation.navigate('History')}
+                />
+              </>
+            )}
           </List.Section>
         </Card>
 

@@ -4,6 +4,8 @@ import { notificationApi } from '../api/notification';
 import { useAuth } from './AuthContext';
 import { Notification } from '../types';
 import { devError } from '../utils/logger';
+import CacheManager from '../utils/cache/CacheManager';
+import { CACHE_KEYS, CACHE_TTL } from '../utils/cache/CacheKeys';
 
 interface NotificationContextValue {
   notifications: Notification[];
@@ -93,9 +95,30 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (!(await hasToken())) return;
     try {
       setIsLoading(true);
-      const result = await notificationApi.getNotifications({ unread: unreadOnly || undefined, limit: 50 });
-      setNotifications(result.items);
-      setUnreadCount(result.unread);
+      
+      const cache = CacheManager.getInstance();
+      const cacheKey = unreadOnly ? `${CACHE_KEYS.NOTIFICATIONS}_unread` : CACHE_KEYS.NOTIFICATIONS;
+      
+      const cached = await cache.get<{ items: Notification[]; unread: number }>(cacheKey);
+      if (cached) {
+        setNotifications(cached.items);
+        setUnreadCount(cached.unread);
+        setIsLoading(false);
+      }
+
+      try {
+        const result = await notificationApi.getNotifications({ unread: unreadOnly || undefined, limit: 50 });
+        setNotifications(result.items);
+        setUnreadCount(result.unread);
+        await cache.set(cacheKey, result, CACHE_TTL.NOTIFICATIONS);
+      } catch (err: any) {
+        if (err.response?.status === 401) return;
+        if (!cached) {
+          devError('[Notification] Failed to fetch notifications:', err);
+        }
+      } finally {
+        setIsLoading(false);
+      }
     } catch (err: any) {
       if (err.response?.status === 401) return;
       devError('[Notification] Failed to fetch notifications:', err);
