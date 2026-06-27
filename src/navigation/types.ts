@@ -31,6 +31,7 @@ export type MainStackParamList = {
   StaffBorrow: undefined;
   Schedule: undefined;
   History: undefined;
+  EditProfile: undefined;
 };
 
 export type RootStackParamList = {

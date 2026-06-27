@@ -29,6 +29,7 @@ import AIHealthScreen from '../screens/AIHealthScreen';
 import BookRecommendationsScreen from '../screens/BookRecommendationsScreen';
 import MyReservationsScreen from '../screens/MyReservationsScreen';
 import BookCatalogScreen from '../screens/BookCatalogScreen';
+import EditProfileScreen from '../screens/EditProfileScreen';
 
 import { AuthStackParamList, MainStackParamList, MainTabParamList } from './types';
 
@@ -316,6 +317,14 @@ function MainStackNavigator() {
         component={HistoryScreen}
         options={{
           title: 'Lịch sử mượn sách',
+          presentation: 'card',
+        }}
+      />
+      <MainStack.Screen
+        name="EditProfile"
+        component={EditProfileScreen}
+        options={{
+          title: 'Chỉnh sửa hồ sơ',
           presentation: 'card',
         }}
       />

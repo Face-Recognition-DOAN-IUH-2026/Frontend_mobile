@@ -140,6 +140,19 @@ export const authApi = {
     await api.delete('/users/me/avatar');
   },
 
+  updateProfile: async (data: { full_name?: string; phone?: string; permanent_address?: string }): Promise<any> => {
+    const response = await api.put('/users/me/profile', data);
+    return response.data;
+  },
+
+  requestEmailChangeOtp: async (newEmail: string): Promise<void> => {
+    await api.post('/users/me/email/request-otp', { new_email: newEmail });
+  },
+
+  verifyAndChangeEmail: async (newEmail: string, code: string): Promise<void> => {
+    await api.put('/users/me/email', { new_email: newEmail, code });
+  },
+
   forgotPassword: async (email: string): Promise<void> => {
     await api.post('/auth/forgot-password', { email });
   },

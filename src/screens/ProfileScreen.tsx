@@ -151,6 +151,17 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           </Card.Content>
         </Card>
 
+        <Button
+          mode="contained"
+          icon="pencil"
+          onPress={() => navigation.navigate('EditProfile')}
+          style={styles.editButton}
+          contentStyle={styles.editButtonContent}
+          labelStyle={styles.editButtonLabel}
+        >
+          Chỉnh sửa hồ sơ
+        </Button>
+
         {isStudent && (
           <Card mode="outlined" style={styles.section}>
             <View style={styles.sectionAccent} />
@@ -497,6 +508,17 @@ function createStyles(theme: AppTheme) {
     },
     version: {
       color: theme.colors.onSurfaceVariant,
+    },
+    editButton: {
+      borderRadius: 10,
+      backgroundColor: theme.colors.primary,
+    },
+    editButtonContent: {
+      paddingVertical: 6,
+    },
+    editButtonLabel: {
+      fontSize: 14,
+      fontWeight: '700',
     },
   });
 }
