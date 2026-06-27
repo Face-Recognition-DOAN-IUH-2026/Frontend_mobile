@@ -76,10 +76,11 @@ export const borrowApi = {
   },
 
   getBooks: async (skip = 0, limit = 50): Promise<Book[]> => {
-    const response = await api.get<Book[]>('/borrow/books', {
+    const response = await api.get<{ items: Book[]; total: number } | Book[]>('/borrow/books', {
       params: { skip, limit },
     });
-    return response.data;
+    const data = response.data;
+    return Array.isArray(data) ? data : data.items || [];
   },
 
   getBook: async (isbn: string): Promise<BookWithStats> => {

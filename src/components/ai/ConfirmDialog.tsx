@@ -21,7 +21,7 @@ export default function ConfirmDialog({ visible, pendingAction, onApprove, onRej
   return (
     <Portal>
       <Dialog visible={visible} onDismiss={onDismiss} style={styles.dialog}>
-        <Dialog.Title style={styles.title}>Xac nhan hanh dong</Dialog.Title>
+        <Dialog.Title style={styles.title}>Xác nhận hành động</Dialog.Title>
         <Dialog.Content>
           <Text variant="bodyMedium" style={styles.description}>
             {pendingAction.description}
@@ -33,8 +33,8 @@ export default function ConfirmDialog({ visible, pendingAction, onApprove, onRej
           )}
         </Dialog.Content>
         <Dialog.Actions>
-          <Button onPress={onReject} textColor={theme.colors.error}>Tu choi</Button>
-          <Button onPress={onApprove}>Dong y</Button>
+          <Button onPress={onReject} textColor={theme.colors.error}>Từ chối</Button>
+          <Button onPress={onApprove}>Đồng ý</Button>
         </Dialog.Actions>
       </Dialog>
     </Portal>
