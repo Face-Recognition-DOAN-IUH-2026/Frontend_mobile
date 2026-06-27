@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Avatar,
@@ -11,12 +11,15 @@ import {
   Portal,
   Switch,
   Text,
+  ActivityIndicator,
   useTheme,
 } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../context/AuthContext';
 import { useMobileTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme/DarkTheme';
+import { authApi } from '../api/auth';
 
 interface ProfileScreenProps {
   navigation: any;
@@ -61,9 +64,10 @@ const infoStyles = StyleSheet.create({
 export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   const theme = useTheme() as AppTheme;
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const { user, patron, logout } = useAuth();
+  const { user, patron, logout, updateUser } = useAuth();
   const { mode, toggleTheme } = useMobileTheme();
   const [logoutVisible, setLogoutVisible] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const roleLabel =
     user?.role === 'admin'
@@ -79,6 +83,35 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   const handleLogout = async () => {
     setLogoutVisible(false);
     await logout();
+  };
+
+  const handlePickAvatar = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Cần quyền truy cập', 'Vui lòng cấp quyền truy cập ảnh trong cài đặt.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (result.canceled || !result.assets?.[0]) return;
+
+    const imageUri = result.assets[0].uri;
+    setUploading(true);
+    try {
+      const { avatarUrl } = await authApi.uploadAvatar(imageUri);
+      updateUser({ avatar_url: avatarUrl });
+      Alert.alert('Thành công', 'Avatar đã được cập nhật.');
+    } catch (err: any) {
+      Alert.alert('Lỗi', err?.response?.data?.detail || 'Không thể tải ảnh lên. Thử lại sau.');
+    } finally {
+      setUploading(false);
+    }
   };
 
   const studentFields = [
@@ -102,20 +135,33 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
         <Card mode="contained" style={styles.header}>
           <Card.Content style={styles.headerContent}>
-{user?.avatar_url ? (
-    <Avatar.Image
-      size={74}
-      source={{ uri: user.avatar_url }}
-      style={styles.avatar}
-    />
-  ) : (
-    <Avatar.Text
-      size={74}
-      label={(displayName || user?.email || 'U').slice(0, 1).toUpperCase()}
-      color={theme.colors.onPrimary}
-      style={styles.avatar}
-    />
-  )}
+            <TouchableOpacity onPress={handlePickAvatar} disabled={uploading} activeOpacity={0.7}>
+              <View style={styles.avatarWrapper}>
+                {user?.avatar_url ? (
+                  <Avatar.Image
+                    size={74}
+                    source={{ uri: user.avatar_url }}
+                    style={styles.avatar}
+                  />
+                ) : (
+                  <Avatar.Text
+                    size={74}
+                    label={(displayName || user?.email || 'U').slice(0, 1).toUpperCase()}
+                    color={theme.colors.onPrimary}
+                    style={styles.avatar}
+                  />
+                )}
+                {uploading ? (
+                  <View style={styles.avatarOverlay}>
+                    <ActivityIndicator size="small" color="#fff" />
+                  </View>
+                ) : (
+                  <View style={styles.avatarOverlay}>
+                    <MaterialCommunityIcons name="camera" size={20} color="#fff" />
+                  </View>
+                )}
+              </View>
+            </TouchableOpacity>
             <Text variant="headlineSmall" style={styles.name} numberOfLines={2}>
               {displayName}
             </Text>
@@ -365,6 +411,21 @@ function createStyles(theme: AppTheme) {
     avatar: {
       backgroundColor: theme.colors.primary,
       marginBottom: 8,
+    },
+    avatarWrapper: {
+      position: 'relative',
+      marginBottom: 8,
+    },
+    avatarOverlay: {
+      position: 'absolute',
+      bottom: 8,
+      right: 0,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      borderRadius: 12,
+      width: 28,
+      height: 28,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     name: {
       color: theme.colors.onSurface,

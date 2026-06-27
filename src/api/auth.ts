@@ -122,6 +122,24 @@ export const authApi = {
     });
   },
 
+  uploadAvatar: async (imageUri: string): Promise<{ avatarUrl: string }> => {
+    const formData = new FormData();
+    formData.append('avatar', {
+      uri: imageUri,
+      type: 'image/jpeg',
+      name: 'avatar.jpg',
+    } as any);
+    const response = await api.post<{ avatarUrl: string }>('/users/me/avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000,
+    });
+    return response.data;
+  },
+
+  deleteAvatar: async (): Promise<void> => {
+    await api.delete('/users/me/avatar');
+  },
+
   forgotPassword: async (email: string): Promise<void> => {
     await api.post('/auth/forgot-password', { email });
   },

@@ -15,6 +15,7 @@ interface AuthContextType {
   faceLogin: (imageUri: string) => Promise<void>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
+  updateUser: (patch: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -138,6 +139,27 @@ setUser({
     setPatron(null);
   };
 
+  const updateUser = (patch: Partial<User>) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, ...patch };
+      // persist to storage
+      AsyncStorage.getItem('userData').then((raw) => {
+        if (raw) {
+          const stored = JSON.parse(raw);
+          AsyncStorage.setItem('userData', JSON.stringify({ ...stored, ...patch }));
+        }
+      });
+      AsyncStorage.getItem('patronData').then((raw) => {
+        if (raw) {
+          const stored = JSON.parse(raw);
+          AsyncStorage.setItem('patronData', JSON.stringify({ ...stored, ...patch }));
+        }
+      });
+      return next;
+    });
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -150,6 +172,7 @@ setUser({
         faceLogin,
         logout,
         checkAuth,
+        updateUser,
       }}
     >
       {children}
