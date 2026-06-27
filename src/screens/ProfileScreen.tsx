@@ -100,20 +100,21 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   };
 
   const studentFields = [
-    { icon: 'card-account-details', label: 'MSSV', value: patron?.student_code || '—' },
+    { icon: 'card-account-details', label: 'MSSV', value: patron?.student_code || patron?.studentCode || '—' },
     { icon: 'account-school', label: 'Lớp', value: patron?.class_name || patron?.className || '—' },
     { icon: 'bookmark-outline', label: 'Khóa học', value: patron?.course || '—' },
     { icon: 'domain', label: 'Khoa', value: patron?.faculty || '—' },
     { icon: 'cake-variant-outline', label: 'Ngày sinh', value: patron?.date_of_birth || patron?.dateOfBirth || '—' },
     { icon: 'home-outline', label: 'HKTT', value: patron?.permanent_address || patron?.permanentAddress || '—' },
     { icon: 'card-bulleted-outline', label: 'CCCD', value: patron?.identity_number || '—' },
-    { icon: 'badge-account', label: 'Số thẻ TV', value: patron?.card_number || '—' },
+    { icon: 'badge-account', label: 'Số thẻ TV', value: patron?.card_number || patron?.cardNumber || '—' },
     { icon: 'calendar-plus', label: 'Ngày cấp thẻ', value: patron?.issue_date || patron?.issueDate || '—' },
     { icon: 'calendar-clock', label: 'Hạn thẻ', value: patron?.membership_expiry || patron?.membershipExpiry || '—' },
     { icon: 'card-account-phone', label: 'Số điện thoại', value: patron?.phone || '—' },
   ];
 
-  const isStudent = user?.role === 'patron' && !!patron?.student_code;
+  const studentCode = patron?.student_code || patron?.studentCode;
+  const isStudent = user?.role === 'patron' && !!studentCode;
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -157,10 +158,10 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           <Text variant="bodyMedium" style={styles.heroEmail} selectable>
             {user?.email}
           </Text>
-          {patron?.student_code ? (
+          {studentCode ? (
             <View style={styles.heroPill}>
               <MaterialCommunityIcons name="card-account-details" size={14} color="#FFFFFF" />
-              <Text style={styles.heroPillText}>MSSV: {patron.student_code}</Text>
+              <Text style={styles.heroPillText}>MSSV: {studentCode}</Text>
             </View>
           ) : null}
         </Surface>
@@ -223,11 +224,11 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
             left={(props) => <List.Icon {...props} icon="email" color={theme.colors.primary} />}
           />
           <Divider style={styles.divider} />
-          {patron?.student_code ? (
+          {studentCode ? (
             <>
               <List.Item
                 title="MSSV"
-                description={patron.student_code}
+                description={studentCode}
                 titleStyle={styles.itemTitle}
                 descriptionStyle={styles.itemDescription}
                 left={(props) => <List.Icon {...props} icon="card-account-details" color={theme.colors.primary} />}

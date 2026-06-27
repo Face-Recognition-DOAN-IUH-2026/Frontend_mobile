@@ -24,17 +24,18 @@ export default function BookRecommendationsScreen({ navigation }: BookRecommenda
   const [error, setError] = useState<string | null>(null);
 
   const loadData = async () => {
-    if (!patron?.student_code) {
-      setError('Khong tim thay ma sinh vien');
+    const studentCode = patron?.student_code || patron?.studentCode;
+    if (!studentCode) {
+      setError('Không tìm thấy mã sinh viên');
       setLoading(false);
       return;
     }
     try {
       setError(null);
-      const data = await aiApi.getBookRecommendations(patron.student_code);
+      const data = await aiApi.getBookRecommendations(studentCode);
       setRecommendations(data.recommendations || []);
     } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Khong the tai goi y sach');
+      setError(err?.response?.data?.detail || 'Không thể tải gợi ý sách');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -44,7 +45,7 @@ export default function BookRecommendationsScreen({ navigation }: BookRecommenda
   useFocusEffect(
     useCallback(() => {
       loadData();
-    }, [patron?.student_code])
+    }, [patron?.student_code, patron?.studentCode])
   );
 
   const onRefresh = () => {
