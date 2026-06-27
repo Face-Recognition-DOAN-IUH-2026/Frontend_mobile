@@ -15,7 +15,7 @@ import {
   useTheme,
 } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-let ImagePicker: typeof import('expo-image-picker') | null = null;
+
 import { useAuth } from '../context/AuthContext';
 import { useMobileTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme/DarkTheme';
@@ -86,44 +86,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   };
 
   const handlePickAvatar = async () => {
-    try {
-      if (!ImagePicker) {
-        ImagePicker = require('expo-image-picker');
-      }
-    } catch {
-      Alert.alert('Lỗi', 'Ứng dụng cần được rebuild để sử dụng tính năng này.');
-      return;
-    }
-
-    const picker = ImagePicker;
-    if (!picker) return;
-
-    const { status } = await picker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Cần quyền truy cập', 'Vui lòng cấp quyền truy cập ảnh trong cài đặt.');
-      return;
-    }
-
-    const result = await picker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-
-    if (result.canceled || !result.assets?.[0]) return;
-
-    const imageUri = result.assets[0].uri;
-    setUploading(true);
-    try {
-      const { avatarUrl } = await authApi.uploadAvatar(imageUri);
-      updateUser({ avatar_url: avatarUrl });
-      Alert.alert('Thành công', 'Avatar đã được cập nhật.');
-    } catch (err: any) {
-      Alert.alert('Lỗi', err?.response?.data?.detail || 'Không thể tải ảnh lên. Thử lại sau.');
-    } finally {
-      setUploading(false);
-    }
+    Alert.alert('Cần rebuild app', 'Tính năng cập nhật ảnh cần rebuild lại app với expo-image-picker. Vui lòng chạy `npx expo run:android` hoặc `eas build`.');
   };
 
   const studentFields = [
