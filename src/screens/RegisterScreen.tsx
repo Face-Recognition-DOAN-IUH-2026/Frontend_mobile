@@ -1,21 +1,135 @@
 import React, { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ActivityIndicator, Button, Card, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
+import { ActivityIndicator, Button, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
 import api from '../api/client';
 import { authApi } from '../api/auth';
 import AutoFaceCapture from '../components/AutoFaceCapture';
 import StudentCardScanner, { ScannedCardData } from '../components/StudentCardScanner';
 import { AppTheme } from '../theme/DarkTheme';
+import { SectionCard, GRADIENTS } from '../theme/MobileDesignSystem';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
 interface RegisterScreenProps {
   navigation: any;
 }
 
+type StepKey = 'scan' | 'form' | 'choice' | 'consent' | 'face';
+
+const STEP_META: Record<StepKey, { label: string; icon: string }> = {
+  scan: { label: 'Quét thẻ', icon: 'card-account-details-outline' },
+  form: { label: 'Thông tin', icon: 'form-textbox' },
+  choice: { label: 'Hoàn tất', icon: 'check-circle-outline' },
+  consent: { label: 'Đồng ý', icon: 'file-document-check' },
+  face: { label: 'Khuôn mặt', icon: 'face-recognition' },
+};
+
+const FORM_STEPS: StepKey[] = ['form', 'choice', 'consent', 'face'];
+
+function StepIndicator({ currentStep }: { currentStep: StepKey }) {
+  const currentIdx = FORM_STEPS.indexOf(currentStep);
+  if (currentIdx < 0) return null;
+
+  const theme = useTheme() as AppTheme;
+
+  return (
+    <View style={stepStyles.container}>
+      {FORM_STEPS.map((key, idx) => {
+        const isActive = idx === currentIdx;
+        const isDone = idx < currentIdx;
+        return (
+          <React.Fragment key={key}>
+            <View style={stepStyles.stepItem}>
+              <View
+                style={[
+                  stepStyles.dot,
+                  {
+                    backgroundColor: isDone
+                      ? theme.colors.primary
+                      : isActive
+                        ? theme.colors.primary
+                        : theme.colors.outlineVariant,
+                  },
+                ]}
+              >
+                {isDone ? (
+                  <MaterialCommunityIcons name="check" size={12} color={theme.colors.onPrimary} />
+                ) : (
+                  <Text style={[stepStyles.dotText, { color: isActive ? theme.colors.onPrimary : theme.colors.onSurfaceVariant }]}>
+                    {idx + 1}
+                  </Text>
+                )}
+              </View>
+              <Text
+                style={[
+                  stepStyles.label,
+                  {
+                    color: isActive || isDone ? theme.colors.primary : theme.colors.onSurfaceVariant,
+                    fontWeight: isActive ? '700' : '500',
+                  },
+                ]}
+              >
+                {STEP_META[key].label}
+              </Text>
+            </View>
+            {idx < FORM_STEPS.length - 1 && (
+              <View
+                style={[
+                  stepStyles.connector,
+                  {
+                    backgroundColor: isDone ? theme.colors.primary : theme.colors.outlineVariant,
+                  },
+                ]}
+              />
+            )}
+          </React.Fragment>
+        );
+      })}
+    </View>
+  );
+}
+
+const stepStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    gap: 0,
+  },
+  stepItem: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  dot: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dotText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  connector: {
+    flex: 1,
+    height: 2,
+    borderRadius: 1,
+    marginHorizontal: 6,
+    marginBottom: 18,
+  },
+  label: {
+    fontSize: 10,
+    letterSpacing: 0.3,
+  },
+});
+
 export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   const theme = useTheme() as AppTheme;
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const [step, setStep] = useState<'scan' | 'form' | 'choice' | 'consent' | 'face'>('scan');
+  const [step, setStep] = useState<StepKey>('scan');
   const [studentCode, setStudentCode] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -163,24 +277,30 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   if (step === 'choice') {
     return (
       <SafeAreaView style={styles.container} edges={['bottom']}>
-        <View style={styles.choiceContainer}>
-          <Card mode="outlined" style={styles.choiceCard}>
-            <Card.Content style={styles.choiceContent}>
-              <View style={styles.checkCircle}>
-                <Text style={styles.checkIcon}>✓</Text>
+        <View style={styles.centeredContent}>
+          <SectionCard accentColor={GRADIENTS.emerald[0]} style={styles.choiceCard}>
+            <View style={styles.choiceInner}>
+              <View style={styles.successCircle}>
+                <MaterialCommunityIcons name="check" size={40} color={GRADIENTS.emerald[0]} />
               </View>
-              <Text variant="headlineSmall" style={styles.choiceTitle}>Đăng ký tài khoản thành công</Text>
+              <Text variant="headlineSmall" style={styles.choiceTitle}>Đăng ký thành công</Text>
               <Text style={styles.choiceSubtitle}>
                 Bạn có muốn đăng ký khuôn mặt để đăng nhập nhanh tại cổng thư viện không?
               </Text>
-              <Button mode="contained" onPress={() => setStep('consent')} contentStyle={styles.largeButton}>
+              <Button
+                mode="contained"
+                onPress={() => setStep('consent')}
+                contentStyle={styles.primaryBtn}
+                labelStyle={styles.primaryBtnLabel}
+                style={styles.primaryBtnWrapper}
+              >
                 Đăng ký khuôn mặt
               </Button>
-              <Button mode="text" onPress={() => navigation.replace('Login')}>
+              <Button mode="text" onPress={() => navigation.replace('Login')} labelStyle={styles.skipLabel}>
                 Bỏ qua
               </Button>
-            </Card.Content>
-          </Card>
+            </View>
+          </SectionCard>
         </View>
         <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
           {snackbar}
@@ -192,33 +312,41 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   if (step === 'consent') {
     return (
       <SafeAreaView style={styles.container} edges={['bottom']}>
-        <View style={styles.choiceContainer}>
-          <Card mode="outlined" style={styles.choiceCard}>
-            <Card.Content style={styles.choiceContent}>
-              <View style={[styles.checkCircle, { backgroundColor: `${theme.colors.primary}22` }]}>
-                <Text style={[styles.checkIcon, { color: theme.colors.primary }]}>?</Text>
-              </View>
-              <Text variant="headlineSmall" style={styles.choiceTitle}>Thu thap du lieu sinh hoc hoc</Text>
-              <Text style={styles.choiceSubtitle}>
-                Ung dung se thu thap hinh anh khuon mat cua ban de xac thuc danh tinh. Du lieu nay duoc bao mat va chi dung cho muc dich xac thuc.
+        <View style={styles.centeredContent}>
+          <SectionCard
+            title="Thu thập dữ liệu sinh học"
+            icon="file-document-check"
+            accentColor={GRADIENTS.amber[0]}
+            style={styles.choiceCard}
+          >
+            <View style={styles.consentInner}>
+              <Text style={styles.consentText}>
+                Ứng dụng sẽ thu thập hình ảnh khuôn mặt của bạn để xác thực danh tính. Dữ liệu được bảo mật và chỉ dùng cho mục đích xác thực.
               </Text>
-              <View style={{ width: '100%', gap: 8 }}>
-                <Button
-                  mode={consentGiven ? 'contained' : 'outlined'}
-                  onPress={() => setConsentGiven(!consentGiven)}
-                  icon={consentGiven ? 'check' : undefined}
-                >
-                  {consentGiven ? 'Da dong y' : 'Toi dong y'}
-                </Button>
-                <Button mode="contained" onPress={() => setStep('face')} disabled={!consentGiven} contentStyle={styles.largeButton}>
-                  Tiep tuc
-                </Button>
-                <Button mode="text" onPress={() => setStep('choice')}>
-                  Tu choi
-                </Button>
-              </View>
-            </Card.Content>
-          </Card>
+              <Button
+                mode={consentGiven ? 'contained' : 'outlined'}
+                onPress={() => setConsentGiven(!consentGiven)}
+                icon={consentGiven ? 'check' : undefined}
+                contentStyle={styles.consentBtn}
+                style={consentGiven ? styles.consentActiveBtn : styles.consentInactiveBtn}
+              >
+                {consentGiven ? 'Đã đồng ý' : 'Tôi đồng ý'}
+              </Button>
+              <Button
+                mode="contained"
+                onPress={() => setStep('face')}
+                disabled={!consentGiven}
+                contentStyle={styles.primaryBtn}
+                labelStyle={styles.primaryBtnLabel}
+                style={styles.primaryBtnWrapper}
+              >
+                Tiếp tục
+              </Button>
+              <Button mode="text" onPress={() => setStep('choice')} labelStyle={styles.skipLabel}>
+                Từ chối
+              </Button>
+            </View>
+          </SectionCard>
         </View>
       </SafeAreaView>
     );
@@ -227,33 +355,37 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   if (step === 'face') {
     return (
       <SafeAreaView style={styles.container} edges={['bottom']}>
-        <Card mode="contained" style={styles.faceHeader}>
-          <Card.Content>
-            <Text variant="titleLarge" style={styles.cardTitle}>Đăng ký khuôn mặt</Text>
+        <SectionCard
+          title="Đăng ký khuôn mặt"
+          icon="face-recognition"
+          accentColor={GRADIENTS.violet[0]}
+          style={styles.faceHeaderCard}
+        >
+          <View style={styles.faceHeaderInner}>
             <Text style={styles.mutedText}>Chụp khuôn mặt từ 4 góc để đăng nhập nhanh sau này.</Text>
-          </Card.Content>
-        </Card>
+          </View>
+        </SectionCard>
 
         <View style={styles.captureContainer}>
           <AutoFaceCapture onFilesReady={handleFaceEnroll} onError={showError} />
         </View>
 
-        {!isUploading ? (
-          <Card mode="contained" style={styles.faceActions}>
-            <Card.Content>
-              <Button mode="text" onPress={() => navigation.replace('Login')}>
-                Bỏ qua
-              </Button>
-            </Card.Content>
-          </Card>
-        ) : null}
-
-        {isUploading ? (
-          <View style={styles.loadingOverlay}>
-            <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={styles.loadingText}>Đang đăng ký khuôn mặt...</Text>
+        {!isUploading && (
+          <View style={styles.faceFooter}>
+            <Button mode="text" onPress={() => navigation.replace('Login')} labelStyle={styles.skipLabel}>
+              Bỏ qua
+            </Button>
           </View>
-        ) : null}
+        )}
+
+        {isUploading && (
+          <View style={styles.loadingOverlay}>
+            <View style={styles.loadingCard}>
+              <ActivityIndicator size="large" color={theme.colors.primary} />
+              <Text style={styles.loadingText}>Đang đăng ký khuôn mặt...</Text>
+            </View>
+          </View>
+        )}
 
         <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
           {snackbar}
@@ -264,16 +396,34 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
 
   return (
     <SafeAreaView style={styles.container}>
+      <View style={styles.headerBar}>
+        <Button
+          mode="text"
+          onPress={() => navigation.goBack()}
+          icon="arrow-left"
+          compact
+          labelStyle={styles.backLabel}
+        >
+          Quay lại
+        </Button>
+        <Text variant="titleMedium" style={styles.headerTitle}>Đăng ký</Text>
+        <View style={{ width: 60 }} />
+      </View>
+
+      <StepIndicator currentStep={step} />
+
       <ScrollView style={styles.flex} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <Card mode="outlined" style={styles.formContainer}>
-          <Card.Content style={styles.formContent}>
-            <View>
-              <Text variant="headlineSmall" style={styles.formTitle}>Đăng ký tài khoản</Text>
-              <Text style={styles.formSubtitle}>Nhập thông tin để tạo tài khoản độc giả mới.</Text>
-            </View>
+        <SectionCard
+          title="Thông tin tài khoản"
+          icon="form-textbox"
+          accentColor={GRADIENTS.indigo[0]}
+        >
+          <View style={styles.formInner}>
+            <Text style={styles.formSubtitle}>Nhập thông tin để tạo tài khoản độc giả mới.</Text>
 
             {studentCode || fullName ? (
               <View style={styles.prefillBanner}>
+                <MaterialCommunityIcons name="check-circle" size={16} color={GRADIENTS.emerald[0]} />
                 <Text style={styles.prefillText}>Đã điền thông tin từ thẻ sinh viên</Text>
               </View>
             ) : null}
@@ -285,6 +435,8 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               mode="outlined"
               autoCapitalize="none"
               left={<TextInput.Icon icon="account" color={theme.colors.onSurfaceVariant} />}
+              outlineStyle={styles.inputOutline}
+              style={styles.input}
             />
 
             <TextInput
@@ -293,6 +445,8 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               onChangeText={setFullName}
               mode="outlined"
               left={<TextInput.Icon icon="account-outline" color={theme.colors.onSurfaceVariant} />}
+              outlineStyle={styles.inputOutline}
+              style={styles.input}
             />
 
             <TextInput
@@ -301,6 +455,8 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               onChangeText={setClassName}
               mode="outlined"
               left={<TextInput.Icon icon="school" color={theme.colors.onSurfaceVariant} />}
+              outlineStyle={styles.inputOutline}
+              style={styles.input}
             />
 
             <TextInput
@@ -309,6 +465,8 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               onChangeText={setCourse}
               mode="outlined"
               left={<TextInput.Icon icon="bookmark-outline" color={theme.colors.onSurfaceVariant} />}
+              outlineStyle={styles.inputOutline}
+              style={styles.input}
             />
 
             <TextInput
@@ -319,6 +477,8 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               multiline
               numberOfLines={2}
               left={<TextInput.Icon icon="home-outline" color={theme.colors.onSurfaceVariant} />}
+              outlineStyle={styles.inputOutline}
+              style={styles.input}
             />
 
             <TextInput
@@ -329,6 +489,8 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               autoCapitalize="none"
               keyboardType="email-address"
               left={<TextInput.Icon icon="email" color={theme.colors.onSurfaceVariant} />}
+              outlineStyle={styles.inputOutline}
+              style={styles.input}
             />
 
             <TextInput
@@ -338,6 +500,8 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               mode="outlined"
               secureTextEntry
               left={<TextInput.Icon icon="lock" color={theme.colors.onSurfaceVariant} />}
+              outlineStyle={styles.inputOutline}
+              style={styles.input}
             />
 
             <TextInput
@@ -347,6 +511,8 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               mode="outlined"
               secureTextEntry
               left={<TextInput.Icon icon="lock-check" color={theme.colors.onSurfaceVariant} />}
+              outlineStyle={styles.inputOutline}
+              style={styles.input}
             />
 
             <Button
@@ -354,16 +520,18 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               onPress={handleRegisterClick}
               loading={isUploading}
               disabled={isUploading}
-              contentStyle={styles.largeButton}
+              contentStyle={styles.primaryBtn}
+              labelStyle={styles.primaryBtnLabel}
+              style={styles.primaryBtnWrapper}
             >
               Đăng ký
             </Button>
 
-            <Button mode="text" onPress={() => navigation.goBack()}>
+            <Button mode="text" onPress={() => navigation.goBack()} labelStyle={styles.loginLink}>
               Đã có tài khoản? Đăng nhập
             </Button>
-          </Card.Content>
-        </Card>
+          </View>
+        </SectionCard>
       </ScrollView>
 
       <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
@@ -374,8 +542,6 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
 }
 
 function createStyles(theme: AppTheme) {
-  const success = theme.dark ? '#4A8C5C' : '#067647';
-
   return StyleSheet.create({
     container: {
       flex: 1,
@@ -384,71 +550,94 @@ function createStyles(theme: AppTheme) {
     flex: {
       flex: 1,
     },
-    scrollContent: {
-      flexGrow: 1,
+    centeredContent: {
+      flex: 1,
       justifyContent: 'center',
       padding: 16,
     },
-    formContainer: {
-      borderRadius: 18,
-      borderColor: theme.colors.outlineVariant,
-      backgroundColor: theme.colors.surface,
+    scrollContent: {
+      flexGrow: 1,
+      padding: 16,
+      paddingBottom: 32,
     },
-    formContent: {
-      gap: 14,
-      paddingVertical: 22,
+    headerBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 4,
+      paddingVertical: 8,
     },
-    formTitle: {
+    backLabel: {
+      fontSize: 14,
+      color: theme.colors.primary,
+    },
+    headerTitle: {
       color: theme.colors.onSurface,
-      fontWeight: '900',
+      fontWeight: '800',
+    },
+    formInner: {
+      gap: 12,
+      padding: 16,
     },
     formSubtitle: {
       color: theme.colors.onSurfaceVariant,
-      marginTop: 4,
+      marginBottom: 4,
+    },
+    input: {
+      backgroundColor: 'transparent',
+    },
+    inputOutline: {
+      borderRadius: 6,
     },
     prefillBanner: {
-      backgroundColor: `${theme.dark ? '#4A8C5C' : '#067647'}22`,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      backgroundColor: `${GRADIENTS.emerald[0]}18`,
       paddingVertical: 8,
       paddingHorizontal: 12,
       borderRadius: 8,
-      borderLeftWidth: 3,
-      borderLeftColor: theme.dark ? '#4A8C5C' : '#067647',
     },
     prefillText: {
-      color: theme.dark ? '#4A8C5C' : '#067647',
+      color: GRADIENTS.emerald[0],
       fontSize: 13,
       fontWeight: '600',
     },
-    largeButton: {
-      minHeight: 52,
+    primaryBtn: {
+      minHeight: 50,
+      borderRadius: 8,
     },
-    choiceContainer: {
-      flex: 1,
-      justifyContent: 'center',
-      padding: 20,
+    primaryBtnLabel: {
+      fontWeight: '700',
+      fontSize: 15,
+    },
+    primaryBtnWrapper: {
+      borderRadius: 8,
+      marginTop: 4,
+    },
+    loginLink: {
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    skipLabel: {
+      fontSize: 14,
+      fontWeight: '600',
     },
     choiceCard: {
-      borderColor: theme.colors.outlineVariant,
-      backgroundColor: theme.colors.surface,
-      borderRadius: 18,
+      borderRadius: 14,
     },
-    choiceContent: {
+    choiceInner: {
       alignItems: 'center',
       gap: 14,
-      paddingVertical: 24,
+      padding: 24,
     },
-    checkCircle: {
-      width: 84,
-      height: 84,
-      borderRadius: 42,
-      backgroundColor: `${success}22`,
+    successCircle: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: `${GRADIENTS.emerald[0]}20`,
       justifyContent: 'center',
       alignItems: 'center',
-    },
-    checkIcon: {
-      fontSize: 42,
-      color: success,
-      fontWeight: '900',
     },
     choiceTitle: {
       color: theme.colors.onSurface,
@@ -460,42 +649,61 @@ function createStyles(theme: AppTheme) {
       textAlign: 'center',
       lineHeight: 20,
     },
-    faceHeader: {
+    consentInner: {
+      gap: 12,
+      padding: 16,
+    },
+    consentText: {
+      color: theme.colors.onSurfaceVariant,
+      lineHeight: 20,
+    },
+    consentBtn: {
+      minHeight: 44,
+      borderRadius: 8,
+    },
+    consentActiveBtn: {
+      borderRadius: 8,
+      backgroundColor: `${GRADIENTS.emerald[0]}20`,
+      borderColor: GRADIENTS.emerald[0],
+    },
+    consentInactiveBtn: {
+      borderRadius: 8,
+    },
+    faceHeaderCard: {
       margin: 12,
       marginBottom: 0,
-      borderRadius: 16,
-      backgroundColor: theme.colors.surface,
+      borderRadius: 14,
     },
-    cardTitle: {
-      color: theme.colors.onSurface,
-      fontWeight: '800',
+    faceHeaderInner: {
+      padding: 16,
     },
     mutedText: {
       color: theme.colors.onSurfaceVariant,
-      marginTop: 4,
+      lineHeight: 20,
     },
     captureContainer: {
       flex: 1,
     },
-    faceActions: {
-      margin: 12,
-      borderRadius: 16,
-      backgroundColor: theme.colors.surface,
+    faceFooter: {
+      padding: 12,
     },
     loadingOverlay: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
+      ...StyleSheet.absoluteFill,
       backgroundColor: 'rgba(0,0,0,0.65)',
       justifyContent: 'center',
       alignItems: 'center',
     },
+    loadingCard: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: 14,
+      padding: 28,
+      alignItems: 'center',
+      gap: 12,
+    },
     loadingText: {
-      color: '#FFFFFF',
+      color: theme.colors.onSurface,
       fontSize: 15,
-      marginTop: 12,
+      fontWeight: '600',
     },
   });
 }

@@ -1,18 +1,22 @@
 import React, { useState, useMemo } from 'react';
 import { View, StyleSheet, KeyboardAvoidingView, Platform, Alert, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { TextInput, Button, Text, Surface, Divider, useTheme } from 'react-native-paper';
+import { TextInput, Button, Text, Surface, useTheme } from 'react-native-paper';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { authApi } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
 import { devError } from '../utils/logger';
+import { AppTheme } from '../theme/DarkTheme';
+import { GradientHeader, SectionCard } from '../theme/MobileDesignSystem';
 
 interface EditProfileScreenProps {
   navigation: any;
 }
 
 export default function EditProfileScreen({ navigation }: EditProfileScreenProps) {
-  const theme = useTheme();
+  const theme = useTheme() as AppTheme;
   const c = theme.colors;
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const { user, patron, updateUser } = useAuth();
 
   const [fullName, setFullName] = useState(user?.full_name || '');
@@ -20,71 +24,10 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
   const [address, setAddress] = useState(patron?.permanent_address || patron?.permanentAddress || '');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Email change
   const [newEmail, setNewEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [emailStep, setEmailStep] = useState<'input' | 'otp'>('input');
   const [emailLoading, setEmailLoading] = useState(false);
-
-  const s = useMemo(() => StyleSheet.create({
-    container: { flex: 1, backgroundColor: c.background },
-    flex: { flex: 1 },
-    content: { flexGrow: 1, padding: 16, gap: 14 },
-    form: {
-      padding: 20,
-      borderRadius: 8,
-      backgroundColor: c.surface,
-      position: 'relative',
-      overflow: 'hidden',
-      borderWidth: 0.5,
-      borderColor: c.outline,
-    },
-    formAccent: {
-      position: 'absolute',
-      left: 0, top: 0, bottom: 0,
-      width: 3,
-      backgroundColor: c.primary,
-      borderTopRightRadius: 2,
-      borderBottomRightRadius: 2,
-    },
-    sectionTitle: {
-      color: c.primary,
-      fontSize: 13,
-      fontWeight: '800',
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-      marginBottom: 14,
-    },
-    input: { marginBottom: 12, backgroundColor: 'transparent' },
-    inputOutline: { borderRadius: 6, borderColor: c.outline },
-    button: { marginTop: 8, borderRadius: 6, backgroundColor: c.primary },
-    buttonContent: { paddingVertical: 8 },
-    buttonLabel: { fontSize: 15, fontWeight: '700' },
-    cancelButton: { marginTop: 12 },
-    cancelLabel: { fontSize: 14, color: c.onSurfaceVariant },
-    hint: {
-      color: c.onSurfaceVariant,
-      fontSize: 11,
-      marginTop: -8,
-      marginBottom: 12,
-      marginLeft: 4,
-    },
-    emailSection: {
-      padding: 20,
-      borderRadius: 8,
-      backgroundColor: c.surface,
-      position: 'relative',
-      overflow: 'hidden',
-      borderWidth: 0.5,
-      borderColor: c.outline,
-    },
-    currentEmail: {
-      color: c.onSurfaceVariant,
-      fontSize: 13,
-      marginBottom: 12,
-      lineHeight: 20,
-    },
-  }), [c]);
 
   const handleSaveProfile = async () => {
     if (!fullName.trim()) {
@@ -152,138 +95,259 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
   };
 
   return (
-    <SafeAreaView style={s.container} edges={['bottom']}>
-      <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
-          {/* Personal Info */}
-          <Surface style={s.form} elevation={0}>
-            <View style={s.formAccent} />
-            <Text style={s.sectionTitle}>Thông tin cá nhân</Text>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <GradientHeader
+        title="Chỉnh sửa hồ sơ"
+        subtitle="Cập nhật thông tin cá nhân"
+        icon="account-edit"
+      />
 
-            <TextInput
-              label="Họ và tên"
-              value={fullName}
-              onChangeText={setFullName}
-              mode="outlined"
-              style={s.input}
-              outlineStyle={s.inputOutline}
-              left={<TextInput.Icon icon="account" color={c.onSurfaceVariant} />}
-              activeOutlineColor={c.primary}
-            />
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <SectionCard
+            title="Thông tin cá nhân"
+            icon="account-details"
+            accentColor={c.primary}
+          >
+            <View style={styles.formBody}>
+              <TextInput
+                label="Họ và tên"
+                value={fullName}
+                onChangeText={setFullName}
+                mode="outlined"
+                style={styles.input}
+                outlineStyle={styles.inputOutline}
+                left={<TextInput.Icon icon="account" color={c.onSurfaceVariant} />}
+                activeOutlineColor={c.primary}
+              />
 
-            <TextInput
-              label="Số điện thoại"
-              value={phone}
-              onChangeText={setPhone}
-              mode="outlined"
-              keyboardType="phone-pad"
-              style={s.input}
-              outlineStyle={s.inputOutline}
-              left={<TextInput.Icon icon="phone" color={c.onSurfaceVariant} />}
-              activeOutlineColor={c.primary}
-            />
+              <TextInput
+                label="Số điện thoại"
+                value={phone}
+                onChangeText={setPhone}
+                mode="outlined"
+                keyboardType="phone-pad"
+                style={styles.input}
+                outlineStyle={styles.inputOutline}
+                left={<TextInput.Icon icon="phone" color={c.onSurfaceVariant} />}
+                activeOutlineColor={c.primary}
+              />
 
-            <TextInput
-              label="Địa chỉ"
-              value={address}
-              onChangeText={setAddress}
-              mode="outlined"
-              style={s.input}
-              outlineStyle={s.inputOutline}
-              left={<TextInput.Icon icon="home" color={c.onSurfaceVariant} />}
-              activeOutlineColor={c.primary}
-            />
+              <TextInput
+                label="Địa chỉ"
+                value={address}
+                onChangeText={setAddress}
+                mode="outlined"
+                style={styles.input}
+                outlineStyle={styles.inputOutline}
+                left={<TextInput.Icon icon="home" color={c.onSurfaceVariant} />}
+                activeOutlineColor={c.primary}
+              />
 
-            <Button
-              mode="contained"
-              onPress={handleSaveProfile}
-              loading={isLoading}
-              disabled={isLoading}
-              style={s.button}
-              contentStyle={s.buttonContent}
-              labelStyle={s.buttonLabel}
-            >
-              Lưu thay đổi
-            </Button>
-          </Surface>
+              <Button
+                mode="contained"
+                onPress={handleSaveProfile}
+                loading={isLoading}
+                disabled={isLoading}
+                style={styles.button}
+                contentStyle={styles.buttonContent}
+                labelStyle={styles.buttonLabel}
+                icon="content-save"
+              >
+                Lưu thay đổi
+              </Button>
+            </View>
+          </SectionCard>
 
-          {/* Email Change */}
-          <Surface style={s.emailSection} elevation={0}>
-            <View style={s.formAccent} />
-            <Text style={s.sectionTitle}>Đổi email</Text>
-            <Text style={s.currentEmail}>
-              Email hiện tại: <Text style={{ fontWeight: '700', color: c.onSurface }}>{user?.email}</Text>
-            </Text>
+          <SectionCard
+            title="Đổi email"
+            icon="email-edit"
+            accentColor={c.primary}
+          >
+            <View style={styles.formBody}>
+              <View style={styles.currentEmailRow}>
+                <MaterialCommunityIcons name="email-check" size={16} color={c.primary} />
+                <Text style={styles.currentEmailLabel}>Email hiện tại: </Text>
+                <Text style={styles.currentEmailValue}>{user?.email}</Text>
+              </View>
 
-            {emailStep === 'input' ? (
-              <>
-                <TextInput
-                  label="Email mới"
-                  value={newEmail}
-                  onChangeText={setNewEmail}
-                  mode="outlined"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  style={s.input}
-                  outlineStyle={s.inputOutline}
-                  left={<TextInput.Icon icon="email" color={c.onSurfaceVariant} />}
-                  activeOutlineColor={c.primary}
-                />
-                <Button
-                  mode="contained"
-                  onPress={handleRequestEmailOtp}
-                  loading={emailLoading}
-                  disabled={emailLoading || !newEmail.trim()}
-                  style={s.button}
-                  contentStyle={s.buttonContent}
-                  labelStyle={s.buttonLabel}
-                >
-                  Gửi mã OTP
-                </Button>
-              </>
-            ) : (
-              <>
-                <Text style={s.hint}>Mã OTP đã gửi đến {newEmail}</Text>
-                <TextInput
-                  label="Mã OTP"
-                  value={otpCode}
-                  onChangeText={setOtpCode}
-                  mode="outlined"
-                  keyboardType="number-pad"
-                  maxLength={6}
-                  style={s.input}
-                  outlineStyle={s.inputOutline}
-                  left={<TextInput.Icon icon="shield-key" color={c.onSurfaceVariant} />}
-                  activeOutlineColor={c.primary}
-                />
-                <Button
-                  mode="contained"
-                  onPress={handleChangeEmail}
-                  loading={emailLoading}
-                  disabled={emailLoading || !otpCode.trim()}
-                  style={s.button}
-                  contentStyle={s.buttonContent}
-                  labelStyle={s.buttonLabel}
-                >
-                  Xác nhận đổi email
-                </Button>
-                <Button
-                  mode="text"
-                  onPress={() => { setEmailStep('input'); setOtpCode(''); }}
-                  style={s.cancelButton}
-                  labelStyle={s.cancelLabel}
-                >
-                  Nhập lại email
-                </Button>
-              </>
-            )}
-          </Surface>
+              {emailStep === 'input' ? (
+                <>
+                  <TextInput
+                    label="Email mới"
+                    value={newEmail}
+                    onChangeText={setNewEmail}
+                    mode="outlined"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    style={styles.input}
+                    outlineStyle={styles.inputOutline}
+                    left={<TextInput.Icon icon="email" color={c.onSurfaceVariant} />}
+                    activeOutlineColor={c.primary}
+                  />
+                  <Button
+                    mode="contained"
+                    onPress={handleRequestEmailOtp}
+                    loading={emailLoading}
+                    disabled={emailLoading || !newEmail.trim()}
+                    style={styles.button}
+                    contentStyle={styles.buttonContent}
+                    labelStyle={styles.buttonLabel}
+                    icon="send"
+                  >
+                    Gửi mã OTP
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Surface style={styles.otpBanner} elevation={0}>
+                    <MaterialCommunityIcons name="email-check" size={18} color={c.primary} />
+                    <Text style={styles.otpBannerText}>Mã OTP đã gửi đến {newEmail}</Text>
+                  </Surface>
 
-          <Button mode="text" onPress={() => navigation.goBack()} style={s.cancelButton} labelStyle={s.cancelLabel}>
-            Hủy
+                  <TextInput
+                    label="Mã OTP"
+                    value={otpCode}
+                    onChangeText={setOtpCode}
+                    mode="outlined"
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    style={styles.input}
+                    outlineStyle={styles.inputOutline}
+                    left={<TextInput.Icon icon="shield-key" color={c.onSurfaceVariant} />}
+                    activeOutlineColor={c.primary}
+                  />
+                  <Button
+                    mode="contained"
+                    onPress={handleChangeEmail}
+                    loading={emailLoading}
+                    disabled={emailLoading || !otpCode.trim()}
+                    style={styles.button}
+                    contentStyle={styles.buttonContent}
+                    labelStyle={styles.buttonLabel}
+                    icon="check-circle"
+                  >
+                    Xác nhận đổi email
+                  </Button>
+                  <Button
+                    mode="text"
+                    onPress={() => { setEmailStep('input'); setOtpCode(''); }}
+                    style={styles.cancelButton}
+                    labelStyle={styles.cancelLabel}
+                    icon="arrow-left"
+                  >
+                    Nhập lại email
+                  </Button>
+                </>
+              )}
+            </View>
+          </SectionCard>
+
+          <Button
+            mode="text"
+            onPress={() => navigation.goBack()}
+            style={styles.cancelButton}
+            labelStyle={styles.cancelLabel}
+            icon="arrow-left"
+          >
+            Quay lại
           </Button>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
+}
+
+function createStyles(theme: AppTheme) {
+  const c = theme.colors;
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: c.background,
+    },
+    flex: {
+      flex: 1,
+    },
+    content: {
+      flexGrow: 1,
+      padding: 16,
+      gap: 12,
+    },
+    formBody: {
+      padding: 16,
+      paddingBottom: 20,
+      gap: 4,
+    },
+    sectionTitle: {
+      color: c.primary,
+      fontSize: 13,
+      fontWeight: '800',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: 14,
+    },
+    input: {
+      marginBottom: 10,
+      backgroundColor: 'transparent',
+    },
+    inputOutline: {
+      borderRadius: 12,
+      borderColor: c.outline,
+    },
+    button: {
+      marginTop: 10,
+      borderRadius: 12,
+      backgroundColor: c.primary,
+    },
+    buttonContent: {
+      paddingVertical: 8,
+    },
+    buttonLabel: {
+      fontSize: 15,
+      fontWeight: '700',
+    },
+    cancelButton: {
+      marginTop: 4,
+    },
+    cancelLabel: {
+      fontSize: 14,
+      color: c.onSurfaceVariant,
+    },
+    currentEmailRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 14,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      backgroundColor: c.surfaceVariant + '60',
+      borderRadius: 10,
+    },
+    currentEmailLabel: {
+      color: c.onSurfaceVariant,
+      fontSize: 13,
+    },
+    currentEmailValue: {
+      color: c.onSurface,
+      fontSize: 13,
+      fontWeight: '700',
+      flex: 1,
+    },
+    otpBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      padding: 12,
+      marginBottom: 12,
+      backgroundColor: c.primaryContainer + '40',
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: c.primary + '30',
+    },
+    otpBannerText: {
+      color: c.onSurface,
+      fontSize: 13,
+      flex: 1,
+    },
+  });
 }

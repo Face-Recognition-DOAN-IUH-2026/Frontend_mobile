@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { IconButton, Text, TextInput, useTheme } from 'react-native-paper';
+import { IconButton, Text, TextInput, Surface, useTheme } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AIMessage, AIPendingAction } from '../types/ai';
 import { aiApi } from '../api/ai';
 import { useAuth } from '../context/AuthContext';
 import { AppTheme } from '../theme/DarkTheme';
+import { GRADIENTS } from '../theme/MobileDesignSystem';
 import ChatBubble from '../components/ai/ChatBubble';
 import ToolResultCard from '../components/ai/ToolResultCard';
 import ConfirmDialog from '../components/ai/ConfirmDialog';
@@ -178,8 +179,10 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>
       <View style={styles.welcomeAvatarOuter}>
-        <View style={styles.welcomeAvatarInner}>
-          <MaterialCommunityIcons name="robot" size={40} color="#FFFFFF" />
+        <View style={styles.welcomeAvatarMid}>
+          <View style={styles.welcomeAvatarInner}>
+            <MaterialCommunityIcons name="robot" size={40} color="#FFFFFF" />
+          </View>
         </View>
       </View>
       <Text variant="headlineSmall" style={styles.welcomeTitle}>
@@ -193,12 +196,12 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
       </Text>
       <View style={styles.welcomeActions}>
         {welcomeActions.map((action, idx) => (
-          <View key={idx} style={styles.welcomeActionChip}>
+          <Surface key={idx} style={styles.chipSurface} elevation={0}>
             <IconButton
               icon={action.icon}
               size={18}
               onPress={() => sendMessage(action.message)}
-              iconColor={theme.colors.primary}
+              iconColor={GRADIENTS.indigo[0]}
               style={styles.chipIcon}
             />
             <Text
@@ -208,7 +211,7 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
             >
               {action.label}
             </Text>
-          </View>
+          </Surface>
         ))}
       </View>
     </View>
@@ -218,7 +221,9 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
+      <Surface style={styles.header} elevation={0}>
+        <View style={styles.headerCircle1} />
+        <View style={styles.headerCircle2} />
         <View style={styles.headerLeft}>
           <View style={styles.headerAvatar}>
             <MaterialCommunityIcons name="robot" size={18} color="#FFFFFF" />
@@ -231,9 +236,10 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
         <IconButton
           icon="dots-vertical"
           size={20}
+          iconColor="rgba(255,255,255,0.7)"
           onPress={() => {}}
         />
-      </View>
+      </Surface>
 
       <KeyboardAvoidingView
         style={styles.keyboardView}
@@ -273,6 +279,7 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
 
         <View style={styles.inputContainer}>
           <View style={styles.inputWrapper}>
+            <MaterialCommunityIcons name="pencil" size={18} color={theme.colors.onSurfaceVariant} style={{ marginLeft: 14 }} />
             <TextInput
               style={styles.input}
               placeholder="Nhap tin nhan..."
@@ -287,14 +294,16 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
               activeUnderlineColor="transparent"
               textColor={theme.colors.onSurface}
             />
-            <IconButton
-              icon="send-circle"
-              size={32}
-              onPress={() => sendMessage()}
-              disabled={!input.trim() || loading}
-              iconColor={input.trim() ? theme.colors.primary : theme.colors.onSurfaceVariant}
-              style={styles.sendButton}
-            />
+            <View style={[styles.sendBtn, (!input.trim() || loading) && styles.sendBtnDisabled]}>
+              <IconButton
+                icon="send"
+                size={20}
+                onPress={() => sendMessage()}
+                disabled={!input.trim() || loading}
+                iconColor="#FFFFFF"
+                style={{ margin: 0 }}
+              />
+            </View>
           </View>
         </View>
 
@@ -311,46 +320,68 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
 }
 
 function createStyles(theme: AppTheme) {
+  const c = theme.colors;
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: theme.colors.background,
+      backgroundColor: c.background,
     },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      backgroundColor: theme.colors.surface,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: theme.colors.outlineVariant,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      backgroundColor: c.primary,
+      borderBottomLeftRadius: 20,
+      borderBottomRightRadius: 20,
+      position: 'relative',
+      overflow: 'hidden',
+    },
+    headerCircle1: {
+      position: 'absolute',
+      top: -30,
+      right: -30,
+      width: 120,
+      height: 120,
+      borderRadius: 60,
+      backgroundColor: 'rgba(255,255,255,0.08)',
+    },
+    headerCircle2: {
+      position: 'absolute',
+      bottom: -40,
+      left: 80,
+      width: 160,
+      height: 160,
+      borderRadius: 80,
+      backgroundColor: 'rgba(255,255,255,0.05)',
     },
     headerLeft: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 10,
+      gap: 12,
+      zIndex: 1,
     },
     headerAvatar: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      backgroundColor: theme.colors.primary,
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: 'rgba(255,255,255,0.2)',
       alignItems: 'center',
       justifyContent: 'center',
     },
     headerTitle: {
-      color: theme.colors.onSurface,
-      fontWeight: '700',
-      fontSize: 15,
+      color: '#FFFFFF',
+      fontWeight: '800',
+      fontSize: 16,
     },
     headerSubtitle: {
-      color: theme.colors.onSurfaceVariant,
+      color: 'rgba(255,255,255,0.7)',
       fontSize: 11,
     },
     keyboardView: {
       flex: 1,
-      backgroundColor: theme.colors.background,
+      backgroundColor: c.background,
     },
     chatArea: {
       flex: 1,
@@ -365,34 +396,43 @@ function createStyles(theme: AppTheme) {
       padding: 32,
     },
     welcomeAvatarOuter: {
-      width: 88,
-      height: 88,
-      borderRadius: 44,
-      backgroundColor: theme.colors.primary + '25', // 15% opacity primary
+      width: 100,
+      height: 100,
+      borderRadius: 50,
+      backgroundColor: c.primary + '15',
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: 20,
+      marginBottom: 24,
+    },
+    welcomeAvatarMid: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: c.primary + '25',
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     welcomeAvatarInner: {
       width: 64,
       height: 64,
       borderRadius: 32,
-      backgroundColor: theme.colors.primary,
+      backgroundColor: c.primary,
       alignItems: 'center',
       justifyContent: 'center',
+      elevation: 2,
     },
     welcomeTitle: {
-      color: theme.colors.onSurface,
-      fontWeight: '700',
-      marginBottom: 4,
+      color: c.onSurface,
+      fontWeight: '800',
+      marginBottom: 6,
     },
     welcomeSubtitle: {
-      color: theme.colors.onSurfaceVariant,
+      color: c.onSurfaceVariant,
       textAlign: 'center',
-      marginBottom: 4,
+      marginBottom: 6,
     },
     welcomeHint: {
-      color: theme.colors.onSurfaceVariant,
+      color: c.onSurfaceVariant,
       opacity: 0.8,
       textAlign: 'center',
       marginBottom: 32,
@@ -402,26 +442,28 @@ function createStyles(theme: AppTheme) {
       flexDirection: 'row',
       flexWrap: 'wrap',
       justifyContent: 'center',
-      gap: 8,
+      gap: 10,
     },
-    welcomeActionChip: {
+    chipSurface: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: theme.colors.surfaceVariant,
-      borderRadius: 20,
+      backgroundColor: c.surface,
+      borderRadius: 24,
       borderWidth: 1,
-      borderColor: theme.colors.outlineVariant,
+      borderColor: c.outlineVariant,
     },
     chipIcon: {
       margin: 0,
-      marginRight: -4,
+      marginRight: -6,
     },
     welcomeActionText: {
-      color: theme.colors.onSurfaceVariant,
-      marginRight: 12,
+      color: c.onSurfaceVariant,
+      fontWeight: '600',
+      marginRight: 14,
+      fontSize: 13,
     },
     messageList: {
-      paddingVertical: 8,
+      paddingVertical: 10,
       paddingHorizontal: 4,
     },
     messageListEmpty: {
@@ -434,50 +476,58 @@ function createStyles(theme: AppTheme) {
       flexDirection: 'row',
       alignItems: 'flex-end',
       paddingHorizontal: 16,
-      paddingVertical: 4,
-      gap: 6,
+      paddingVertical: 6,
+      gap: 8,
     },
     typingAvatar: {
-      width: 24,
-      height: 24,
-      borderRadius: 12,
-      backgroundColor: theme.colors.primary,
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+      backgroundColor: c.primary,
       alignItems: 'center',
       justifyContent: 'center',
     },
     typingBubble: {
-      backgroundColor: theme.colors.surfaceVariant,
-      borderRadius: 16,
-      borderBottomLeftRadius: 4,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
+      backgroundColor: c.surfaceVariant,
+      borderRadius: 18,
+      borderBottomLeftRadius: 6,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
     },
     inputContainer: {
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      backgroundColor: theme.colors.background,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      backgroundColor: c.background,
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: theme.colors.outlineVariant,
+      borderTopColor: c.outlineVariant,
     },
     inputWrapper: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: theme.colors.surfaceVariant,
-      borderRadius: 24,
+      backgroundColor: c.surface,
+      borderRadius: 28,
       borderWidth: 1,
-      borderColor: theme.colors.outlineVariant,
-      paddingLeft: 16,
+      borderColor: c.outlineVariant,
+      paddingLeft: 4,
     },
     input: {
       flex: 1,
       backgroundColor: 'transparent',
       fontSize: 14,
-      color: theme.colors.onSurface,
-      minHeight: 40,
+      color: c.onSurface,
+      minHeight: 44,
     },
-    sendButton: {
-      margin: 0,
+    sendBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: c.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
       marginRight: 4,
+    },
+    sendBtnDisabled: {
+      backgroundColor: c.outlineVariant,
     },
   });
 }

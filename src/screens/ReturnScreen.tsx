@@ -11,6 +11,7 @@ import {
   Menu,
   Portal,
   Snackbar,
+  Surface,
   Text,
   TextInput,
   useTheme,
@@ -20,6 +21,14 @@ import { AppTheme } from '../theme/DarkTheme';
 import { BorrowRecord, StaffPatronActiveBorrowsResponse } from '../types';
 import { formatDate, getDaysUntil, isOverdue } from '../utils/dateUtils';
 import { getErrorMessage } from '../utils/errorUtils';
+import {
+  GradientHeader,
+  SectionCard,
+  StatCard,
+  FilterPill,
+  EmptyState,
+  GRADIENTS,
+} from '../theme/MobileDesignSystem';
 
 type StepState = 'lookup' | 'scan';
 
@@ -39,6 +48,7 @@ const normalizeBookCode = (value?: string | null) =>
 
 export default function ReturnScreen() {
   const theme = useTheme() as AppTheme;
+  const c = theme.colors;
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [studentCode, setStudentCode] = useState('');
   const [staffLookup, setStaffLookup] = useState<StaffPatronActiveBorrowsResponse | null>(null);
@@ -174,49 +184,32 @@ export default function ReturnScreen() {
     setError(null);
   };
 
-  const renderStepPill = (value: StepState, label: string, icon: MaterialIconName) => {
-    const active = step === value;
-    const complete = value === 'lookup' ? !!staffLookup : scannedReturns.length > 0;
-    return (
-      <View style={[styles.stepPill, (active || complete) && styles.stepPillActive]}>
-        <MaterialCommunityIcons
-          name={complete ? 'check-circle' : icon}
-          size={15}
-          color={active || complete ? theme.colors.onPrimary : theme.colors.onSurfaceVariant}
-        />
-        <Text style={[styles.stepText, (active || complete) && styles.stepTextActive]}>{label}</Text>
-      </View>
-    );
-  };
-
   const renderBorrowRecord = (record: BorrowRecord) => {
     const daysLeft = getDaysUntil(record.due_at);
     const overdue = isOverdue(record.due_at);
 
     return (
-      <Card key={record.id} mode="outlined" style={styles.recordCard}>
-        <Card.Content style={styles.recordContent}>
-          <View style={styles.recordHeader}>
-            <View style={styles.recordTitleWrap}>
-              <Text variant="titleSmall" style={styles.cardTitle} numberOfLines={2} selectable>
-                {record.book?.title || record.book_id}
-              </Text>
-              <Text variant="bodySmall" style={styles.mutedText} selectable>
-                ISBN {record.book?.isbn || record.book_id}
-              </Text>
-            </View>
-            <Chip compact style={overdue ? styles.errorChip : styles.primaryChip} textStyle={overdue ? styles.errorChipText : styles.primaryChipText}>
-              {overdue ? 'Quá hạn' : 'Đang mượn'}
-            </Chip>
-          </View>
-          <View style={styles.recordFooter}>
-            <Text style={styles.mutedText}>Mượn {formatDate(record.borrow_at)}</Text>
-            <Text style={[styles.mutedText, overdue && styles.errorText]}>
-              Hạn {formatDate(record.due_at)} - {overdue ? `trễ ${Math.abs(daysLeft)} ngày` : `còn ${daysLeft} ngày`}
+      <Surface key={record.id} style={styles.recordCard} elevation={0}>
+        <View style={styles.recordHeader}>
+          <View style={styles.recordTitleWrap}>
+            <Text variant="titleSmall" style={styles.cardTitle} numberOfLines={2} selectable>
+              {record.book?.title || record.book_id}
+            </Text>
+            <Text variant="bodySmall" style={styles.mutedText} selectable>
+              ISBN {record.book?.isbn || record.book_id}
             </Text>
           </View>
-        </Card.Content>
-      </Card>
+          <Chip compact style={overdue ? styles.errorChip : styles.primaryChip} textStyle={overdue ? styles.errorChipText : styles.primaryChipText}>
+            {overdue ? 'Quá hạn' : 'Đang mượn'}
+          </Chip>
+        </View>
+        <View style={styles.recordFooter}>
+          <Text style={styles.mutedText}>Mượn {formatDate(record.borrow_at)}</Text>
+          <Text style={[styles.mutedText, overdue && styles.errorText]}>
+            Hạn {formatDate(record.due_at)} - {overdue ? `trễ ${Math.abs(daysLeft)} ngày` : `còn ${daysLeft} ngày`}
+          </Text>
+        </View>
+      </Surface>
     );
   };
 
@@ -224,263 +217,276 @@ export default function ReturnScreen() {
     if (!staffLookup) return null;
 
     if (!permission) {
-      return <ActivityIndicator color={theme.colors.primary} style={styles.loader} />;
+      return <ActivityIndicator color={c.primary} style={styles.loader} />;
     }
 
     const hasScanned = scannedReturns.length > 0;
     const hasActiveRecords = activeRecords.length > 0;
 
     return (
-      <Card mode="outlined" style={styles.panel}>
-        <Card.Content>
-          <View style={styles.panelHeader}>
-            <View style={styles.panelTitleGroup}>
-              <MaterialCommunityIcons name="barcode-scan" size={22} color={theme.colors.primary} />
-              <View>
-                <Text variant="titleMedium" style={styles.cardTitle}>Quét sách trả</Text>
-                <Text style={styles.mutedText}>Mã góc ISBN trên bìa sách</Text>
+      <SectionCard
+        title="Quét sách trả"
+        icon="barcode-scan"
+        accentColor={GRADIENTS.emerald[0]}
+        right={
+          hasScanned ? (
+            <Button mode="text" compact onPress={() => setScannedReturns([])} textColor={c.error}>
+              Xóa tất cả
+            </Button>
+          ) : undefined
+        }
+      >
+        {permission.granted ? (
+          <View style={styles.cameraWrap}>
+            <CameraView
+              style={styles.camera}
+              facing="back"
+              barcodeScannerSettings={{
+                barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
+              }}
+              onBarcodeScanned={handleBarCodeScanned}
+            />
+            <View style={styles.cameraOverlay}>
+              <View style={styles.scanArea}>
+                <View style={[styles.corner, styles.topLeft]} />
+                <View style={[styles.corner, styles.topRight]} />
+                <View style={[styles.corner, styles.bottomLeft]} />
+                <View style={[styles.corner, styles.bottomRight]} />
               </View>
+              <Text style={styles.cameraHint}>Đưa ISBN vào khung</Text>
             </View>
-            {hasScanned ? (
-              <Button mode="text" compact onPress={() => setScannedReturns([])}>
-                Xóa tất cả
-              </Button>
-            ) : null}
           </View>
+        ) : (
+          <View style={styles.permissionBox}>
+            <MaterialCommunityIcons name="camera-off-outline" size={34} color={c.onSurfaceVariant} />
+            <Text style={styles.mutedCenterText}>Chưa có quyền camera</Text>
+            <Button mode="contained" onPress={requestPermission} icon="camera" style={styles.permissionBtn}>
+              Cấp quyền
+            </Button>
+          </View>
+        )}
 
-          {permission.granted ? (
-            <View style={styles.cameraWrap}>
-              <CameraView
-                style={styles.camera}
-                facing="back"
-                barcodeScannerSettings={{
-                  barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
-                }}
-                onBarcodeScanned={handleBarCodeScanned}
-              />
-              <View style={styles.cameraOverlay}>
-                <View style={styles.scanArea}>
-                  <View style={[styles.corner, styles.topLeft]} />
-                  <View style={[styles.corner, styles.topRight]} />
-                  <View style={[styles.corner, styles.bottomLeft]} />
-                  <View style={[styles.corner, styles.bottomRight]} />
+        {hasScanned ? (
+          <View style={styles.scannedList}>
+            <Text variant="titleSmall" style={styles.scannedListTitle}>
+              Đã quét ({scannedReturns.length} cuốn)
+            </Text>
+            {scannedReturns.map((item) => (
+              <View key={item.isbn} style={styles.scannedItem}>
+                <View style={styles.scannedItemDot} />
+                <View style={styles.scannedItemInfo}>
+                  <Text variant="bodySmall" style={styles.cardTitle} numberOfLines={1}>
+                    {item.record.book?.title || item.record.book_id}
+                  </Text>
+                  <Text style={styles.scannedIsbn}>{item.isbn}</Text>
                 </View>
-                <Text style={styles.cameraHint}>Đưa ISBN vào khung</Text>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.permissionBox}>
-              <MaterialCommunityIcons name="camera-off-outline" size={34} color={theme.colors.onSurfaceVariant} />
-              <Text style={styles.mutedText}>Chưa có quyền camera</Text>
-              <Button mode="contained" onPress={requestPermission} icon="camera">
-                Cấp quyền
-              </Button>
-            </View>
-          )}
-
-          {hasScanned ? (
-            <View style={styles.scannedList}>
-              <Text variant="titleSmall" style={styles.scannedListTitle}>
-                Đã quét ({scannedReturns.length} cuốn)
-              </Text>
-              {scannedReturns.map((item) => (
-                <View key={item.isbn} style={styles.scannedItem}>
-                  <View style={styles.scannedItemInfo}>
-                    <Text variant="bodySmall" style={styles.cardTitle} numberOfLines={1}>
-                      {item.record.book?.title || item.record.book_id}
-                    </Text>
-                    <Text style={styles.scannedIsbn}>{item.isbn}</Text>
-                  </View>
-                  <Menu
-                    visible={conditionMenuIsbn === item.isbn}
-                    onDismiss={() => setConditionMenuIsbn(null)}
-                    anchor={
-                      <Button
-                        mode="outlined"
-                        compact
-                        onPress={() => setConditionMenuIsbn(item.isbn)}
-                        style={styles.scannedConditionBtn}
-                        contentStyle={styles.scannedConditionContent}
-                        icon={item.condition ? 'check-circle' : 'note-plus-outline'}
-                      >
-                        {item.condition || 'Tình trạng'}
-                      </Button>
-                    }
-                    anchorPosition="bottom"
-                  >
-                    {CONDITION_OPTIONS.map((opt) => (
-                      <Menu.Item
-                        key={opt.value}
-                        onPress={() => {
-                          updateCondition(item.isbn, opt.value);
-                          setConditionMenuIsbn(null);
-                        }}
-                        title={opt.label}
-                        leadingIcon={item.condition === opt.value ? 'check' : undefined}
-                      />
-                    ))}
+                <Menu
+                  visible={conditionMenuIsbn === item.isbn}
+                  onDismiss={() => setConditionMenuIsbn(null)}
+                  anchor={
+                    <Button
+                      mode="outlined"
+                      compact
+                      onPress={() => setConditionMenuIsbn(item.isbn)}
+                      style={styles.scannedConditionBtn}
+                      contentStyle={styles.scannedConditionContent}
+                      icon={item.condition ? 'check-circle' : 'note-plus-outline'}
+                    >
+                      {item.condition || 'Tình trạng'}
+                    </Button>
+                  }
+                  anchorPosition="bottom"
+                >
+                  {CONDITION_OPTIONS.map((opt) => (
                     <Menu.Item
+                      key={opt.value}
                       onPress={() => {
-                        updateCondition(item.isbn, '');
+                        updateCondition(item.isbn, opt.value);
                         setConditionMenuIsbn(null);
                       }}
-                      title="Xoá lựa chọn"
-                      leadingIcon="close"
+                      title={opt.label}
+                      leadingIcon={item.condition === opt.value ? 'check' : undefined}
                     />
-                  </Menu>
-                  <MaterialCommunityIcons
-                    name="close-circle-outline"
-                    size={22}
-                    color={theme.colors.error}
-                    onPress={() => removeScanned(item.isbn)}
-                    style={styles.scannedRemove}
+                  ))}
+                  <Menu.Item
+                    onPress={() => {
+                      updateCondition(item.isbn, '');
+                      setConditionMenuIsbn(null);
+                    }}
+                    title="Xoá lựa chọn"
+                    leadingIcon="close"
                   />
-                </View>
-              ))}
-            </View>
-          ) : (
-            <Text style={styles.scannedEmpty}>Chưa có sách nào được quét</Text>
-          )}
+                </Menu>
+                <MaterialCommunityIcons
+                  name="close-circle-outline"
+                  size={22}
+                  color={c.error}
+                  onPress={() => removeScanned(item.isbn)}
+                  style={styles.scannedRemove}
+                />
+              </View>
+            ))}
+          </View>
+        ) : (
+          <Text style={styles.scannedEmpty}>Chưa có sách nào được quét</Text>
+        )}
 
-          {!hasActiveRecords && !hasScanned && (
-            <View style={styles.emptyCameraOverlay}>
-              <MaterialCommunityIcons name="book-check-outline" size={36} color={theme.colors.onSurfaceVariant} />
-              <Text style={styles.mutedCenterText}>Không có sách đang mượn</Text>
-              <Text style={styles.mutedCenterText}>Có thể đổi patron để tiếp tục</Text>
-            </View>
-          )}
+        {!hasActiveRecords && !hasScanned && (
+          <View style={styles.emptyCameraOverlay}>
+            <MaterialCommunityIcons name="book-check-outline" size={36} color={c.onSurfaceVariant} />
+            <Text style={styles.mutedCenterText}>Không có sách đang mượn</Text>
+            <Text style={styles.mutedCenterText}>Có thể đổi patron để tiếp tục</Text>
+          </View>
+        )}
 
-          <Button
-            mode="contained"
-            onPress={handleBatchReturn}
-            loading={batchReturning}
-            disabled={batchReturning || !hasScanned}
-            style={styles.returnButton}
-            icon="check"
-            contentStyle={styles.largeButtonContent}
-          >
-            {batchReturning ? 'Đang trả...' : `Xác nhận trả (${scannedReturns.length} cuốn)`}
-          </Button>
-        </Card.Content>
-      </Card>
+        <Button
+          mode="contained"
+          onPress={handleBatchReturn}
+          loading={batchReturning}
+          disabled={batchReturning || !hasScanned}
+          style={styles.returnButton}
+          icon="check"
+          contentStyle={styles.largeButtonContent}
+        >
+          {batchReturning ? 'Đang trả...' : `Xác nhận trả (${scannedReturns.length} cuốn)`}
+        </Button>
+      </SectionCard>
     );
   };
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.headerBlock}>
-          <Text style={styles.kicker}>Staff scanner</Text>
-          <Text variant="headlineSmall" style={styles.screenTitle}>Trả sách tại quầy</Text>
-          <View style={styles.stepsRow}>
-            {renderStepPill('lookup', 'MSSV', 'account-search-outline')}
-            {renderStepPill('scan', 'ISBN', 'barcode-scan')}
-          </View>
+        <GradientHeader
+          title="Trả sách tại quầy"
+          subtitle={staffLookup ? `Độc giả: ${staffLookup.patron.full_name || staffLookup.patron.student_code}` : 'Staff scanner'}
+          icon="book-check-outline"
+        />
+
+        <View style={styles.stepsRow}>
+          <FilterPill
+            label="Tra MSSV"
+            active={step === 'lookup'}
+            onPress={() => {}}
+          />
+          <FilterPill
+            label="Quét ISBN"
+            active={step === 'scan'}
+            onPress={() => {}}
+          />
         </View>
 
-        <Card mode="outlined" style={styles.panel}>
-          <Card.Content>
-            <View style={styles.panelHeader}>
-              <View style={styles.panelTitleGroup}>
-                <MaterialCommunityIcons name="account-search-outline" size={22} color={theme.colors.primary} />
-                <View>
-                  <Text variant="titleMedium" style={styles.cardTitle}>Tìm độc giả</Text>
-                  <Text style={styles.mutedText}>Nhập MSSV trước khi quét sách</Text>
-                </View>
-              </View>
-              {staffLookup ? (
-                <Button mode="text" compact onPress={resetPatron}>
-                  Đổi
-                </Button>
-              ) : null}
-            </View>
-
-            <View style={styles.lookupRow}>
-              <TextInput
-                label="MSSV"
-                value={studentCode}
-                onChangeText={setStudentCode}
-                autoCapitalize="characters"
-                keyboardType="number-pad"
-                mode="outlined"
-                style={[styles.input, styles.lookupInput]}
-                right={
-                  <TextInput.Icon
-                    icon="magnify"
-                    onPress={() => loadPatronBorrows()}
-                    disabled={isLoadingPatron}
-                    color={theme.colors.primary}
-                  />
-                }
-              />
-              <Button
-                mode="contained"
-                onPress={() => loadPatronBorrows()}
-                loading={isLoadingPatron}
-                disabled={isLoadingPatron}
-                style={styles.lookupButton}
-                contentStyle={styles.lookupButtonContent}
-                icon="arrow-right"
-              >
-                Tìm
+        <SectionCard
+          title="Tìm độc giả"
+          icon="account-search-outline"
+          accentColor={GRADIENTS.indigo[0]}
+          right={
+            staffLookup ? (
+              <Button mode="text" compact onPress={resetPatron}>
+                Đổi
               </Button>
+            ) : undefined
+          }
+        >
+          <View style={styles.lookupRow}>
+            <TextInput
+              label="MSSV"
+              value={studentCode}
+              onChangeText={setStudentCode}
+              autoCapitalize="characters"
+              keyboardType="number-pad"
+              mode="outlined"
+              style={[styles.input, styles.lookupInput]}
+              outlineStyle={styles.inputOutline}
+              right={
+                <TextInput.Icon
+                  icon="magnify"
+                  onPress={() => loadPatronBorrows()}
+                  disabled={isLoadingPatron}
+                  color={c.primary}
+                />
+              }
+            />
+            <Button
+              mode="contained"
+              onPress={() => loadPatronBorrows()}
+              loading={isLoadingPatron}
+              disabled={isLoadingPatron}
+              style={styles.lookupButton}
+              contentStyle={styles.lookupButtonContent}
+              icon="arrow-right"
+            >
+              Tìm
+            </Button>
+          </View>
+
+          {error ? (
+            <View style={styles.errorBox}>
+              <MaterialCommunityIcons name="alert-circle-outline" size={18} color={c.error} />
+              <Text style={styles.errorText} selectable>{error}</Text>
             </View>
+          ) : null}
+        </SectionCard>
 
-            {error ? (
-              <View style={styles.errorBox}>
-                <MaterialCommunityIcons name="alert-circle-outline" size={18} color={theme.colors.error} />
-                <Text style={styles.errorText} selectable>{error}</Text>
-              </View>
-            ) : null}
-          </Card.Content>
-        </Card>
-
-        {isLoadingPatron ? <ActivityIndicator color={theme.colors.primary} style={styles.loader} /> : null}
+        {isLoadingPatron ? <ActivityIndicator color={c.primary} style={styles.loader} /> : null}
 
         {staffLookup ? (
-          <Card mode="outlined" style={styles.panel}>
-            <Card.Content>
-              <View style={styles.patronHeader}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>
-                    {(staffLookup.patron.full_name || staffLookup.patron.student_code).slice(0, 1).toUpperCase()}
-                  </Text>
-                </View>
-                <View style={styles.patronInfo}>
-                  <Text variant="titleMedium" style={styles.cardTitle} numberOfLines={1} selectable>
-                    {staffLookup.patron.full_name || staffLookup.patron.student_code}
-                  </Text>
-                  <Text variant="bodySmall" style={styles.mutedText} selectable>
-                    MSSV {staffLookup.patron.student_code}
-                  </Text>
-                </View>
-                <View style={styles.countBox}>
-                  <Text style={styles.countNumber}>{staffLookup.total}</Text>
-                  <Text style={styles.countLabel}>sách</Text>
-                </View>
+          <SectionCard
+            title="Thông tin độc giả"
+            icon="account-outline"
+            accentColor={GRADIENTS.cyan[0]}
+          >
+            <View style={styles.patronHeader}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>
+                  {(staffLookup.patron.full_name || staffLookup.patron.student_code).slice(0, 1).toUpperCase()}
+                </Text>
               </View>
+              <View style={styles.patronInfo}>
+                <Text variant="titleMedium" style={styles.cardTitle} numberOfLines={1} selectable>
+                  {staffLookup.patron.full_name || staffLookup.patron.student_code}
+                </Text>
+                <Text variant="bodySmall" style={styles.mutedText} selectable>
+                  MSSV {staffLookup.patron.student_code}
+                </Text>
+              </View>
+            </View>
 
-              {activeRecords.length === 0 ? (
-                <View style={styles.emptyBox}>
-                  <MaterialCommunityIcons name="book-check-outline" size={42} color={theme.colors.onSurfaceVariant} />
-                  <Text style={styles.cardTitle}>Không có sách đang mượn</Text>
-                  <Text style={styles.mutedCenterText}>Có thể đổi MSSV để tiếp tục tra cứu.</Text>
+            <View style={styles.statsRow}>
+              <View style={styles.statHalf}>
+                <StatCard
+                  label="Đang mượn"
+                  value={staffLookup.total}
+                  icon="book-open-variant"
+                  gradient={GRADIENTS.blue}
+                />
+              </View>
+              <View style={styles.statHalf}>
+                <StatCard
+                  label="Quá hạn"
+                  value={staffLookup.overdue_count}
+                  icon="alert-circle-outline"
+                  gradient={staffLookup.overdue_count > 0 ? GRADIENTS.red : GRADIENTS.emerald}
+                />
+              </View>
+            </View>
+
+            {activeRecords.length === 0 ? (
+              <EmptyState icon="book-check-outline" message="Không có sách đang mượn — có thể đổi MSSV" />
+            ) : (
+              <View style={styles.recordsBlock}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Sách đang mượn</Text>
+                  {staffLookup.overdue_count > 0 ? (
+                    <Chip compact style={styles.errorChip} textStyle={styles.errorChipText}>
+                      {staffLookup.overdue_count} quá hạn
+                    </Chip>
+                  ) : null}
                 </View>
-              ) : (
-                <View style={styles.recordsBlock}>
-                  <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>Sách đang mượn</Text>
-                    {staffLookup.overdue_count > 0 ? (
-                      <Chip compact style={styles.errorChip} textStyle={styles.errorChipText}>
-                        {staffLookup.overdue_count} quá hạn
-                      </Chip>
-                    ) : null}
-                  </View>
-                  <View style={styles.recordsList}>{activeRecords.map(renderBorrowRecord)}</View>
-                </View>
-              )}
-            </Card.Content>
-          </Card>
+                <View style={styles.recordsList}>{activeRecords.map(renderBorrowRecord)}</View>
+              </View>
+            )}
+          </SectionCard>
         ) : null}
 
         {renderScanner()}
@@ -512,117 +518,74 @@ export default function ReturnScreen() {
 }
 
 function createStyles(theme: AppTheme) {
+  const c = theme.colors;
   const success = theme.dark ? '#4A8C5C' : '#067647';
   const warningBg = theme.dark ? 'rgba(196, 154, 60, 0.16)' : '#FFF4E5';
 
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: theme.colors.background,
+      backgroundColor: c.background,
     },
     content: {
-      padding: 16,
       paddingBottom: 28,
       gap: 12,
-    },
-    headerBlock: {
-      gap: 8,
-    },
-    kicker: {
-      color: theme.colors.primary,
-      fontSize: 12,
-      fontWeight: '800',
-      textTransform: 'uppercase',
-    },
-    screenTitle: {
-      color: theme.colors.onBackground,
-      fontWeight: '800',
     },
     stepsRow: {
       flexDirection: 'row',
       gap: 8,
-    },
-    stepPill: {
-      flex: 1,
-      minHeight: 34,
-      borderRadius: 8,
-      borderWidth: 1,
-      borderColor: theme.colors.outlineVariant,
-      backgroundColor: theme.colors.surface,
-      alignItems: 'center',
-      justifyContent: 'center',
-      flexDirection: 'row',
-      gap: 5,
-    },
-    stepPillActive: {
-      backgroundColor: theme.colors.primary,
-      borderColor: theme.colors.primary,
-    },
-    stepText: {
-      color: theme.colors.onSurfaceVariant,
-      fontSize: 12,
-      fontWeight: '700',
-    },
-    stepTextActive: {
-      color: theme.colors.onPrimary,
-    },
-    panel: {
-      backgroundColor: theme.colors.surface,
-      borderColor: theme.colors.outlineVariant,
-      borderRadius: 14,
-    },
-    panelHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: 10,
-      marginBottom: 12,
-    },
-    panelTitleGroup: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 9,
-      flex: 1,
+      paddingHorizontal: 16,
     },
     cardTitle: {
-      color: theme.colors.onSurface,
+      color: c.onSurface,
       fontWeight: '800',
     },
     mutedText: {
-      color: theme.colors.onSurfaceVariant,
+      color: c.onSurfaceVariant,
     },
     mutedCenterText: {
-      color: theme.colors.onSurfaceVariant,
+      color: c.onSurfaceVariant,
       textAlign: 'center',
     },
     lookupRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
+      paddingHorizontal: 16,
+      paddingBottom: 12,
     },
     lookupInput: {
       flex: 1,
     },
     lookupButton: {
-      borderRadius: 8,
+      borderRadius: 10,
       minWidth: 86,
     },
     lookupButtonContent: {
       minHeight: 52,
     },
     input: {
-      backgroundColor: theme.colors.surface,
+      backgroundColor: c.surface,
+    },
+    inputOutline: {
+      borderRadius: 10,
     },
     errorBox: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       gap: 8,
-      marginTop: 12,
+      marginHorizontal: 16,
+      marginBottom: 12,
       padding: 10,
-      borderRadius: 8,
-      backgroundColor: theme.colors.errorContainer,
+      borderRadius: 10,
+      backgroundColor: c.errorContainer,
       borderWidth: 1,
-      borderColor: theme.colors.error,
+      borderColor: c.error,
+    },
+    errorText: {
+      color: c.error,
+      flex: 1,
+      fontSize: 13,
     },
     loader: {
       marginVertical: 12,
@@ -630,45 +593,38 @@ function createStyles(theme: AppTheme) {
     patronHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 10,
+      gap: 12,
+      paddingHorizontal: 16,
+      paddingBottom: 12,
     },
     avatar: {
-      width: 42,
-      height: 42,
-      borderRadius: 21,
-      backgroundColor: theme.colors.primary,
+      width: 46,
+      height: 46,
+      borderRadius: 23,
+      backgroundColor: c.primary,
       alignItems: 'center',
       justifyContent: 'center',
     },
     avatarText: {
-      color: theme.colors.onPrimary,
+      color: c.onPrimary,
       fontWeight: '900',
       fontSize: 18,
     },
     patronInfo: {
       flex: 1,
     },
-    countBox: {
-      minWidth: 54,
-      paddingVertical: 6,
-      paddingHorizontal: 8,
-      borderRadius: 8,
-      backgroundColor: theme.colors.surfaceVariant,
-      alignItems: 'center',
+    statsRow: {
+      flexDirection: 'row',
+      gap: 12,
+      paddingHorizontal: 16,
+      paddingBottom: 12,
     },
-    countNumber: {
-      color: theme.colors.primary,
-      fontSize: 18,
-      fontWeight: '900',
-      fontVariant: ['tabular-nums'],
-    },
-    countLabel: {
-      color: theme.colors.onSurfaceVariant,
-      fontSize: 11,
-      fontWeight: '700',
+    statHalf: {
+      flex: 1,
     },
     recordsBlock: {
-      marginTop: 14,
+      paddingHorizontal: 16,
+      paddingBottom: 12,
       gap: 10,
     },
     sectionHeader: {
@@ -678,7 +634,7 @@ function createStyles(theme: AppTheme) {
       gap: 8,
     },
     sectionTitle: {
-      color: theme.colors.onSurface,
+      color: c.onSurface,
       fontSize: 14,
       fontWeight: '800',
     },
@@ -686,13 +642,13 @@ function createStyles(theme: AppTheme) {
       gap: 8,
     },
     recordCard: {
-      backgroundColor: theme.colors.surfaceVariant,
-      borderRadius: 12,
-      borderColor: theme.colors.outlineVariant,
-    },
-    recordCardMatched: {
-      borderColor: success,
-      backgroundColor: `${success}18`,
+      backgroundColor: c.surfaceVariant,
+      borderRadius: 14,
+      borderColor: c.outlineVariant,
+      borderWidth: 0.5,
+      overflow: 'hidden',
+      position: 'relative',
+      padding: 12,
     },
     recordContent: {
       paddingVertical: 12,
@@ -713,25 +669,20 @@ function createStyles(theme: AppTheme) {
       flexWrap: 'wrap',
     },
     primaryChip: {
-      backgroundColor: theme.colors.primaryContainer,
+      backgroundColor: c.primaryContainer,
     },
     primaryChipText: {
-      color: theme.dark ? theme.colors.primary : theme.colors.onSurface,
+      color: theme.dark ? c.primary : c.onSurface,
       fontSize: 12,
       fontWeight: '800',
     },
     errorChip: {
-      backgroundColor: theme.colors.errorContainer,
+      backgroundColor: c.errorContainer,
     },
     errorChipText: {
-      color: theme.colors.error,
+      color: c.error,
       fontSize: 12,
       fontWeight: '800',
-    },
-    errorText: {
-      color: theme.colors.error,
-      flex: 1,
-      fontSize: 13,
     },
     emptyBox: {
       alignItems: 'center',
@@ -745,9 +696,10 @@ function createStyles(theme: AppTheme) {
     },
     cameraWrap: {
       height: 190,
-      borderRadius: 12,
+      marginHorizontal: 16,
+      borderRadius: 14,
       overflow: 'hidden',
-      backgroundColor: theme.colors.surfaceVariant,
+      backgroundColor: c.surfaceVariant,
       marginBottom: 12,
     },
     camera: {
@@ -759,12 +711,12 @@ function createStyles(theme: AppTheme) {
       right: 0,
       bottom: 0,
       left: 0,
-      backgroundColor: 'rgba(0,0,0,0.28)',
+      backgroundColor: 'rgba(0,0,0,0.4)',
       justifyContent: 'center',
       alignItems: 'center',
     },
     scanArea: {
-      width: 245,
+      width: 250,
       height: 112,
       position: 'relative',
     },
@@ -778,40 +730,48 @@ function createStyles(theme: AppTheme) {
       position: 'absolute',
       width: 32,
       height: 32,
-      borderColor: theme.colors.primary,
-      borderWidth: 2,
+      borderColor: c.primary,
+      borderWidth: 2.5,
     },
     topLeft: {
       top: 0,
       left: 0,
       borderRightWidth: 0,
       borderBottomWidth: 0,
+      borderTopLeftRadius: 12,
     },
     topRight: {
       top: 0,
       right: 0,
       borderLeftWidth: 0,
       borderBottomWidth: 0,
+      borderTopRightRadius: 12,
     },
     bottomLeft: {
       bottom: 0,
       left: 0,
       borderRightWidth: 0,
       borderTopWidth: 0,
+      borderBottomLeftRadius: 12,
     },
     bottomRight: {
       bottom: 0,
       right: 0,
       borderLeftWidth: 0,
       borderTopWidth: 0,
+      borderBottomRightRadius: 12,
     },
     permissionBox: {
+      marginHorizontal: 16,
       padding: 16,
-      borderRadius: 12,
-      backgroundColor: theme.colors.surfaceVariant,
+      borderRadius: 14,
+      backgroundColor: c.surfaceVariant,
       alignItems: 'center',
       gap: 9,
       marginBottom: 12,
+    },
+    permissionBtn: {
+      borderRadius: 10,
     },
     inlineWarning: {
       flexDirection: 'row',
@@ -819,7 +779,7 @@ function createStyles(theme: AppTheme) {
       gap: 8,
       marginTop: 10,
       padding: 10,
-      borderRadius: 8,
+      borderRadius: 10,
       backgroundColor: warningBg,
     },
     warningText: {
@@ -830,7 +790,7 @@ function createStyles(theme: AppTheme) {
     matchBox: {
       marginTop: 10,
       padding: 10,
-      borderRadius: 8,
+      borderRadius: 10,
       backgroundColor: `${success}18`,
       borderWidth: 1,
       borderColor: `${success}66`,
@@ -848,18 +808,20 @@ function createStyles(theme: AppTheme) {
       fontWeight: '700',
     },
     returnButton: {
-      borderRadius: 8,
-      marginTop: 12,
+      borderRadius: 10,
+      marginHorizontal: 16,
+      marginTop: 4,
     },
     largeButtonContent: {
       minHeight: 48,
     },
     scannedList: {
-      marginTop: 12,
+      paddingHorizontal: 16,
+      paddingBottom: 12,
       gap: 8,
     },
     scannedListTitle: {
-      color: theme.colors.onSurface,
+      color: c.onSurface,
       fontWeight: '800',
       marginBottom: 4,
     },
@@ -869,21 +831,27 @@ function createStyles(theme: AppTheme) {
       gap: 8,
       paddingVertical: 8,
       paddingHorizontal: 10,
-      borderRadius: 8,
-      backgroundColor: theme.colors.surfaceVariant,
+      borderRadius: 12,
+      backgroundColor: c.surfaceVariant,
+    },
+    scannedItemDot: {
+      width: 4,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: c.primary,
     },
     scannedItemInfo: {
       flex: 1,
       minWidth: 0,
     },
     scannedIsbn: {
-      color: theme.colors.primary,
+      color: c.primary,
       fontSize: 11,
       fontFamily: 'monospace',
       marginTop: 2,
     },
     scannedConditionBtn: {
-      borderRadius: 6,
+      borderRadius: 8,
       minWidth: 0,
     },
     scannedConditionContent: {
@@ -893,10 +861,12 @@ function createStyles(theme: AppTheme) {
       padding: 4,
     },
     scannedEmpty: {
-      color: theme.colors.onSurfaceVariant,
+      color: c.onSurfaceVariant,
       fontSize: 13,
       marginTop: 12,
       textAlign: 'center',
+      paddingHorizontal: 16,
+      paddingBottom: 12,
     },
     multiLineSnackbar: {
       flexWrap: 'wrap',
