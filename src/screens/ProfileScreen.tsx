@@ -15,7 +15,7 @@ import {
   useTheme,
 } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import * as ImagePicker from 'expo-image-picker';
+let ImagePicker: typeof import('expo-image-picker') | null = null;
 import { useAuth } from '../context/AuthContext';
 import { useMobileTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme/DarkTheme';
@@ -86,13 +86,25 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   };
 
   const handlePickAvatar = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    try {
+      if (!ImagePicker) {
+        ImagePicker = require('expo-image-picker');
+      }
+    } catch {
+      Alert.alert('Lỗi', 'Ứng dụng cần được rebuild để sử dụng tính năng này.');
+      return;
+    }
+
+    const picker = ImagePicker;
+    if (!picker) return;
+
+    const { status } = await picker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Cần quyền truy cập', 'Vui lòng cấp quyền truy cập ảnh trong cài đặt.');
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
+    const result = await picker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
