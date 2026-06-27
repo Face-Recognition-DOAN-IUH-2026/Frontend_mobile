@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, Card, Divider, SegmentedButtons, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
+import { Button, SegmentedButtons, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
 import { useAuth } from '../context/AuthContext';
 import { AppTheme } from '../theme/DarkTheme';
 
@@ -78,22 +78,31 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <View style={styles.brandSection}>
-            <View style={styles.logoCircle}>
-              <Text style={styles.logoText}>TV</Text>
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+          <View style={styles.headerSection}>
+            <View style={styles.decorCircle1} />
+            <View style={styles.decorCircle2} />
+            <View style={styles.decorCircle3} />
+            <View style={styles.brandRow}>
+              <View style={styles.logoBox}>
+                <Text style={styles.logoText}>TV</Text>
+              </View>
+              <View>
+                <Text variant="headlineMedium" style={styles.brandTitle}>Thư Viện</Text>
+                <Text variant="bodyMedium" style={styles.brandSubtitle}>Thư viện số thông minh</Text>
+              </View>
             </View>
-            <Text variant="displaySmall" style={styles.title}>Thư Viện</Text>
-            <Text variant="bodyLarge" style={styles.subtitle}>Đăng nhập để tiếp tục</Text>
+            <Text variant="bodyLarge" style={styles.welcomeText}>Đăng nhập để tiếp tục</Text>
           </View>
 
-          <Card mode="outlined" style={styles.form}>
-            <Card.Content style={styles.formContent}>
+          <View style={styles.formCard}>
+            <View style={styles.accentBar} />
+            <View style={styles.formInner}>
               <SegmentedButtons
                 value={loginMode}
                 onValueChange={(value) => setLoginMode(value as LoginMode)}
@@ -113,6 +122,8 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
                   autoCorrect={false}
                   keyboardType="email-address"
                   left={<TextInput.Icon icon="email" color={theme.colors.onSurfaceVariant} />}
+                  outlineStyle={styles.inputOutline}
+                  style={styles.input}
                 />
               ) : (
                 <TextInput
@@ -123,6 +134,8 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
                   autoCapitalize="none"
                   autoCorrect={false}
                   left={<TextInput.Icon icon="account" color={theme.colors.onSurfaceVariant} />}
+                  outlineStyle={styles.inputOutline}
+                  style={styles.input}
                 />
               )}
 
@@ -140,6 +153,8 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
                     color={theme.colors.onSurfaceVariant}
                   />
                 }
+                outlineStyle={styles.inputOutline}
+                style={styles.input}
               />
 
               <Button
@@ -147,16 +162,23 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
                 onPress={handleLogin}
                 loading={isLoading}
                 disabled={isLoading}
-                contentStyle={styles.largeButton}
+                contentStyle={styles.loginBtn}
+                labelStyle={styles.loginBtnLabel}
+                style={styles.loginBtnWrapper}
               >
                 {loginMode === 'staff' ? 'Đăng nhập nhân viên' : 'Đăng nhập'}
               </Button>
 
-              <Button mode="text" onPress={() => navigation.navigate('ForgotPassword')} compact style={{ marginTop: -4 }}>
+              <Button
+                mode="text"
+                onPress={() => navigation.navigate('ForgotPassword')}
+                compact
+                labelStyle={styles.forgotLabel}
+              >
                 Quên mật khẩu?
               </Button>
 
-              <View style={styles.divider}>
+              <View style={styles.dividerRow}>
                 <View style={styles.dividerLine} />
                 <Text variant="bodySmall" style={styles.dividerText}>hoặc</Text>
                 <View style={styles.dividerLine} />
@@ -166,18 +188,24 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
                 mode="outlined"
                 onPress={() => navigation.navigate('FaceLogin')}
                 icon="face-recognition"
-                contentStyle={styles.mediumButton}
+                contentStyle={styles.faceBtn}
+                labelStyle={styles.faceBtnLabel}
+                style={styles.faceBtnWrapper}
               >
                 Đăng nhập bằng khuôn mặt
               </Button>
 
               {loginMode === 'patron' ? (
-                <Button mode="text" onPress={() => navigation.navigate('Register')}>
+                <Button
+                  mode="text"
+                  onPress={() => navigation.navigate('Register')}
+                  labelStyle={styles.registerLabel}
+                >
                   Chưa có tài khoản? Đăng ký ngay
                 </Button>
               ) : null}
-            </Card.Content>
-          </Card>
+            </View>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -197,58 +225,129 @@ function createStyles(theme: AppTheme) {
     flex: {
       flex: 1,
     },
-    content: {
+    scrollContent: {
       flexGrow: 1,
-      justifyContent: 'center',
-      padding: 20,
-      gap: 28,
     },
-    brandSection: {
-      alignItems: 'center',
-      gap: 8,
-    },
-    logoCircle: {
-      width: 72,
-      height: 72,
-      borderRadius: 22,
+    headerSection: {
       backgroundColor: theme.colors.primary,
+      paddingTop: 28,
+      paddingBottom: 40,
+      paddingHorizontal: 24,
+      borderBottomLeftRadius: 28,
+      borderBottomRightRadius: 28,
+      position: 'relative',
+      overflow: 'hidden',
+    },
+    decorCircle1: {
+      position: 'absolute',
+      top: -30,
+      right: -30,
+      width: 130,
+      height: 130,
+      borderRadius: 999,
+      backgroundColor: 'rgba(255,255,255,0.08)',
+    },
+    decorCircle2: {
+      position: 'absolute',
+      bottom: -40,
+      left: 60,
+      width: 170,
+      height: 170,
+      borderRadius: 999,
+      backgroundColor: 'rgba(255,255,255,0.05)',
+    },
+    decorCircle3: {
+      position: 'absolute',
+      top: 20,
+      left: -50,
+      width: 100,
+      height: 100,
+      borderRadius: 999,
+      backgroundColor: 'rgba(255,255,255,0.04)',
+    },
+    brandRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+      zIndex: 1,
+    },
+    logoBox: {
+      width: 56,
+      height: 56,
+      borderRadius: 16,
+      backgroundColor: 'rgba(255,255,255,0.2)',
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: 6,
     },
     logoText: {
-      color: theme.colors.onPrimary,
-      fontSize: 26,
+      color: '#FFFFFF',
+      fontSize: 22,
       fontWeight: '900',
       letterSpacing: 2,
     },
-    title: {
-      color: theme.colors.onBackground,
+    brandTitle: {
+      color: '#FFFFFF',
       fontWeight: '900',
     },
-    subtitle: {
-      color: theme.colors.onSurfaceVariant,
+    brandSubtitle: {
+      color: 'rgba(255,255,255,0.75)',
+      marginTop: 2,
     },
-    form: {
-      borderRadius: 18,
-      borderColor: theme.colors.outlineVariant,
+    welcomeText: {
+      color: 'rgba(255,255,255,0.85)',
+      marginTop: 16,
+      zIndex: 1,
+      fontWeight: '500',
+    },
+    formCard: {
+      marginHorizontal: 16,
+      marginTop: -20,
       backgroundColor: theme.colors.surface,
+      borderRadius: 14,
+      borderWidth: 0.5,
+      borderColor: theme.colors.outlineVariant,
+      position: 'relative',
+      overflow: 'hidden',
     },
-    formContent: {
-      gap: 16,
-      paddingVertical: 22,
+    accentBar: {
+      position: 'absolute',
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: 3,
+      backgroundColor: theme.colors.primary,
     },
-    largeButton: {
-      minHeight: 52,
+    formInner: {
+      padding: 20,
+      gap: 14,
     },
-    mediumButton: {
-      minHeight: 48,
+    input: {
+      backgroundColor: 'transparent',
     },
-    divider: {
+    inputOutline: {
+      borderRadius: 6,
+    },
+    loginBtn: {
+      minHeight: 50,
+      borderRadius: 8,
+    },
+    loginBtnLabel: {
+      fontWeight: '700',
+      fontSize: 15,
+    },
+    loginBtnWrapper: {
+      borderRadius: 8,
+      marginTop: 4,
+    },
+    forgotLabel: {
+      fontSize: 13,
+      color: theme.colors.primary,
+    },
+    dividerRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
-      paddingVertical: 4,
+      paddingVertical: 2,
     },
     dividerLine: {
       flex: 1,
@@ -257,6 +356,22 @@ function createStyles(theme: AppTheme) {
     },
     dividerText: {
       color: theme.colors.onSurfaceVariant,
+    },
+    faceBtn: {
+      minHeight: 48,
+      borderRadius: 8,
+    },
+    faceBtnLabel: {
+      fontWeight: '600',
+      fontSize: 14,
+    },
+    faceBtnWrapper: {
+      borderRadius: 8,
+      borderColor: theme.colors.outline,
+    },
+    registerLabel: {
+      fontSize: 14,
+      fontWeight: '600',
     },
   });
 }

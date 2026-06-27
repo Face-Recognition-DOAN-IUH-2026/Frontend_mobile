@@ -1,13 +1,20 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { View, StyleSheet, Alert, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, Button, Surface, TextInput, ActivityIndicator, Card, Divider, Snackbar, Avatar, Portal, useTheme } from 'react-native-paper';
+import { Text, Button, Surface, TextInput, ActivityIndicator, Divider, Snackbar, Portal, useTheme } from 'react-native-paper';
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { borrowApi } from '../api/borrow';
 import { Book, BorrowRecord } from '../types';
 import { AppTheme } from '../theme/DarkTheme';
 import { devError } from '../utils/logger';
+import {
+  GradientHeader,
+  SectionCard,
+  StatCard,
+  EmptyState,
+  GRADIENTS,
+} from '../theme/MobileDesignSystem';
 
 interface ScannedBorrowItem {
   barcode: string;
@@ -242,6 +249,7 @@ export default function StaffBorrowScreen() {
   if (!permission.granted) {
     return (
       <SafeAreaView style={styles.permissionContainer} edges={['bottom']}>
+        <MaterialCommunityIcons name="camera-off-outline" size={48} color={c.onSurfaceVariant} />
         <Text style={styles.permissionText}>Cần quyền camera để quét mã vạch sách</Text>
         <Button mode="contained" onPress={requestPermission} style={styles.permissionButton}>
           Cấp quyền
@@ -252,8 +260,24 @@ export default function StaffBorrowScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      <Surface style={styles.patronInput} elevation={0}>
-        <Text style={styles.patronLabel}>Mã số độc giả</Text>
+      <GradientHeader
+        title="Mượn sách"
+        subtitle={patronId ? `Độc giả: ${patronName}` : 'Quét sách cho độc giả'}
+        icon="book-plus-outline"
+      />
+
+      <SectionCard
+        title="Độc giả"
+        icon="account-outline"
+        accentColor={GRADIENTS.indigo[0]}
+        right={
+          patronId ? (
+            <Button mode="text" compact onPress={resetState} textColor={c.error}>
+              Đặt lại
+            </Button>
+          ) : undefined
+        }
+      >
         <View style={styles.patronRow}>
           <TextInput
             value={patronCode}
@@ -289,7 +313,29 @@ export default function StaffBorrowScreen() {
             </View>
           </View>
         ) : null}
-      </Surface>
+      </SectionCard>
+
+      {patronId ? (
+        <View style={styles.statsRow}>
+          <View style={styles.statHalf}>
+            <StatCard
+              label="Đang mượn"
+              value={activeCount}
+              icon="book-open-variant"
+              gradient={GRADIENTS.blue}
+              pct={(activeCount / MAX_BORROW) * 100}
+            />
+          </View>
+          <View style={styles.statHalf}>
+            <StatCard
+              label="Khả dụng"
+              value={remaining}
+              icon="book-check-outline"
+              gradient={canBorrow ? GRADIENTS.emerald : GRADIENTS.amber}
+            />
+          </View>
+        </View>
+      ) : null}
 
       <View style={styles.scannerContainer}>
         {permission?.granted && patronId && canBorrow ? (
@@ -333,37 +379,39 @@ export default function StaffBorrowScreen() {
         )}
       </View>
 
-      <Surface style={styles.listPanel} elevation={2}>
-        <View style={styles.listHeader}>
-          <MaterialCommunityIcons name="book-open-variant" size={20} color={c.primary} />
-          <Text style={styles.listTitle}>
-            Danh sách mượn ({scannedItems.length} cuốn)
-          </Text>
-        </View>
-
-        <Divider />
-
+      <SectionCard
+        title={`Danh sách mượn (${scannedItems.length} cuốn)`}
+        icon="book-open-variant"
+        accentColor={GRADIENTS.violet[0]}
+        right={
+          scannedItems.length > 0 ? (
+            <Button mode="text" compact onPress={() => setScannedItems([])} textColor={c.error}>
+              Xoá tất cả
+            </Button>
+          ) : undefined
+        }
+        style={styles.listSection}
+      >
         {scannedItems.length === 0 ? (
-          <View style={styles.emptyState}>
-            <MaterialCommunityIcons name="barcode-scan" size={48} color={c.onSurfaceVariant} />
-            <Text style={styles.emptyText}>Quét sách để thêm vào phiếu mượn</Text>
-          </View>
+          <EmptyState icon="barcode-scan" message="Quét sách để thêm vào phiếu mượn" />
         ) : (
           <FlatList
             data={scannedItems}
             keyExtractor={(_, index) => String(index)}
             style={styles.list}
-renderItem={({ item, index }) => (
-                <Card
-                  style={[
-                    styles.itemCard,
-                    item.alreadyBorrowed && styles.itemCardAlreadyBorrowed,
-                  ]}
-                  key={index}
-                >
+            renderItem={({ item, index }) => (
+              <Surface
+                style={[
+                  styles.itemCard,
+                  item.alreadyBorrowed && styles.itemCardAlreadyBorrowed,
+                ]}
+                elevation={0}
+              >
                 <View style={styles.itemRow}>
                   {item.book.cover_url ? (
-                    <Card.Cover source={{ uri: item.book.cover_url }} style={styles.itemCover} />
+                    <View style={styles.itemCoverWrap}>
+                      <MaterialCommunityIcons name="book-open-variant" size={20} color={c.primary} />
+                    </View>
                   ) : (
                     <View style={styles.itemCoverPlaceholder}>
                       <MaterialCommunityIcons name="book-open-variant" size={24} color={c.onSurfaceVariant} />
@@ -389,22 +437,20 @@ renderItem={({ item, index }) => (
                     Xoá
                   </Button>
                 </View>
-              </Card>
+              </Surface>
             )}
           />
         )}
+      </SectionCard>
 
-        <Divider />
-
-        <View style={styles.actionRow}>
-          <Button mode="outlined" onPress={resetState} style={styles.actionButton} textColor={c.onSurfaceVariant}>
-            Xoá tất cả
-          </Button>
-          <Button mode="contained" onPress={handleCreateSlip} loading={isCreating} disabled={isCreating || scannedItems.length === 0 || !patronId || !canBorrow} style={styles.actionButton}>
-            {isCreating ? 'Đang tạo phiếu...' : `Tạo phiếu mượn (${scannedItems.length} cuốn)`}
-          </Button>
-        </View>
-      </Surface>
+      <View style={styles.actionRow}>
+        <Button mode="outlined" onPress={resetState} style={styles.actionButton} textColor={c.onSurfaceVariant}>
+          Xoá tất cả
+        </Button>
+        <Button mode="contained" onPress={handleCreateSlip} loading={isCreating} disabled={isCreating || scannedItems.length === 0 || !patronId || !canBorrow} style={styles.actionButton}>
+          {isCreating ? 'Đang tạo phiếu...' : `Tạo phiếu mượn (${scannedItems.length} cuốn)`}
+        </Button>
+      </View>
 
       <Portal>
         <View style={styles.topSnackbarWrapper}>
@@ -426,48 +472,43 @@ function createStyles(theme: AppTheme) {
   const c = theme.colors;
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: c.background },
-    permissionContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: c.background },
-    permissionText: { color: c.onSurface, fontSize: 16, marginBottom: 16, textAlign: 'center' },
-    permissionButton: { borderRadius: 6 },
-    patronInput: { padding: 12, backgroundColor: c.surface },
-    patronLabel: { fontSize: 13, color: c.onSurfaceVariant, marginBottom: 6, fontWeight: '600' },
-    patronRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+    permissionContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: c.background, gap: 12 },
+    permissionText: { color: c.onSurface, fontSize: 16, marginBottom: 8, textAlign: 'center' },
+    permissionButton: { borderRadius: 10, paddingHorizontal: 24 },
+    patronRow: { flexDirection: 'row', gap: 8, alignItems: 'center', paddingHorizontal: 16, paddingBottom: 12 },
     patronField: { flex: 1, backgroundColor: 'transparent' },
-    inputOutline: { borderRadius: 6, borderColor: c.outlineVariant },
-    lookupButton: { borderRadius: 6, height: 44 },
-    patronStatus: { fontSize: 12, color: c.primary, marginTop: 6, fontWeight: '600' },
-    patronReadyBanner: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4, paddingHorizontal: 6, borderRadius: 6, backgroundColor: theme.dark ? 'rgba(74, 140, 92, 0.12)' : 'rgba(6, 118, 71, 0.08)' },
+    inputOutline: { borderRadius: 10, borderColor: c.outlineVariant },
+    lookupButton: { borderRadius: 10, height: 44 },
+    patronReadyBanner: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8, backgroundColor: theme.dark ? 'rgba(74, 140, 92, 0.12)' : 'rgba(6, 118, 71, 0.08)' },
     patronReadyText: { color: theme.dark ? '#4A8C5C' : '#067647', fontSize: 12, fontWeight: '600' },
-    quotaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6, gap: 8 },
+    quotaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 12, gap: 8 },
     quotaBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 12 },
     quotaBadgeOk: { backgroundColor: theme.dark ? 'rgba(74, 140, 92, 0.12)' : 'rgba(6, 118, 71, 0.08)' },
     quotaBadgeWarning: { backgroundColor: theme.dark ? 'rgba(196, 154, 60, 0.15)' : 'rgba(181, 71, 8, 0.08)' },
     quotaBadgeError: { backgroundColor: 'rgba(196, 78, 78, 0.15)' },
     quotaBadgeText: { fontSize: 12, fontWeight: '700', color: c.onSurface },
     quotaBadgeTextError: { color: c.error },
-    scannerContainer: { height: 220, position: 'relative', backgroundColor: c.surfaceVariant },
+    statsRow: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, paddingBottom: 12 },
+    statHalf: { flex: 1 },
+    scannerContainer: { height: 220, marginHorizontal: 16, borderRadius: 14, overflow: 'hidden', backgroundColor: c.surfaceVariant, marginBottom: 12 },
     camera: { flex: 1 },
-    overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-    scanArea: { width: 280, height: 100, borderRadius: 8, position: 'relative' },
-    corner: { position: 'absolute', width: 28, height: 28, borderColor: c.primary, borderWidth: 2 },
-    topLeft: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 8 },
-    topRight: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 8 },
-    bottomLeft: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 8 },
-    bottomRight: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 8 },
-    scanText: { color: c.onSurface, marginTop: 12, fontSize: 14, textAlign: 'center', fontWeight: '500' },
+    overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' },
+    scanArea: { width: 280, height: 100, borderRadius: 12, position: 'relative' },
+    corner: { position: 'absolute', width: 28, height: 28, borderColor: c.primary, borderWidth: 2.5 },
+    topLeft: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 12 },
+    topRight: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 12 },
+    bottomLeft: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 12 },
+    bottomRight: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 12 },
+    scanText: { color: '#FFFFFF', marginTop: 12, fontSize: 14, textAlign: 'center', fontWeight: '600' },
     cameraPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 10, backgroundColor: c.surfaceVariant },
     cameraPlaceholderText: { color: c.onSurfaceVariant, fontSize: 14, fontWeight: '600' },
-    listPanel: { flex: 1, backgroundColor: c.surface, borderTopLeftRadius: 16, borderTopRightRadius: 16, marginTop: -16 },
-    listHeader: { padding: 16, paddingBottom: 8 },
-    listTitle: { fontSize: 16, fontWeight: '700', color: c.onSurface, marginTop: 4 },
-    list: { flex: 1, paddingHorizontal: 12 },
-    emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
-    emptyText: { color: c.onSurfaceVariant, marginTop: 12, fontSize: 14 },
-    itemCard: { marginVertical: 4, backgroundColor: c.surface, borderRadius: 8 },
-    itemRow: { flexDirection: 'row', alignItems: 'center', padding: 10 },
-    itemCover: { width: 44, height: 60, borderRadius: 4 },
-    itemCoverPlaceholder: { width: 44, height: 60, borderRadius: 4, backgroundColor: c.surfaceVariant, justifyContent: 'center', alignItems: 'center' },
-    itemInfo: { flex: 1, marginLeft: 10 },
+    listSection: { flex: 1, marginHorizontal: 16 },
+    list: { flex: 1 },
+    itemCard: { marginVertical: 4, marginHorizontal: 16, backgroundColor: c.surface, borderRadius: 14, borderWidth: 0.5, borderColor: c.outlineVariant },
+    itemRow: { flexDirection: 'row', alignItems: 'center', padding: 12 },
+    itemCoverWrap: { width: 44, height: 60, borderRadius: 8, backgroundColor: c.primaryContainer, justifyContent: 'center', alignItems: 'center' },
+    itemCoverPlaceholder: { width: 44, height: 60, borderRadius: 8, backgroundColor: c.surfaceVariant, justifyContent: 'center', alignItems: 'center' },
+    itemInfo: { flex: 1, marginLeft: 12 },
     itemTitle: { fontSize: 14, fontWeight: '600', color: c.onSurface },
     itemAuthor: { fontSize: 12, color: c.onSurfaceVariant, marginTop: 2 },
     itemIsbn: { fontSize: 11, color: c.primary, marginTop: 2, fontFamily: 'monospace' },
@@ -477,8 +518,8 @@ function createStyles(theme: AppTheme) {
     alreadyBorrowedNote: { color: c.error, fontSize: 11, marginTop: 2, fontStyle: 'italic' },
     itemCardAlreadyBorrowed: { backgroundColor: c.surfaceVariant, borderColor: c.error, borderWidth: 1, opacity: 0.7 },
     removeButton: { marginLeft: 4 },
-    actionRow: { flexDirection: 'row', padding: 12, gap: 8 },
-    actionButton: { flex: 1, borderRadius: 6 },
+    actionRow: { flexDirection: 'row', padding: 16, gap: 8, paddingBottom: 20 },
+    actionButton: { flex: 1, borderRadius: 10 },
     topSnackbarWrapper: { position: 'absolute', top: 8, left: 0, right: 0, zIndex: 9999, paddingHorizontal: 16 },
     topSnackbar: { width: '100%' },
   });

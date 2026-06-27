@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { View, Image, StyleSheet, ScrollView, RefreshControl, Alert, FlatList } from 'react-native';
+import { View, Image, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, Surface, Button, useTheme, TextInput, Snackbar, Portal, Modal } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -11,9 +11,25 @@ import { devError } from '../utils/logger';
 import CacheManager from '../utils/cache/CacheManager';
 import { CACHE_KEYS, CACHE_TTL } from '../utils/cache/CacheKeys';
 import { useNetwork } from '../context/NetworkContext';
+import {
+  GradientHeader,
+  SectionCard,
+  EmptyState,
+  GRADIENTS,
+} from '../theme/MobileDesignSystem';
 
 interface BookCatalogScreenProps {
   navigation: any;
+}
+
+const SPINE_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#3b82f6', '#ef4444', '#8b5cf6', '#06b6d4', '#f43f5e'];
+
+function getSpineColor(id: string): string {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = id.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return SPINE_COLORS[Math.abs(hash) % SPINE_COLORS.length];
 }
 
 export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps) {
@@ -36,7 +52,7 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
   const loadBooks = useCallback(async () => {
     try {
       setLoadError(null);
-      
+
       const cache = CacheManager.getInstance();
       const cached = await cache.get<Book[]>(CACHE_KEYS.BOOKS);
       if (cached) {
@@ -100,7 +116,7 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
       Alert.alert('Requires Network', 'Reserving books requires an internet connection.');
       return;
     }
-    
+
     Alert.alert(
       'Đặt chỗ',
       `Bạn muốn đặt chỗ "${title}"?`,
@@ -130,85 +146,97 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: c.background }]} edges={['bottom']}>
-      <View style={styles.searchBar}>
-        <MaterialCommunityIcons name="magnify" size={20} color={c.onSurfaceVariant} />
-        <TextInput
-          placeholder="Tìm sách theo tên, tác giả, ISBN..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          style={styles.searchInput}
-          underlineColor="transparent"
-          activeUnderlineColor="transparent"
-          mode="flat"
-          contentStyle={styles.searchContent}
-        />
-        {searchQuery.length > 0 && (
-          <Button compact onPress={() => setSearchQuery('')} textColor={c.onSurfaceVariant} mode="text">
-            Xóa
-          </Button>
-        )}
-      </View>
-
       <ScrollView
         style={styles.flex}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
       >
+        <GradientHeader
+          title="Danh sách sách"
+          subtitle={`${filtered.length} cuốn sách có sẵn`}
+          icon="book-open-page-variant"
+        />
+
+        <View style={styles.searchWrap}>
+          <SectionCard
+            title="Tìm kiếm"
+            icon="magnify"
+            accentColor={GRADIENTS.indigo[0]}
+            style={styles.searchCard}
+          >
+            <View style={styles.searchBar}>
+              <MaterialCommunityIcons name="magnify" size={20} color={c.onSurfaceVariant} />
+              <TextInput
+                placeholder="Tên, tác giả, ISBN..."
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                style={styles.searchInput}
+                underlineColor="transparent"
+                activeUnderlineColor="transparent"
+                mode="flat"
+                contentStyle={styles.searchContent}
+              />
+              {searchQuery.length > 0 && (
+                <Button compact onPress={() => setSearchQuery('')} textColor={c.onSurfaceVariant} mode="text">
+                  Xóa
+                </Button>
+              )}
+            </View>
+          </SectionCard>
+        </View>
+
         {loadError ? (
-          <Surface style={[styles.stateCard, { backgroundColor: c.surface, borderColor: c.outline }]} elevation={0}>
-            <MaterialCommunityIcons name="cloud-off-outline" size={36} color={c.onSurfaceVariant} />
-            <Text variant="bodyMedium" style={[styles.stateText, { color: c.onSurface }]}>{loadError}</Text>
+          <View style={styles.stateWrap}>
+            <EmptyState icon="cloud-off-outline" message={loadError} />
             <Button mode="outlined" onPress={loadBooks} style={styles.stateButton} labelStyle={styles.stateButtonLabel} icon="refresh">
               Thử lại
             </Button>
-          </Surface>
+          </View>
         ) : filtered.length === 0 ? (
-          <Surface style={[styles.stateCard, { backgroundColor: c.surface, borderColor: c.outline }]} elevation={0}>
-            <MaterialCommunityIcons name="book-search" size={36} color={c.onSurfaceVariant} />
-            <Text variant="bodyMedium" style={[styles.stateText, { color: c.onSurface }]}>
-              {searchQuery ? 'Không tìm thấy sách phù hợp' : 'Thư viện chưa có sách nào'}
-            </Text>
-          </Surface>
+          <EmptyState
+            icon="book-search"
+            message={searchQuery ? 'Không tìm thấy sách phù hợp' : 'Thư viện chưa có sách nào'}
+          />
         ) : (
-          filtered.map((book) => (
-            <Surface
-              key={book.id}
-              style={[styles.bookCard, { backgroundColor: c.surface, borderColor: c.outline }]}
-              elevation={0}
-            >
-              <View style={[styles.bookCardSpine, { backgroundColor: book.is_available ? c.primary : c.onSurfaceVariant }]} />
-              {book.cover_url ? (
-                <Image source={{ uri: book.cover_url }} style={styles.bookCover} />
-              ) : (
-                <View style={[styles.bookCoverPlaceholder, { backgroundColor: c.surfaceVariant }]}>
-                  <MaterialCommunityIcons name="book-variant" size={24} color={c.onSurfaceVariant} />
+          filtered.map((book) => {
+            const spineColor = getSpineColor(book.id);
+            return (
+              <SectionCard key={book.id} accentColor={spineColor} style={styles.bookCard}>
+                <View style={styles.bookRow}>
+                  {book.cover_url ? (
+                    <Image source={{ uri: book.cover_url }} style={styles.bookCover} />
+                  ) : (
+                    <View style={[styles.bookCoverPlaceholder, { backgroundColor: c.surfaceVariant }]}>
+                      <MaterialCommunityIcons name="book-variant" size={24} color={c.onSurfaceVariant} />
+                    </View>
+                  )}
+                  <View style={styles.bookContent}>
+                    <Text style={[styles.bookTitle, { color: c.onSurface }]} numberOfLines={2}>
+                      {book.title}
+                    </Text>
+                    {book.author && (
+                      <Text style={[styles.bookAuthor, { color: c.onSurfaceVariant }]} numberOfLines={1}>
+                        {book.author}
+                      </Text>
+                    )}
+                    {book.isbn && (
+                      <Text style={[styles.isbnText, { color: c.custom.textDisabled }]}>ISBN: {book.isbn}</Text>
+                    )}
+                  </View>
+                  <Button
+                    mode={book.is_available ? 'contained' : 'outlined'}
+                    onPress={() => openDetail(book)}
+                    style={book.is_available ? styles.borrowButton : styles.reserveButton}
+                    labelStyle={styles.buttonLabel}
+                    compact
+                    disabled={reservingId === book.id}
+                    loading={reservingId === book.id}
+                  >
+                    {book.is_available ? 'Mượn' : 'Đặt chỗ'}
+                  </Button>
                 </View>
-              )}
-              <View style={styles.bookContent}>
-                <Text style={[styles.bookTitle, { color: c.onSurface }]} numberOfLines={2}>
-                  {book.title}
-                </Text>
-                {book.author && (
-                  <Text style={[styles.bookAuthor, { color: c.onSurfaceVariant }]} numberOfLines={1}>
-                    {book.author}
-                  </Text>
-                )}
-                {book.isbn && (
-                  <Text style={[styles.isbnText, { color: c.custom.textDisabled }]}>ISBN: {book.isbn}</Text>
-                )}
-              </View>
-              <Button
-                mode={book.is_available ? 'contained' : 'outlined'}
-                onPress={() => openDetail(book)}
-                style={book.is_available ? styles.borrowButton : styles.reserveButton}
-                labelStyle={styles.buttonLabel}
-                compact
-                disabled={reservingId === book.id}
-                loading={reservingId === book.id}
-              >
-                {book.is_available ? 'Mượn' : 'Đặt chỗ'}
-              </Button>
-            </Surface>
-          ))
+              </SectionCard>
+            );
+          })
         )}
       </ScrollView>
 
@@ -226,8 +254,12 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
           ) : detailBook ? (
             <ScrollView>
               <View style={styles.detailHeader}>
-                {detailBook.cover_url && (
+                {detailBook.cover_url ? (
                   <Image source={{ uri: detailBook.cover_url }} style={styles.detailCover} />
+                ) : (
+                  <View style={[styles.detailCoverPlaceholder, { backgroundColor: c.surfaceVariant }]}>
+                    <MaterialCommunityIcons name="book-variant" size={32} color={c.onSurfaceVariant} />
+                  </View>
                 )}
                 <View style={styles.detailInfo}>
                   <Text style={[styles.detailTitle, { color: c.onSurface }]}>{detailBook.title}</Text>
@@ -258,9 +290,11 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
               </View>
 
               {detailBook.description && (
-                <Text style={[styles.detailDescription, { color: c.onSurfaceVariant }]} numberOfLines={6}>
-                  {detailBook.description}
-                </Text>
+                <SectionCard title="Mô tả" icon="text-box-outline" accentColor={GRADIENTS.indigo[0]} style={styles.detailDescCard}>
+                  <Text style={[styles.detailDescription, { color: c.onSurfaceVariant }]} numberOfLines={6}>
+                    {detailBook.description}
+                  </Text>
+                </SectionCard>
               )}
 
               <View style={styles.detailActions}>
@@ -307,12 +341,11 @@ function createStyles(theme: AppTheme) {
   return StyleSheet.create({
     container: { flex: 1 },
     flex: { flex: 1 },
+    searchWrap: { marginTop: 12, paddingHorizontal: 16 },
+    searchCard: { backgroundColor: c.surface },
     searchBar: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginHorizontal: 16,
-      marginTop: 12,
-      marginBottom: 4,
       backgroundColor: c.surfaceVariant,
       borderRadius: 10,
       paddingHorizontal: 12,
@@ -320,57 +353,64 @@ function createStyles(theme: AppTheme) {
     },
     searchInput: { flex: 1, backgroundColor: 'transparent', height: 44 },
     searchContent: { height: 44, paddingHorizontal: 0 },
-    stateCard: {
-      marginHorizontal: 16,
-      marginTop: 24,
-      padding: 32,
-      borderRadius: 10,
-      alignItems: 'center',
-      borderWidth: 0.5,
-    },
-    stateText: { marginTop: 12, marginBottom: 16, textAlign: 'center' },
-    stateButton: { borderRadius: 6 },
+    stateWrap: { alignItems: 'center', marginTop: 32 },
+    stateButton: { borderRadius: 8, marginTop: 12 },
     stateButtonLabel: { fontSize: 14 },
     bookCard: {
       marginHorizontal: 16,
-      marginTop: 8,
-      borderRadius: 10,
-      flexDirection: 'row',
-      overflow: 'hidden',
-      borderWidth: 0.5,
-      alignItems: 'center',
+      marginTop: 10,
+      backgroundColor: c.surface,
     },
-    bookCardSpine: { width: 4, alignSelf: 'stretch' },
-    bookCover: { width: 48, height: 66, borderRadius: 4, margin: 10, marginRight: 0 },
+    bookRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 10,
+      paddingRight: 10,
+    },
+    bookCover: {
+      width: 52,
+      height: 72,
+      borderRadius: 6,
+      marginLeft: 12,
+      marginRight: 0,
+    },
     bookCoverPlaceholder: {
-      width: 48,
-      height: 66,
-      borderRadius: 4,
-      margin: 10,
+      width: 52,
+      height: 72,
+      borderRadius: 6,
+      marginLeft: 12,
       marginRight: 0,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    bookContent: { flex: 1, padding: 10, gap: 2 },
+    bookContent: { flex: 1, paddingHorizontal: 10, gap: 2 },
     bookTitle: { fontWeight: '600', fontSize: 14, lineHeight: 18 },
     bookAuthor: { fontSize: 12 },
     isbnText: { fontSize: 10, marginTop: 2 },
-    borrowButton: { margin: 10, borderRadius: 6 },
-    reserveButton: { margin: 10, borderRadius: 6, borderColor: c.primary },
+    borrowButton: { borderRadius: 8 },
+    reserveButton: { borderRadius: 8, borderColor: c.primary },
     buttonLabel: { fontSize: 12 },
-    detailModal: { margin: 16, borderRadius: 12, padding: 16, maxHeight: '80%' },
+    detailModal: { margin: 16, borderRadius: 14, padding: 16, maxHeight: '80%' },
     detailLoading: { padding: 32, alignItems: 'center' },
     detailHeader: { flexDirection: 'row', gap: 12, marginBottom: 12 },
-    detailCover: { width: 80, height: 110, borderRadius: 6 },
+    detailCover: { width: 80, height: 110, borderRadius: 8 },
+    detailCoverPlaceholder: {
+      width: 80,
+      height: 110,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
     detailInfo: { flex: 1, gap: 4 },
     detailTitle: { fontWeight: '700', fontSize: 16, lineHeight: 20 },
     detailAuthor: { fontSize: 13 },
     detailMeta: { fontSize: 11 },
     detailAvailability: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
     detailAvailabilityText: { fontSize: 13, fontWeight: '600' },
-    detailDescription: { fontSize: 12, lineHeight: 18, marginBottom: 16 },
+    detailDescCard: { marginBottom: 12 },
+    detailDescription: { fontSize: 12, lineHeight: 18, paddingHorizontal: 12, paddingBottom: 12 },
     detailActions: { gap: 8 },
-    detailBorrowButton: { borderRadius: 8 },
-    detailReserveButton: { borderRadius: 8 },
+    detailBorrowButton: { borderRadius: 10 },
+    detailReserveButton: { borderRadius: 10 },
   });
 }
