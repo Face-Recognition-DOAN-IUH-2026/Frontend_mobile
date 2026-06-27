@@ -12,34 +12,45 @@ interface BookRecommendationCardProps {
 
 export default function BookRecommendationCard({ recommendation, compact = false }: BookRecommendationCardProps) {
   const theme = useTheme() as AppTheme;
+  const c = theme.colors;
   const styles = useMemo(() => createStyles(theme, compact), [theme, compact]);
 
   return (
-    <Card style={styles.card}>
+    <Card style={[styles.card, { backgroundColor: c.surfaceVariant, borderColor: c.outline }]}>
       <Card.Content style={styles.content}>
         {recommendation.cover_url ? (
-          <Image source={{ uri: recommendation.cover_url }} style={styles.cover} />
+          <Image source={{ uri: recommendation.cover_url }} style={[styles.cover, { backgroundColor: c.surface }]} />
         ) : (
-          <View style={[styles.cover, styles.coverPlaceholder]}>
-            <MaterialCommunityIcons name="book" size={24} color={theme.colors.onSurfaceVariant} />
+          <View style={[styles.cover, styles.coverPlaceholder, { backgroundColor: c.primary + '15' }]}>
+            <MaterialCommunityIcons name="book" size={compact ? 22 : 28} color={c.primary} />
           </View>
         )}
         <View style={styles.info}>
-          <Text variant="labelMedium" style={styles.title} numberOfLines={2}>
+          <Text variant="labelMedium" style={[styles.title, { color: c.onSurface }]} numberOfLines={2}>
             {recommendation.title}
           </Text>
-          {recommendation.author && (
-            <Text variant="bodySmall" style={styles.author} numberOfLines={1}>
+          {recommendation.author ? (
+            <Text variant="bodySmall" style={[styles.author, { color: c.onSurfaceVariant }]} numberOfLines={1}>
               {recommendation.author}
             </Text>
-          )}
+          ) : null}
+          {recommendation.category ? (
+            <View style={[styles.categoryBadge, { backgroundColor: c.primary + '20' }]}>
+              <Text variant="labelSmall" style={{ color: c.primary }}>{recommendation.category}</Text>
+            </View>
+          ) : null}
+          {recommendation.reason ? (
+            <Text variant="bodySmall" style={[styles.reason, { color: c.onSurfaceVariant }]} numberOfLines={2}>
+              {recommendation.reason}
+            </Text>
+          ) : null}
           <View style={styles.scoreRow}>
             <ProgressBar
-              progress={recommendation.relevance_score / 100}
-              style={styles.progressBar}
-              color={theme.colors.primary}
+              progress={Math.min((recommendation.relevance_score || 0) / 100, 1)}
+              style={[styles.progressBar, { backgroundColor: c.outline }]}
+              color={c.primary}
             />
-            <Text variant="labelSmall" style={styles.scoreText}>
+            <Text variant="labelSmall" style={[styles.scoreText, { color: c.primary }]}>
               {recommendation.relevance_score}%
             </Text>
           </View>
@@ -50,21 +61,24 @@ export default function BookRecommendationCard({ recommendation, compact = false
 }
 
 function createStyles(theme: AppTheme, compact: boolean) {
-  const coverSize = compact ? { width: 50, height: 70 } : { width: 60, height: 85 };
+  const coverSize = compact ? { width: 56, height: 78 } : { width: 70, height: 98 };
   return StyleSheet.create({
     card: {
       marginVertical: 4,
       marginHorizontal: 4,
-      backgroundColor: theme.colors.surface,
       flex: 1,
+      borderRadius: 12,
+      borderWidth: 0.5,
+      overflow: 'hidden',
     },
     content: {
       flexDirection: 'row',
-      padding: compact ? 8 : 12,
+      padding: compact ? 10 : 14,
+      gap: 10,
     },
     cover: {
-      borderRadius: 4,
-      backgroundColor: theme.colors.surfaceVariant,
+      ...coverSize,
+      borderRadius: 6,
     },
     coverPlaceholder: {
       alignItems: 'center',
@@ -72,22 +86,32 @@ function createStyles(theme: AppTheme, compact: boolean) {
     },
     info: {
       flex: 1,
-      marginLeft: 8,
       justifyContent: 'center',
+      gap: 3,
     },
     title: {
-      fontWeight: '600',
-      lineHeight: 16,
+      fontWeight: '700',
+      lineHeight: 18,
     },
     author: {
-      opacity: 0.6,
+      marginTop: 1,
+    },
+    categoryBadge: {
+      alignSelf: 'flex-start',
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 10,
       marginTop: 2,
+    },
+    reason: {
+      marginTop: 2,
+      lineHeight: 16,
     },
     scoreRow: {
       flexDirection: 'row',
       alignItems: 'center',
       marginTop: 6,
-      gap: 6,
+      gap: 8,
     },
     progressBar: {
       flex: 1,
@@ -95,8 +119,8 @@ function createStyles(theme: AppTheme, compact: boolean) {
       borderRadius: 2,
     },
     scoreText: {
-      opacity: 0.7,
-      minWidth: 32,
+      fontWeight: '700',
+      minWidth: 36,
       textAlign: 'right',
     },
   });
