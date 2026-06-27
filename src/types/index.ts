@@ -22,6 +22,8 @@ export interface Book {
   cover_url?: string;
   shelf_location?: string;
   is_available?: boolean;
+  total_copies?: number;
+  available_copies?: number;
   publish_year?: number;
   pages?: number;
   publisher?: string;

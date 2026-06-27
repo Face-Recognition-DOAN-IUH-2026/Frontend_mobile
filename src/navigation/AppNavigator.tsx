@@ -175,16 +175,29 @@ function MainTabNavigator() {
         }}
       />
       {!isStaffScanner && (
-        <MainTab.Screen
-          name="BookRecommendations"
-          component={BookRecommendationsScreen}
-          options={{
-            title: 'Gợi ý',
-            tabBarIcon: ({ color, size }) => (
-              <MaterialCommunityIcons name="lightbulb" size={size} color={color} />
-            ),
-          }}
-        />
+        <>
+          <MainTab.Screen
+            name="BookCatalog"
+            component={BookCatalogScreen}
+            options={{
+              title: 'Tìm sách',
+              headerShown: false,
+              tabBarIcon: ({ color, size }) => (
+                <MaterialCommunityIcons name="book-search" size={size} color={color} />
+              ),
+            }}
+          />
+          <MainTab.Screen
+            name="BookRecommendations"
+            component={BookRecommendationsScreen}
+            options={{
+              title: 'Gợi ý',
+              tabBarIcon: ({ color, size }) => (
+                <MaterialCommunityIcons name="lightbulb" size={size} color={color} />
+              ),
+            }}
+          />
+        </>
       )}
       <MainTab.Screen
         name="Profile"

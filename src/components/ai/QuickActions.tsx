@@ -8,6 +8,7 @@ interface QuickAction {
   label: string;
   message: string;
   icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+  color: string;
 }
 
 interface QuickActionsProps {
@@ -16,17 +17,17 @@ interface QuickActionsProps {
 }
 
 const patronActions: QuickAction[] = [
-  { label: 'Tim sach', message: 'tim kiem sach', icon: 'book-search' },
-  { label: 'Lich su muon', message: 'xem lich su muon sach cua toi', icon: 'history' },
-  { label: 'Goi y sach', message: 'goi y sach phu hop', icon: 'lightbulb-outline' },
-  { label: 'The thu vien', message: 'tra cuu thong tin the', icon: 'card-account-details-outline' },
+  { label: 'Tìm sách', message: 'tìm kiếm sách', icon: 'book-search', color: '#6366F1' },
+  { label: 'Lịch sử mượn', message: 'xem lịch sử mượn sách của tôi', icon: 'history', color: '#3B82F6' },
+  { label: 'Gợi ý sách', message: 'gợi ý sách phù hợp', icon: 'lightbulb-outline', color: '#F59E0B' },
+  { label: 'Thẻ thư viện', message: 'tra cứu thông tin thẻ', icon: 'card-account-details-outline', color: '#10B981' },
 ];
 
 const staffActions: QuickAction[] = [
-  { label: 'Tim sach', message: 'tim kiem sach', icon: 'book-search' },
-  { label: 'Lich truc', message: 'xem lich truc hom nay', icon: 'calendar-clock-outline' },
-  { label: 'Sach tre han', message: 'kiem tra sach tre han', icon: 'alert-circle-outline' },
-  { label: 'The thu vien', message: 'tra cuu thong tin the', icon: 'card-account-details-outline' },
+  { label: 'Tìm sách', message: 'tìm kiếm sách', icon: 'book-search', color: '#6366F1' },
+  { label: 'Lịch trực', message: 'xem lịch trực hôm nay', icon: 'calendar-clock-outline', color: '#8B5CF6' },
+  { label: 'Sách trễ hạn', message: 'kiểm tra sách trễ hạn', icon: 'alert-circle-outline', color: '#EF4444' },
+  { label: 'Thẻ thư viện', message: 'tra cứu thông tin thẻ', icon: 'card-account-details-outline', color: '#10B981' },
 ];
 
 export default function QuickActions({ onSelect, isStaff }: QuickActionsProps) {
@@ -42,8 +43,14 @@ export default function QuickActions({ onSelect, isStaff }: QuickActionsProps) {
         contentContainerStyle={styles.container}
       >
         {actions.map((action, idx) => (
-          <View key={idx} style={styles.chip} onTouchEnd={() => onSelect(action.message)}>
-            <MaterialCommunityIcons name={action.icon} size={14} color={theme.colors.onSurfaceVariant} />
+          <View
+            key={idx}
+            style={styles.chip}
+            onTouchEnd={() => onSelect(action.message)}
+          >
+            <View style={[styles.chipIconBg, { backgroundColor: action.color + '18' }]}>
+              <MaterialCommunityIcons name={action.icon} size={14} color={action.color} />
+            </View>
             <Text style={styles.chipText}>{action.label}</Text>
           </View>
         ))}
@@ -53,32 +60,41 @@ export default function QuickActions({ onSelect, isStaff }: QuickActionsProps) {
 }
 
 function createStyles(theme: AppTheme) {
+  const isDark = theme.dark;
+
   return StyleSheet.create({
     wrapper: {
-      backgroundColor: theme.colors.surface,
+      backgroundColor: isDark ? '#121212' : '#F9FAFB',
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: theme.colors.outlineVariant,
+      borderBottomColor: isDark ? '#2A2A3C' : '#E5E7EB',
     },
     container: {
       paddingHorizontal: 12,
-      paddingVertical: 8,
+      paddingVertical: 10,
       gap: 8,
     },
     chip: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: theme.colors.surfaceVariant,
-      borderRadius: 16,
+      backgroundColor: isDark ? '#1C1C2E' : '#FFFFFF',
+      borderRadius: 20,
       borderWidth: 1,
-      borderColor: theme.colors.outlineVariant,
+      borderColor: isDark ? '#2A2A3C' : '#E5E7EB',
       paddingHorizontal: 12,
-      paddingVertical: 6,
+      paddingVertical: 7,
       gap: 6,
     },
+    chipIconBg: {
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
     chipText: {
-      color: theme.colors.onSurfaceVariant,
+      color: theme.colors.onSurface,
       fontSize: 13,
-      fontWeight: '500',
+      fontWeight: '600',
     },
   });
 }

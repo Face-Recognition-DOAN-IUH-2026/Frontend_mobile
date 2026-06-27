@@ -223,15 +223,15 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
                     )}
                   </View>
                   <Button
-                    mode={book.is_available ? 'contained' : 'outlined'}
+                    mode={book.available_copies > 0 ? 'contained' : 'outlined'}
                     onPress={() => openDetail(book)}
-                    style={book.is_available ? styles.borrowButton : styles.reserveButton}
+                    style={book.available_copies > 0 ? styles.borrowButton : styles.reserveButton}
                     labelStyle={styles.buttonLabel}
                     compact
                     disabled={reservingId === book.id}
                     loading={reservingId === book.id}
                   >
-                    {book.is_available ? 'Mượn' : 'Đặt chỗ'}
+                    {book.available_copies > 0 ? 'Đặt sách' : 'Đặt chỗ'}
                   </Button>
                 </View>
               </SectionCard>
@@ -300,7 +300,7 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
               <View style={styles.detailActions}>
                 {detailBook.available_copies > 0 ? (
                   <Button mode="contained" onPress={() => {}} style={styles.detailBorrowButton} disabled>
-                    Mượn tại thư viện
+                    Sách có sẵn tại thư viện
                   </Button>
                 ) : (
                   <Button

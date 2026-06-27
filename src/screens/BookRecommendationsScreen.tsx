@@ -24,17 +24,18 @@ export default function BookRecommendationsScreen({ navigation }: BookRecommenda
   const [error, setError] = useState<string | null>(null);
 
   const loadData = async () => {
-    if (!patron?.student_code) {
-      setError('Khong tim thay ma sinh vien');
+    const studentCode = patron?.student_code || patron?.studentCode;
+    if (!studentCode) {
+      setError('Không tìm thấy mã sinh viên');
       setLoading(false);
       return;
     }
     try {
       setError(null);
-      const data = await aiApi.getBookRecommendations(patron.student_code);
+      const data = await aiApi.getBookRecommendations(studentCode);
       setRecommendations(data.recommendations || []);
     } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Khong the tai goi y sach');
+      setError(err?.response?.data?.detail || 'Không thể tải gợi ý sách');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -44,7 +45,7 @@ export default function BookRecommendationsScreen({ navigation }: BookRecommenda
   useFocusEffect(
     useCallback(() => {
       loadData();
-    }, [patron?.student_code])
+    }, [patron?.student_code, patron?.studentCode])
   );
 
   const onRefresh = () => {
@@ -56,7 +57,7 @@ export default function BookRecommendationsScreen({ navigation }: BookRecommenda
     return (
       <SafeAreaView style={styles.centered}>
         <ActivityIndicator size="large" />
-        <Text style={styles.loadingText}>Dang tai goi y sach...</Text>
+        <Text style={styles.loadingText}>Đang tải gợi ý sách...</Text>
       </SafeAreaView>
     );
   }
@@ -70,10 +71,8 @@ export default function BookRecommendationsScreen({ navigation }: BookRecommenda
     );
   }
 
-  const renderItem = ({ item, index }: { item: AIBookRecommendation; index: number }) => (
-    <View style={[styles.gridItem, index % 2 === 0 && styles.gridItemLeft]}>
-      <BookRecommendationCard recommendation={item} compact />
-    </View>
+  const renderItem = ({ item }: { item: AIBookRecommendation }) => (
+    <BookRecommendationCard recommendation={item} />
   );
 
   return (
@@ -82,8 +81,6 @@ export default function BookRecommendationsScreen({ navigation }: BookRecommenda
         data={recommendations}
         renderItem={renderItem}
         keyExtractor={item => item.book_id}
-        numColumns={2}
-        columnWrapperStyle={styles.columnWrapper}
         contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
         ListHeaderComponent={
@@ -91,16 +88,16 @@ export default function BookRecommendationsScreen({ navigation }: BookRecommenda
             <View style={styles.headerIcon}>
               <MaterialCommunityIcons name="lightbulb" size={24} color={theme.colors.primary} />
             </View>
-            <Text variant="titleMedium" style={styles.headerTitle}>Goi y sach AI</Text>
+            <Text variant="titleMedium" style={styles.headerTitle}>Gợi ý sách AI</Text>
             <Text variant="bodySmall" style={styles.headerSubtitle}>
-              Duoc cai thien dua tren lich su muon va so thich cua ban
+              Được cải thiện dựa trên lịch sử mượn và sở thích của bạn
             </Text>
           </View>
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <MaterialCommunityIcons name="book-off" size={48} color={theme.colors.onSurfaceVariant} />
-            <Text variant="bodyMedium" style={styles.emptyText}>Chua co goi y nao</Text>
+            <Text variant="bodyMedium" style={styles.emptyText}>Chưa có gợi ý nào</Text>
           </View>
         }
       />
@@ -132,16 +129,7 @@ function createStyles(theme: AppTheme) {
     },
     listContent: {
       paddingBottom: 16,
-    },
-    columnWrapper: {
-      paddingHorizontal: 8,
-    },
-    gridItem: {
-      flex: 1,
-      maxWidth: '50%',
-    },
-    gridItemLeft: {
-      paddingRight: 4,
+      paddingHorizontal: 12,
     },
     header: {
       padding: 16,

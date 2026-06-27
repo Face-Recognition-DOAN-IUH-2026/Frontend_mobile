@@ -41,10 +41,10 @@ function BookCardInline({ book, theme }: { book: any; theme: AppTheme }) {
   const [imageError, setImageError] = React.useState(false);
 
   return (
-    <View style={[inlineStyles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}>
-      <View style={inlineStyles.header}>
-        <MaterialCommunityIcons name="book-open-variant" size={16} color={theme.colors.primary} />
-        <Text style={[inlineStyles.headerLabel, { color: theme.colors.primary }]}>Thông tin sách</Text>
+    <View style={[inlineStyles.card, { backgroundColor: theme.dark ? '#1C1C2E' : '#FFFFFF', borderColor: theme.dark ? '#2A2A3C' : '#E5E7EB' }]}>
+      <View style={[inlineStyles.header, { backgroundColor: theme.dark ? '#2D2D44' : '#6366F1' }]}>
+        <MaterialCommunityIcons name="book-open-variant" size={14} color="#FFFFFF" />
+        <Text style={inlineStyles.headerLabel}>Thông tin sách</Text>
       </View>
       <View style={inlineStyles.body}>
         {book.cover_url && !imageError ? (
@@ -55,18 +55,18 @@ function BookCardInline({ book, theme }: { book: any; theme: AppTheme }) {
             resizeMode="cover"
           />
         ) : (
-          <View style={[inlineStyles.cover, { backgroundColor: theme.colors.surfaceVariant }]}>
-            <MaterialCommunityIcons name="book" size={24} color={theme.colors.primary} />
+          <View style={[inlineStyles.cover, { backgroundColor: theme.colors.primary + '12' }]}>
+            <MaterialCommunityIcons name="book" size={20} color={theme.colors.primary} />
           </View>
         )}
         <View style={inlineStyles.info}>
-          <Text style={[inlineStyles.title, { color: theme.colors.onSurface }]}>{book.title}</Text>
-          {book.author && <Text style={[inlineStyles.meta, { color: theme.colors.onSurfaceVariant }]}>{book.author}</Text>}
+          <Text style={[inlineStyles.title, { color: theme.colors.onSurface }]} numberOfLines={2}>{book.title}</Text>
+          {book.author && <Text style={[inlineStyles.meta, { color: theme.colors.onSurfaceVariant }]} numberOfLines={1}>{book.author}</Text>}
           {book.isbn && <Text style={[inlineStyles.meta, { color: theme.colors.onSurfaceVariant }]}>ISBN: {book.isbn}</Text>}
           {book.categories && <Text style={[inlineStyles.meta, { color: theme.colors.onSurfaceVariant }]}>{book.categories}</Text>}
           {book.source && (
-            <View style={[inlineStyles.sourceChip, { backgroundColor: theme.colors.surfaceVariant }]}>
-              <Text style={[inlineStyles.sourceText, { color: theme.colors.onSurfaceVariant }]}>
+            <View style={[inlineStyles.sourceChip, { backgroundColor: theme.colors.primary + '15' }]}>
+              <Text style={[inlineStyles.sourceText, { color: theme.colors.primary }]}>
                 {book.source === 'database' ? 'Cơ sở dữ liệu' : 'Google Books'}
               </Text>
             </View>
@@ -84,7 +84,7 @@ function BookCardInline({ book, theme }: { book: any; theme: AppTheme }) {
 
 const inlineStyles = StyleSheet.create({
   card: {
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
     marginVertical: 6,
     overflow: 'hidden',
@@ -93,57 +93,63 @@ const inlineStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 6,
+    paddingVertical: 8,
     gap: 6,
   },
   headerLabel: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
   },
   body: {
     flexDirection: 'row',
     paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 6,
     gap: 10,
   },
   cover: {
     width: 48,
     height: 64,
-    borderRadius: 6,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   coverImage: {
     width: 48,
     height: 64,
-    borderRadius: 6,
+    borderRadius: 8,
   },
   info: {
     flex: 1,
   },
   title: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 18,
   },
   meta: {
     fontSize: 12,
     marginTop: 2,
+    lineHeight: 16,
   },
   sourceChip: {
     alignSelf: 'flex-start',
     borderRadius: 8,
     paddingHorizontal: 8,
-    paddingVertical: 2,
-    marginTop: 4,
+    paddingVertical: 3,
+    marginTop: 6,
   },
   sourceText: {
     fontSize: 10,
+    fontWeight: '600',
   },
   description: {
     fontSize: 12,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    lineHeight: 16,
+    paddingBottom: 10,
+    lineHeight: 17,
   },
 });
 
@@ -185,6 +191,8 @@ export default function ChatBubble({ message }: ChatBubbleProps) {
 }
 
 function createStyles(theme: AppTheme) {
+  const isDark = theme.dark;
+
   return StyleSheet.create({
     container: {
       marginVertical: 3,
@@ -201,16 +209,16 @@ function createStyles(theme: AppTheme) {
       maxWidth: '82%',
     },
     userBubble: {
-      backgroundColor: theme.colors.primary,
+      backgroundColor: isDark ? '#6366F1' : '#6366F1',
       borderRadius: 18,
       borderBottomRightRadius: 4,
       paddingHorizontal: 14,
       paddingVertical: 10,
     },
     userText: {
-      color: theme.colors.onPrimary,
+      color: '#FFFFFF',
       fontSize: 14,
-      lineHeight: 20,
+      lineHeight: 21,
     },
     assistantRow: {
       flexDirection: 'row',
@@ -222,22 +230,22 @@ function createStyles(theme: AppTheme) {
       flex: 1,
     },
     assistantBubble: {
-      backgroundColor: theme.colors.surfaceVariant,
+      backgroundColor: isDark ? '#1C1C2E' : '#F3F4F6',
       borderRadius: 18,
       borderBottomLeftRadius: 4,
       paddingHorizontal: 14,
       paddingVertical: 10,
     },
     assistantText: {
-      color: theme.colors.onSurfaceVariant,
+      color: isDark ? 'rgba(255,255,255,0.85)' : '#374151',
       fontSize: 14,
-      lineHeight: 20,
+      lineHeight: 21,
     },
     avatarSmall: {
       width: 24,
       height: 24,
       borderRadius: 12,
-      backgroundColor: theme.colors.primary,
+      backgroundColor: isDark ? '#6366F1' : '#6366F1',
       alignItems: 'center',
       justifyContent: 'center',
     },

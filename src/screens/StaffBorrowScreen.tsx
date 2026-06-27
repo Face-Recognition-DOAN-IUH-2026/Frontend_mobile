@@ -289,7 +289,7 @@ export default function StaffBorrowScreen() {
             activeOutlineColor={c.primary}
           />
           <Button mode="contained" onPress={lookupPatron} loading={isLookingUp} disabled={isLookingUp || !patronCode.trim()} style={styles.lookupButton}>
-            Tra
+            Tra cứu
           </Button>
         </View>
 

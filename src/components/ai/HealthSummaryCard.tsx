@@ -19,9 +19,9 @@ export default function HealthSummaryCard({ summary }: HealthSummaryCardProps) {
     theme.colors.error;
 
   const grade =
-    summary.operational_score >= 80 ? 'Tot' :
-    summary.operational_score >= 60 ? 'Binh thuong' :
-    summary.operational_score >= 40 ? 'Canh bao' : 'Nguy hiem';
+    summary.operational_score >= 80 ? 'Tốt' :
+    summary.operational_score >= 60 ? 'Bình thường' :
+    summary.operational_score >= 40 ? 'Cảnh báo' : 'Nguy hiểm';
 
   return (
     <Card style={styles.card}>
@@ -40,12 +40,12 @@ export default function HealthSummaryCard({ summary }: HealthSummaryCardProps) {
         </View>
 
         <View style={styles.statsGrid}>
-          <StatItem icon="account-multiple" label="Dang trong" value={summary.snapshot.active_patrons} theme={theme} />
-          <StatItem icon="login" label="Vao hom nay" value={summary.snapshot.today_entries} theme={theme} />
-          <StatItem icon="book-check" label="Dang muon" value={summary.snapshot.active_borrows} theme={theme} />
-          <StatItem icon="alert-circle" label="Tre han" value={summary.snapshot.overdue_borrows} theme={theme} />
-          <StatItem icon="calendar-clock" label="Dang truc" value={summary.snapshot.scheduled_staff_today} theme={theme} />
-          <StatItem icon="logout" label="Ra hom nay" value={summary.snapshot.today_exits} theme={theme} />
+          <StatItem icon="account-multiple" label="Đang trong" value={summary.snapshot.active_patrons} theme={theme} />
+          <StatItem icon="login" label="Vào hôm nay" value={summary.snapshot.today_entries} theme={theme} />
+          <StatItem icon="book-check" label="Đang mượn" value={summary.snapshot.active_borrows} theme={theme} />
+          <StatItem icon="alert-circle" label="Trễ hạn" value={summary.snapshot.overdue_borrows} theme={theme} />
+          <StatItem icon="calendar-clock" label="Đang trực" value={summary.snapshot.scheduled_staff_today} theme={theme} />
+          <StatItem icon="logout" label="Ra hôm nay" value={summary.snapshot.today_exits} theme={theme} />
         </View>
       </Card.Content>
     </Card>

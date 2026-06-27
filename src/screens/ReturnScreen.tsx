@@ -365,7 +365,7 @@ export default function ReturnScreen() {
 
         <View style={styles.stepsRow}>
           <FilterPill
-            label="Tra MSSV"
+            label="Tra cứu MSSV"
             active={step === 'lookup'}
             onPress={() => {}}
           />

@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { Alert, FlatList, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconButton, Text, TextInput, Surface, useTheme } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AIMessage, AIPendingAction } from '../types/ai';
 import { aiApi } from '../api/ai';
+import { reserveBook } from '../api/borrow';
 import { useAuth } from '../context/AuthContext';
 import { AppTheme } from '../theme/DarkTheme';
 import { GRADIENTS } from '../theme/MobileDesignSystem';
@@ -23,17 +24,17 @@ interface AIChatScreenProps {
 }
 
 const WELCOME_ACTIONS_STAFF = [
-  { label: 'Tim sach', message: 'tim kiem sach', icon: 'book-search' },
-  { label: 'Lich truc', message: 'xem lich truc hom nay', icon: 'calendar-clock' },
-  { label: 'Sach tre han', message: 'kiem tra sach tre han', icon: 'alert-circle' },
-  { label: 'The thu vien', message: 'tra cuu thong tin the', icon: 'card-account-details' },
+  { label: 'Tìm sách', message: 'tìm kiếm sách', icon: 'book-search' },
+  { label: 'Lịch trực', message: 'xem lịch trực hôm nay', icon: 'calendar-clock' },
+  { label: 'Sách trễ hạn', message: 'kiểm tra sách trễ hạn', icon: 'alert-circle' },
+  { label: 'Thẻ thư viện', message: 'tra cứu thông tin thẻ', icon: 'card-account-details' },
 ];
 
 const WELCOME_ACTIONS_PATRON = [
-  { label: 'Tim sach', message: 'tim kiem sach', icon: 'book-search' },
-  { label: 'Lich su muon', message: 'xem lich su muon sach', icon: 'history' },
-  { label: 'Goi y sach', message: 'goi y sach phu hop', icon: 'lightbulb' },
-  { label: 'The thu vien', message: 'tra cuu thong tin the', icon: 'card-account-details' },
+  { label: 'Tìm sách', message: 'tìm kiếm sách', icon: 'book-search' },
+  { label: 'Lịch sử mượn', message: 'xem lịch sử mượn sách', icon: 'history' },
+  { label: 'Gợi ý sách', message: 'gợi ý sách phù hợp', icon: 'lightbulb' },
+  { label: 'Thẻ thư viện', message: 'tra cứu thông tin thẻ', icon: 'card-account-details' },
 ];
 
 export default function AIChatScreen({ navigation }: AIChatScreenProps) {
@@ -125,7 +126,7 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
       const errorMessage: AIMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: 'Xin loi, da xay ra loi. Vui long thu lai.',
+        content: 'Xin lỗi, đã xảy ra lỗi. Vui lòng thử lại.',
         timestamp: new Date(),
       };
       addMessage(errorMessage);
@@ -145,7 +146,7 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
       const msg: AIMessage = {
         id: Date.now().toString(),
         role: 'assistant',
-        content: response.message || (action === 'approve' ? 'Da thuc hien thanh cong.' : 'Da huy hanh dong.'),
+        content: response.message || (action === 'approve' ? 'Đã thực hiện thành công.' : 'Đã hủy hành động.'),
         timestamp: new Date(),
       };
       addMessage(msg);
@@ -153,7 +154,7 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
       const msg: AIMessage = {
         id: Date.now().toString(),
         role: 'assistant',
-        content: 'Loi khi xu ly xac nhan.',
+        content: 'Lỗi khi xử lý xác nhận.',
         timestamp: new Date(),
       };
       addMessage(msg);
@@ -163,12 +164,42 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
     }
   };
 
+  const handleReserve = async (bookId: string, title: string) => {
+    Alert.alert('Đặt chỗ', `Bạn muốn đặt chỗ "${title}"?`, [
+      { text: 'Hủy', style: 'cancel' },
+      {
+        text: 'Đặt chỗ',
+        onPress: async () => {
+          try {
+            const result = await reserveBook(bookId);
+            const msg: AIMessage = {
+              id: Date.now().toString(),
+              role: 'assistant',
+              content: result.message || 'Đặt chỗ thành công!',
+              timestamp: new Date(),
+            };
+            addMessage(msg);
+          } catch (error: any) {
+            const msg = error?.response?.data?.detail || error?.message || 'Không thể đặt chỗ';
+            const errMsg: AIMessage = {
+              id: Date.now().toString(),
+              role: 'assistant',
+              content: `Lỗi đặt chỗ: ${msg}`,
+              timestamp: new Date(),
+            };
+            addMessage(errMsg);
+          }
+        },
+      },
+    ]);
+  };
+
   const renderItem = ({ item }: { item: AIMessage }) => (
     <View>
       <ChatBubble message={item} />
       {item.toolResults?.map((tr, idx) => (
         <View key={idx} style={styles.toolResultWrapper}>
-          <ToolResultCard toolResult={tr} />
+          <ToolResultCard toolResult={tr} onReserve={handleReserve} />
         </View>
       ))}
     </View>
@@ -186,13 +217,13 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
         </View>
       </View>
       <Text variant="headlineSmall" style={styles.welcomeTitle}>
-        Xin chao! 👋
+        Xin chào! 👋
       </Text>
       <Text variant="bodyLarge" style={styles.welcomeSubtitle}>
-        Toi la Tro Ly AI cua Thu Vien.
+        Tôi là Trợ Lý AI của Thư Viện.
       </Text>
       <Text variant="bodyMedium" style={styles.welcomeHint}>
-        Ban muon tim sach, kiem tra the, hay xem lich su muon?
+        Bạn muốn tìm sách, kiểm tra thẻ, hay xem lịch sử mượn?
       </Text>
       <View style={styles.welcomeActions}>
         {welcomeActions.map((action, idx) => (
@@ -230,7 +261,7 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
           </View>
           <View>
             <Text variant="titleMedium" style={styles.headerTitle}>TVTL AI</Text>
-            <Text variant="bodySmall" style={styles.headerSubtitle}>Tro ly thong minh</Text>
+            <Text variant="bodySmall" style={styles.headerSubtitle}>Trợ lý thông minh</Text>
           </View>
         </View>
         <IconButton
@@ -282,7 +313,7 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
             <MaterialCommunityIcons name="pencil" size={18} color={theme.colors.onSurfaceVariant} style={{ marginLeft: 14 }} />
             <TextInput
               style={styles.input}
-              placeholder="Nhap tin nhan..."
+              placeholder="Nhập tin nhắn..."
               placeholderTextColor={theme.colors.onSurfaceVariant}
               value={input}
               onChangeText={setInput}

@@ -30,7 +30,7 @@ export default function AIHealthScreen({ navigation }: AIHealthScreenProps) {
       const data = await aiApi.getHealthSummary();
       setSummary(data);
     } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Khong the tai du lieu');
+      setError(err?.response?.data?.detail || 'Không thể tải dữ liệu');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -57,7 +57,7 @@ export default function AIHealthScreen({ navigation }: AIHealthScreenProps) {
       const res = await aiApi.commandCenterChat(q);
       setChatAnswer(res.answer);
     } catch {
-      setChatAnswer('Khong the tra loi cau hoi.');
+      setChatAnswer('Không thể trả lời câu hỏi.');
     } finally {
       setChatLoading(false);
       setChatInput('');
@@ -86,7 +86,7 @@ export default function AIHealthScreen({ navigation }: AIHealthScreenProps) {
     return (
       <SafeAreaView style={styles.centered}>
         <ActivityIndicator size="large" />
-        <Text style={styles.loadingText}>Dang tai du lieu...</Text>
+        <Text style={styles.loadingText}>Đang tải dữ liệu...</Text>
       </SafeAreaView>
     );
   }
@@ -111,7 +111,7 @@ export default function AIHealthScreen({ navigation }: AIHealthScreenProps) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text variant="bodyMedium" style={styles.emptyText}>Khong co insight nao</Text>
+            <Text variant="bodyMedium" style={styles.emptyText}>Không có insight nào</Text>
           </View>
         }
       />
@@ -119,7 +119,7 @@ export default function AIHealthScreen({ navigation }: AIHealthScreenProps) {
       <View style={styles.chatRow}>
         <TextInput
           style={styles.chatInput}
-          placeholder="Hoi ve he thong..."
+          placeholder="Hỏi về hệ thống..."
           value={chatInput}
           onChangeText={setChatInput}
           onSubmitEditing={sendChat}

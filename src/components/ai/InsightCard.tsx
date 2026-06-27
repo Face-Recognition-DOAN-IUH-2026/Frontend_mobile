@@ -37,7 +37,7 @@ export default function InsightCard({ insight }: InsightCardProps) {
           <View style={styles.details}>
             {insight.evidence.length > 0 && (
               <View style={styles.section}>
-                <Text variant="labelSmall" style={styles.sectionTitle}>Chung cu:</Text>
+                <Text variant="labelSmall" style={styles.sectionTitle}>Chứng cứ:</Text>
                 {insight.evidence.map((ev, idx) => (
                   <Text key={idx} variant="bodySmall" style={styles.evidenceItem}>
                     - {ev.label}: {ev.value}
@@ -47,7 +47,7 @@ export default function InsightCard({ insight }: InsightCardProps) {
             )}
             {insight.recommended_actions.length > 0 && (
               <View style={styles.section}>
-                <Text variant="labelSmall" style={styles.sectionTitle}>De xuat:</Text>
+                <Text variant="labelSmall" style={styles.sectionTitle}>Đề xuất:</Text>
                 {insight.recommended_actions.map((action, idx) => (
                   <Text key={idx} variant="bodySmall" style={styles.actionItem}>
                     - {action}
@@ -64,7 +64,7 @@ export default function InsightCard({ insight }: InsightCardProps) {
           onPress={() => setExpanded(!expanded)}
           style={styles.expandButton}
         >
-          {expanded ? 'Thu gon' : 'Xem chi tiet'}
+          {expanded ? 'Thu gọn' : 'Xem chi tiết'}
         </Button>
       </Card.Content>
     </Card>
