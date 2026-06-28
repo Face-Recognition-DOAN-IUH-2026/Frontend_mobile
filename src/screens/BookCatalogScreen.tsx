@@ -223,15 +223,15 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
                     )}
                   </View>
                   <Button
-                    mode={book.available_copies > 0 ? 'contained' : 'outlined'}
+                    mode={(book.available_copies ?? 0) > 0 ? 'contained' : 'outlined'}
                     onPress={() => openDetail(book)}
-                    style={book.available_copies > 0 ? styles.borrowButton : styles.reserveButton}
+                    style={(book.available_copies ?? 0) > 0 ? styles.borrowButton : styles.reserveButton}
                     labelStyle={styles.buttonLabel}
                     compact
                     disabled={reservingId === book.id}
                     loading={reservingId === book.id}
                   >
-                    {book.available_copies > 0 ? 'Đặt sách' : 'Đặt chỗ'}
+                    {(book.available_copies ?? 0) > 0 ? 'Đặt sách' : 'Đặt chỗ'}
                   </Button>
                 </View>
               </SectionCard>
