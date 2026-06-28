@@ -12,6 +12,7 @@ export type MainTabParamList = {
   Home: undefined;
   AIChat: undefined;
   BookRecommendations: undefined;
+  BookCatalog: undefined;
   Profile: undefined;
 };
 
@@ -32,6 +33,9 @@ export type MainStackParamList = {
   Schedule: undefined;
   History: undefined;
   EditProfile: undefined;
+  Availability: undefined;
+  OpenShifts: undefined;
+  MySwaps: undefined;
 };
 
 export type RootStackParamList = {
