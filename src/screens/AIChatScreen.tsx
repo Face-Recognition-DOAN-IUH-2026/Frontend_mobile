@@ -16,8 +16,8 @@ import ConfirmDialog from '../components/ai/ConfirmDialog';
 import QuickActions from '../components/ai/QuickActions';
 import TypingIndicator from '../components/ai/TypingIndicator';
 
-const SESSION_KEY = 'ai-chat-session';
-const MESSAGES_KEY = 'ai-chat-messages';
+const SESSION_KEY_PREFIX = 'ai-chat-session';
+const MESSAGES_KEY_PREFIX = 'ai-chat-messages';
 
 interface AIChatScreenProps {
   navigation: any;
@@ -51,23 +51,32 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
   const [confirmVisible, setConfirmVisible] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
+  const currentUserId = useMemo(() => patron?.id || user?.id, [patron?.id, user?.id]);
+
+  const sessionKey = useMemo(() => currentUserId ? `${SESSION_KEY_PREFIX}-${currentUserId}` : null, [currentUserId]);
+  const messagesKey = useMemo(() => currentUserId ? `${MESSAGES_KEY_PREFIX}-${currentUserId}` : null, [currentUserId]);
+
   useEffect(() => {
+    setMessages([]);
+    setSessionId(undefined);
     loadSession();
-  }, []);
+  }, [currentUserId]);
 
   const loadSession = async () => {
+    if (!sessionKey || !messagesKey) return;
     try {
-      const savedMessages = await AsyncStorage.getItem(MESSAGES_KEY);
-      const savedSessionId = await AsyncStorage.getItem(SESSION_KEY);
+      const savedMessages = await AsyncStorage.getItem(messagesKey);
+      const savedSessionId = await AsyncStorage.getItem(sessionKey);
       if (savedMessages) setMessages(JSON.parse(savedMessages));
       if (savedSessionId) setSessionId(savedSessionId);
     } catch {}
   };
 
   const saveSession = async (msgs: AIMessage[], sid?: string) => {
+    if (!sessionKey || !messagesKey) return;
     try {
-      await AsyncStorage.setItem(MESSAGES_KEY, JSON.stringify(msgs));
-      if (sid) await AsyncStorage.setItem(SESSION_KEY, sid);
+      await AsyncStorage.setItem(messagesKey, JSON.stringify(msgs));
+      if (sid) await AsyncStorage.setItem(sessionKey, sid);
     } catch {}
   };
 
@@ -104,7 +113,7 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
 
       if (response.sessionId && response.sessionId !== sessionId) {
         setSessionId(response.sessionId);
-        await AsyncStorage.setItem(SESSION_KEY, response.sessionId);
+        if (sessionKey) await AsyncStorage.setItem(sessionKey, response.sessionId);
       }
 
       const assistantMessage: AIMessage = {

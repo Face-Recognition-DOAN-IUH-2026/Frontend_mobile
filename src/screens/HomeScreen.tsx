@@ -128,6 +128,13 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       gradient: GRADIENTS.cyan,
     },
     {
+      title: 'Tham quan 3D',
+      description: 'Khám phá không gian thư viện thực tế ảo 360 độ.',
+      icon: 'compass-outline',
+      route: 'LibraryTour',
+      gradient: GRADIENTS.indigo,
+    },
+    {
       title: 'Hồ sơ',
       description: 'Cài đặt tài khoản, bảo mật và giao diện.',
       icon: 'account-cog',
@@ -217,6 +224,21 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                 />
               </View>
             </View>
+
+            <SectionCard
+              title="Tham quan Thư viện 3D"
+              icon="compass-outline"
+              accentColor={theme.colors.secondary}
+              right={
+                <Button mode="contained-tonal" compact onPress={() => navigation.navigate('LibraryTour')}>
+                  Khám phá
+                </Button>
+              }
+            >
+              <Text variant="bodySmall" style={styles.mutedText}>
+                Trải nghiệm không gian thư viện thực tế ảo 360 độ trực quan sinh động.
+              </Text>
+            </SectionCard>
 
             <SectionCard
               title="Sách đang mượn"

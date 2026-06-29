@@ -283,35 +283,33 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         </SectionCard>
 
         {/* Books */}
-        <SectionCard
-          title="Sách"
-          icon="book-open-variant"
-          accentColor={theme.colors.primary}
-        >
-          <List.Item
-            title="Đặt chỗ của tôi"
-            description="Xem và quản lý đặt chỗ sách"
-            titleStyle={styles.itemTitle}
-            descriptionStyle={styles.itemDescription}
-            left={(props) => <List.Icon {...props} icon="book-check" color={theme.colors.primary} />}
-            right={(props) => <List.Icon {...props} icon="chevron-right" color={theme.colors.onSurfaceVariant} />}
-            onPress={() => navigation.navigate('MyReservations')}
-          />
-          {!isStaffScanner && (
-            <>
-              <Divider style={styles.divider} />
-              <List.Item
-                title="Lịch sử mượn sách"
-                description="Xem lịch sử sách đã mượn và đã trả"
-                titleStyle={styles.itemTitle}
-                descriptionStyle={styles.itemDescription}
-                left={(props) => <List.Icon {...props} icon="history" color={theme.colors.primary} />}
-                right={(props) => <List.Icon {...props} icon="chevron-right" color={theme.colors.onSurfaceVariant} />}
-                onPress={() => navigation.navigate('History')}
-              />
-            </>
-          )}
-        </SectionCard>
+        {!isStaffScanner && (
+          <SectionCard
+            title="Sách"
+            icon="book-open-variant"
+            accentColor={theme.colors.primary}
+          >
+            <List.Item
+              title="Đặt chỗ của tôi"
+              description="Xem và quản lý đặt chỗ sách"
+              titleStyle={styles.itemTitle}
+              descriptionStyle={styles.itemDescription}
+              left={(props) => <List.Icon {...props} icon="book-check" color={theme.colors.primary} />}
+              right={(props) => <List.Icon {...props} icon="chevron-right" color={theme.colors.onSurfaceVariant} />}
+              onPress={() => navigation.navigate('MyReservations')}
+            />
+            <Divider style={styles.divider} />
+            <List.Item
+              title="Lịch sử mượn sách"
+              description="Xem lịch sử sách đã mượn và đã trả"
+              titleStyle={styles.itemTitle}
+              descriptionStyle={styles.itemDescription}
+              left={(props) => <List.Icon {...props} icon="history" color={theme.colors.primary} />}
+              right={(props) => <List.Icon {...props} icon="chevron-right" color={theme.colors.onSurfaceVariant} />}
+              onPress={() => navigation.navigate('History')}
+            />
+          </SectionCard>
+        )}
 
         {/* Security */}
         <SectionCard

@@ -10,9 +10,11 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { scheduleApi, ShiftSwap } from '../api/schedule';
 
 export default function MySwapsScreen() {
+  const navigation = useNavigation<any>();
   const [swaps, setSwaps] = useState<ShiftSwap[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -64,6 +66,12 @@ export default function MySwapsScreen() {
     >
       <View style={styles.header}>
         <Text style={styles.title}>Yêu cầu đổi ca</Text>
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => navigation.navigate('CreateSwap')}
+        >
+          <Ionicons name="add" size={22} color="#fff" />
+        </TouchableOpacity>
       </View>
 
       {swaps.length === 0 ? (
@@ -80,10 +88,24 @@ export default function MySwapsScreen() {
                 <Text style={styles.swapLabel}>Yêu cầu từ</Text>
                 <Text style={styles.swapStaff}>{swap.requesterStaffId.slice(0, 8)}...</Text>
               </View>
+              {swap.targetStaffId && (
+                <View style={styles.swapInfo}>
+                  <Text style={styles.swapLabel}>Đến</Text>
+                  <Text style={styles.swapStaff}>{swap.targetStaffId.slice(0, 8)}...</Text>
+                </View>
+              )}
+              <View style={styles.swapStatus}>
+                <Text style={[styles.swapStatusText, { color: '#f59e0b' }]}>Chờ duyệt</Text>
+              </View>
             </View>
             {swap.reason && (
               <Text style={styles.swapReason}>Lý do: {swap.reason}</Text>
             )}
+            <View style={styles.swapMeta}>
+              <Text style={styles.swapMetaText}>
+                Ca: {swap.requesterAssignmentId.slice(0, 8)}... → {swap.targetAssignmentId?.slice(0, 8) || 'chưa chọn'}
+              </Text>
+            </View>
             <View style={styles.actionRow}>
               <TouchableOpacity
                 style={[styles.acceptButton, respondingId === swap.id && styles.disabledButton]}
@@ -112,8 +134,16 @@ export default function MySwapsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0f172a' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a' },
-  header: { padding: 16, paddingBottom: 8 },
+  header: { padding: 16, paddingBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   title: { fontSize: 18, fontWeight: '700', color: '#e2e8f0' },
+  addButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#6366f1',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   emptyContainer: { alignItems: 'center', paddingVertical: 48 },
   emptyText: { color: '#666', fontSize: 14, marginTop: 12 },
   swapCard: {
@@ -130,6 +160,10 @@ const styles = StyleSheet.create({
   swapLabel: { fontSize: 11, color: '#64748b' },
   swapStaff: { fontSize: 14, fontWeight: '600', color: '#e2e8f0' },
   swapReason: { fontSize: 12, color: '#94a3b8', marginTop: 8 },
+  swapMeta: { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#334155' },
+  swapMetaText: { fontSize: 11, color: '#64748b' },
+  swapStatus: { alignItems: 'flex-end' },
+  swapStatusText: { fontSize: 11, fontWeight: '700' },
   actionRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
   acceptButton: {
     flex: 1,
