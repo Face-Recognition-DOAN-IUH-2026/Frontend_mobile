@@ -44,17 +44,23 @@ export default function OpenShiftsScreen() {
   }, [loadData]);
 
   const handleBid = async (shift: OpenShift) => {
+    if (!shift.shift?.id || !shift.zone?.id) {
+      Alert.alert('Lỗi', 'Thông tin ca không đầy đủ');
+      return;
+    }
     const key = `${shift.shift?.id}-${shift.zone?.id}-${shift.workDate}`;
     setBiddingId(key);
     try {
-      // Note: Bidding requires an assignmentId, but openShifts returns shift+zone+date.
-      // The staff needs to contact admin to create the open slot first.
-      Alert.alert(
-        'Đăng ký ca trống',
-        `Ca: ${shift.shift?.name}\nKhu vực: ${shift.zone?.zoneName}\nNgày: ${shift.workDate}\n\nLiên hệ admin để đăng ký ca này.`,
-      );
+      const assignmentResult = await scheduleApi.createBid(shift.shift.id, `Open shift - ${shift.zone?.zoneName} - ${shift.workDate}`);
+      if (assignmentResult && assignmentResult.id) {
+        Alert.alert('Thành công', 'Đã đăng ký ca trống thành công!');
+      } else {
+        Alert.alert('Thành công', 'Đã gửi yêu cầu đăng ký ca trống. Chờ admin duyệt.');
+      }
+      loadData();
     } catch (err: any) {
-      Alert.alert('Lỗi', err?.response?.data?.error || 'Không thể đăng ký');
+      const msg = err?.response?.data?.error || err?.message || 'Không thể đăng ký';
+      Alert.alert('Lỗi', msg);
     } finally {
       setBiddingId(null);
     }

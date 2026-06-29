@@ -36,6 +36,8 @@ export type MainStackParamList = {
   Availability: undefined;
   OpenShifts: undefined;
   MySwaps: undefined;
+  CreateSwap: undefined;
+  LibraryTour: undefined;
 };
 
 export type RootStackParamList = {

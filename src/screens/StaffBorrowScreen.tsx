@@ -38,6 +38,7 @@ export default function StaffBorrowScreen() {
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const [scanToast, setScanToast] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [activeCount, setActiveCount] = useState(0);
   const [overdueCount, setOverdueCount] = useState(0);
@@ -134,6 +135,7 @@ export default function StaffBorrowScreen() {
   const lookupPatron = async () => {
     if (!patronCode.trim()) return;
     setIsLookingUp(true);
+    setError(null);
     try {
       const data = await borrowApi.getActiveBorrowsByStudentCode(patronCode.trim());
       if (data.patron) {
@@ -149,12 +151,12 @@ export default function StaffBorrowScreen() {
       const detail = err?.response?.data?.detail || err?.message || '';
       if (status === 403) {
         if (detail.includes('chua vao thu vien')) {
-          setScanToast('Độc giả chưa ở trong thư viện. Vui lòng yêu cầu độc giả quét thẻ tại cửa vào.');
+          setError('Độc giả chưa ở trong thư viện. Vui lòng yêu cầu độc giả quét thẻ tại cửa vào.');
         } else {
-          setScanToast('Thẻ độc giả đã bị khóa/hết hạn. Vui lòng liên hệ thư viện.');
+          setError('Thẻ độc giả đã bị khóa/hết hạn. Vui lòng liên hệ thư viện.');
         }
       } else {
-        setScanToast('Không tìm thấy độc giả với mã số này');
+        setError('Không tìm thấy độc giả với mã số này');
       }
       setPatronId(null);
       setPatronName('');
@@ -180,6 +182,7 @@ export default function StaffBorrowScreen() {
     setOverdueCount(0);
     setActiveRecords([]);
     setCameraReady(false);
+    setError(null);
   };
 
   const handleCreateSlip = async () => {
@@ -292,6 +295,13 @@ export default function StaffBorrowScreen() {
             Tra cứu
           </Button>
         </View>
+
+        {error ? (
+          <View style={styles.errorBox}>
+            <MaterialCommunityIcons name="alert-circle-outline" size={18} color={c.error} />
+            <Text style={styles.errorText} selectable>{error}</Text>
+          </View>
+        ) : null}
 
         {patronId ? (
           <View style={styles.quotaRow}>
@@ -479,6 +489,23 @@ function createStyles(theme: AppTheme) {
     patronField: { flex: 1, backgroundColor: 'transparent' },
     inputOutline: { borderRadius: 10, borderColor: c.outlineVariant },
     lookupButton: { borderRadius: 10, height: 44 },
+    errorBox: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+      marginHorizontal: 16,
+      marginBottom: 12,
+      padding: 10,
+      borderRadius: 10,
+      backgroundColor: c.errorContainer,
+      borderWidth: 1,
+      borderColor: c.error,
+    },
+    errorText: {
+      color: c.error,
+      flex: 1,
+      fontSize: 13,
+    },
     patronReadyBanner: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8, backgroundColor: theme.dark ? 'rgba(74, 140, 92, 0.12)' : 'rgba(6, 118, 71, 0.08)' },
     patronReadyText: { color: theme.dark ? '#4A8C5C' : '#067647', fontSize: 12, fontWeight: '600' },
     quotaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 12, gap: 8 },

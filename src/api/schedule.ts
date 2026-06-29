@@ -84,7 +84,7 @@ export const scheduleApi = {
   },
 
   createSwap: async (data: {
-    targetStaffId: string;
+    targetStaffId?: string;
     requesterAssignmentId: string;
     targetAssignmentId?: string;
     reason?: string;

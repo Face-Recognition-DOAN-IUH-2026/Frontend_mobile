@@ -23,6 +23,7 @@ export default function AvailabilityScreen() {
   const [dateTo, setDateTo] = useState('');
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [errors, setErrors] = useState<{ dateFrom?: string; dateTo?: string; general?: string }>({});
 
   const loadData = useCallback(async () => {
     try {
@@ -43,11 +44,35 @@ export default function AvailabilityScreen() {
     loadData();
   }, [loadData]);
 
+  const validateDate = (dateStr: string): boolean => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
+    const d = new Date(dateStr);
+    return !isNaN(d.getTime());
+  };
+
   const handleSubmit = async () => {
-    if (!dateFrom || !dateTo) {
-      Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ ngày');
+    const newErrors: { dateFrom?: string; dateTo?: string } = {};
+    setErrors({});
+
+    if (!dateFrom) {
+      newErrors.dateFrom = 'Vui lòng nhập ngày bắt đầu';
+    } else if (!validateDate(dateFrom)) {
+      newErrors.dateFrom = 'Định dạng ngày không hợp lệ (YYYY-MM-DD)';
+    }
+
+    if (!dateTo) {
+      newErrors.dateTo = 'Vui lòng nhập ngày kết thúc';
+    } else if (!validateDate(dateTo)) {
+      newErrors.dateTo = 'Định dạng ngày không hợp lệ (YYYY-MM-DD)';
+    } else if (dateFrom && dateTo && dateTo < dateFrom) {
+      newErrors.dateTo = 'Ngày kết thúc phải >= ngày bắt đầu';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       return;
     }
+
     setSubmitting(true);
     try {
       await scheduleApi.requestAvailability(dateFrom, dateTo, reason || undefined);
@@ -55,10 +80,11 @@ export default function AvailabilityScreen() {
       setDateFrom('');
       setDateTo('');
       setReason('');
+      setErrors({});
       loadData();
       Alert.alert('Thành công', 'Đã gửi yêu cầu xin nghỉ');
     } catch (err: any) {
-      Alert.alert('Lỗi', err?.response?.data?.error || 'Không thể gửi yêu cầu');
+      setErrors({ general: err?.response?.data?.error || 'Không thể gửi yêu cầu' });
     } finally {
       setSubmitting(false);
     }
@@ -105,22 +131,34 @@ export default function AvailabilityScreen() {
 
       {showForm && (
         <View style={styles.formCard}>
+          {errors.general && (
+            <View style={styles.errorBanner}>
+              <Ionicons name="warning" size={16} color="#ef4444" />
+              <Text style={styles.errorBannerText}>{errors.general}</Text>
+            </View>
+          )}
           <Text style={styles.formLabel}>Từ ngày (YYYY-MM-DD)</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, errors.dateFrom && styles.inputError]}
             value={dateFrom}
-            onChangeText={setDateFrom}
+            onChangeText={(t) => { setDateFrom(t); setErrors(e => ({ ...e, dateFrom: undefined })); }}
             placeholder="2026-07-01"
             placeholderTextColor="#666"
           />
+          {errors.dateFrom && (
+            <Text style={styles.fieldErrorText}>{errors.dateFrom}</Text>
+          )}
           <Text style={styles.formLabel}>Đến ngày (YYYY-MM-DD)</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, errors.dateTo && styles.inputError]}
             value={dateTo}
-            onChangeText={setDateTo}
+            onChangeText={(t) => { setDateTo(t); setErrors(e => ({ ...e, dateTo: undefined })); }}
             placeholder="2026-07-05"
             placeholderTextColor="#666"
           />
+          {errors.dateTo && (
+            <Text style={styles.fieldErrorText}>{errors.dateTo}</Text>
+          )}
           <Text style={styles.formLabel}>Lý do (không bắt buộc)</Text>
           <TextInput
             style={[styles.input, styles.textArea]}
@@ -209,6 +247,18 @@ const styles = StyleSheet.create({
     color: '#e2e8f0',
     marginBottom: 12,
   },
+  inputError: { borderColor: '#ef4444' },
+  fieldErrorText: { fontSize: 11, color: '#ef4444', marginTop: -8, marginBottom: 8 },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fef2f2',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  errorBannerText: { fontSize: 13, color: '#ef4444', flex: 1 },
   textArea: { height: 80, textAlignVertical: 'top' },
   submitButton: {
     backgroundColor: '#6366f1',

@@ -33,6 +33,8 @@ import EditProfileScreen from '../screens/EditProfileScreen';
 import AvailabilityScreen from '../screens/AvailabilityScreen';
 import OpenShiftsScreen from '../screens/OpenShiftsScreen';
 import MySwapsScreen from '../screens/MySwapsScreen';
+import CreateSwapScreen from '../screens/CreateSwapScreen';
+import LibraryTourScreen from '../screens/LibraryTourScreen';
 
 import { AuthStackParamList, MainStackParamList, MainTabParamList } from './types';
 
@@ -321,6 +323,15 @@ function MainStackNavigator() {
         }}
       />
       <MainStack.Screen
+        name="CreateSwap"
+        component={CreateSwapScreen}
+        options={{
+          title: 'Tạo yêu cầu đổi ca',
+          presentation: 'card',
+          headerShown: false,
+        }}
+      />
+      <MainStack.Screen
         name="Notifications"
         component={NotificationScreen}
         options={{
@@ -366,6 +377,15 @@ function MainStackNavigator() {
         options={{
           title: 'Chỉnh sửa hồ sơ',
           presentation: 'card',
+        }}
+      />
+      <MainStack.Screen
+        name="LibraryTour"
+        component={LibraryTourScreen}
+        options={{
+          title: 'Tham quan Thư viện 3D',
+          presentation: 'card',
+          headerShown: true,
         }}
       />
     </MainStack.Navigator>
