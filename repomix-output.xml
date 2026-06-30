@@ -142,426 +142,6 @@ tsconfig.json
 <files>
 This section contains the contents of the repository's files.
 
-<file path="src/screens/CreateSwapScreen.tsx">
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Alert,
-  RefreshControl,
-  ActivityIndicator,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import { scheduleApi, ShiftSwap } from '../api/schedule';
-import { StaffScheduleAssignment } from '../types';
-import { toDateInput } from '../utils/dateUtils';
-
-export default function CreateSwapScreen() {
-  const navigation = useNavigation();
-  const [myAssignments, setMyAssignments] = useState<StaffScheduleAssignment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [selectedAssignment, setSelectedAssignment] = useState<StaffScheduleAssignment | null>(null);
-  const [targetStaffId, setTargetStaffId] = useState('');
-  const [reason, setReason] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [errors, setErrors] = useState<{ assignment?: string; general?: string }>({});
-
-  const todayStr = toDateInput(new Date());
-
-  const loadData = useCallback(async () => {
-    try {
-      const result = await scheduleApi.getMySchedules();
-      const upcoming = (result.items || []).filter(
-        (a: StaffScheduleAssignment) => a.workDate >= todayStr
-      );
-      upcoming.sort((a: StaffScheduleAssignment, b: StaffScheduleAssignment) =>
-        a.workDate.localeCompare(b.workDate) ||
-        ((a.shift?.startTime || '').localeCompare(b.shift?.startTime || ''))
-      );
-      setMyAssignments(upcoming);
-    } catch (err) {
-      console.error('Failed to load assignments:', err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [todayStr]);
-
-  useEffect(() => { loadData(); }, [loadData]);
-
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    loadData();
-  }, [loadData]);
-
-  const formatAssignment = (a: StaffScheduleAssignment) => {
-    const date = new Date(a.workDate + 'T00:00:00');
-    const dateStr = date.toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' });
-    const time = a.shift
-      ? `${a.shift.startTime?.slice(0, 5)} — ${a.shift.endTime?.slice(0, 5)}`
-      : '';
-    const zone = a.zone?.zoneName || a.zoneId || '';
-    return { dateStr, time, zone, shiftName: a.shift?.name || 'Ca' };
-  };
-
-  const handleSubmit = async () => {
-    const newErrors: { assignment?: string; general?: string } = {};
-    if (!selectedAssignment) {
-      newErrors.assignment = 'Vui lòng chọn ca muốn đổi';
-    }
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
-
-    setSubmitting(true);
-    setErrors({});
-    try {
-      const payload: Parameters<typeof scheduleApi.createSwap>[0] = {
-        requesterAssignmentId: selectedAssignment!.id,
-        reason: reason.trim() || undefined,
-      };
-      if (targetStaffId.trim()) {
-        payload.targetStaffId = targetStaffId.trim();
-      }
-      await scheduleApi.createSwap(payload);
-      Alert.alert('Thành công', 'Đã gửi yêu cầu đổi ca', [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
-    } catch (err: any) {
-      setErrors({ general: err?.response?.data?.error || err?.message || 'Không thể tạo yêu cầu đổi ca' });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
-      </View>
-    );
-  }
-
-  return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-    >
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color="#e2e8f0" />
-        </TouchableOpacity>
-        <Text style={styles.title}>Yêu cầu đổi ca</Text>
-      </View>
-
-      {errors.general && (
-        <View style={styles.errorBanner}>
-          <Ionicons name="warning" size={16} color="#ef4444" />
-          <Text style={styles.errorBannerText}>{errors.general}</Text>
-        </View>
-      )}
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>1. Chọn ca muốn đổi *</Text>
-        {errors.assignment && (
-          <Text style={styles.fieldErrorText}>{errors.assignment}</Text>
-        )}
-        {myAssignments.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>Không có ca sắp tới để đổi</Text>
-          </View>
-        ) : (
-          myAssignments.slice(0, 20).map((a) => {
-            const { dateStr, time, zone, shiftName } = formatAssignment(a);
-            const isSelected = selectedAssignment?.id === a.id;
-            return (
-              <TouchableOpacity
-                key={a.id}
-                style={[styles.shiftCard, isSelected && styles.shiftCardSelected]}
-                onPress={() => {
-                  setSelectedAssignment(a);
-                  setErrors(e => ({ ...e, assignment: undefined }));
-                }}
-              >
-                <View style={styles.shiftRadio}>
-                  {isSelected
-                    ? <Ionicons name="radio-button-on" size={22} color="#6366f1" />
-                    : <Ionicons name="radio-button-off" size={22} color="#64748b" />}
-                </View>
-                <View style={styles.shiftInfo}>
-                  <Text style={styles.shiftName}>{shiftName}</Text>
-                  <Text style={styles.shiftZone}>{zone}</Text>
-                  <Text style={styles.shiftTime}>{dateStr} · {time}</Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })
-        )}
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>2. Người muốn đổi cùng (không bắt buộc)</Text>
-        <Text style={styles.sectionHint}>Nhập ID nhân viên muốn đổi, hoặc để trống để gửi yêu cầu công khai</Text>
-        <TextInput
-          style={styles.input}
-          value={targetStaffId}
-          onChangeText={setTargetStaffId}
-          placeholder="Staff ID hoặc để trống"
-          placeholderTextColor="#666"
-        />
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>3. Lý do (không bắt buộc)</Text>
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          value={reason}
-          onChangeText={setReason}
-          placeholder="VD: Trùng lịch học, việc gia đình..."
-          placeholderTextColor="#666"
-          multiline
-          numberOfLines={3}
-        />
-      </View>
-
-      <TouchableOpacity
-        style={[styles.submitButton, submitting && styles.disabledButton]}
-        onPress={handleSubmit}
-        disabled={submitting}
-      >
-        <Text style={styles.submitButtonText}>
-          {submitting ? 'Đang gửi...' : 'Gửi yêu cầu đổi ca'}
-        </Text>
-      </TouchableOpacity>
-
-      <View style={{ height: 40 }} />
-    </ScrollView>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a' },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    paddingBottom: 8,
-    gap: 12,
-  },
-  backBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
-  title: { fontSize: 18, fontWeight: '700', color: '#e2e8f0' },
-  errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#fef2f2',
-    marginHorizontal: 16,
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  errorBannerText: { fontSize: 13, color: '#ef4444', flex: 1 },
-  section: { paddingHorizontal: 16, paddingTop: 16 },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: '#e2e8f0', marginBottom: 8 },
-  sectionHint: { fontSize: 12, color: '#64748b', marginBottom: 8, marginTop: -4 },
-  fieldErrorText: { fontSize: 11, color: '#ef4444', marginBottom: 8 },
-  emptyCard: {
-    backgroundColor: '#1e293b',
-    padding: 16,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  emptyText: { color: '#64748b', fontSize: 14 },
-  shiftCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1e293b',
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#334155',
-    marginBottom: 8,
-  },
-  shiftCardSelected: { borderColor: '#6366f1', backgroundColor: '#6366f115' },
-  shiftRadio: { marginRight: 12 },
-  shiftInfo: { flex: 1 },
-  shiftName: { fontSize: 14, fontWeight: '700', color: '#e2e8f0' },
-  shiftZone: { fontSize: 12, color: '#94a3b8', marginTop: 2 },
-  shiftTime: { fontSize: 11, color: '#64748b', marginTop: 4 },
-  input: {
-    backgroundColor: '#1e293b',
-    borderWidth: 1,
-    borderColor: '#334155',
-    borderRadius: 8,
-    padding: 10,
-    fontSize: 14,
-    color: '#e2e8f0',
-    marginBottom: 12,
-  },
-  textArea: { height: 80, textAlignVertical: 'top' },
-  submitButton: {
-    backgroundColor: '#6366f1',
-    marginHorizontal: 16,
-    marginTop: 8,
-    padding: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  disabledButton: { opacity: 0.5 },
-  submitButtonText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-});
-</file>
-
-<file path="src/screens/LibraryTourScreen.tsx">
-import React, { useState, useMemo } from 'react';
-import { StyleSheet, View, ActivityIndicator } from 'react-native';
-import { WebView } from 'react-native-webview';
-import { Text, Button, useTheme } from 'react-native-paper';
-import { AppTheme } from '../theme/DarkTheme';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-
-export default function LibraryTourScreen() {
-  const theme = useTheme() as AppTheme;
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [key, setKey] = useState(0); // Used to reload WebView
-
-  // Calculate WebVR URL dynamically based on current API URL to support local development on physical devices
-  const tourUrl = useMemo(() => {
-    if (process.env.EXPO_PUBLIC_WEB_URL) {
-      return `${process.env.EXPO_PUBLIC_WEB_URL}/library/vr-tour`;
-    }
-
-    const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:80/api';
-    try {
-      const match = apiUrl.match(/^(https?:\/\/[^\/:]+)/);
-      if (match) {
-        // e.g. http://10.68.153.35:80/api -> http://10.68.153.35:3000/library/vr-tour
-        return `${match[1]}:3000/library/vr-tour`;
-      }
-    } catch (e) {
-      console.error('Error parsing EXPO_PUBLIC_API_URL:', e);
-    }
-    return 'http://10.0.2.2:3000/library/vr-tour'; // Android emulator fallback
-  }, []);
-
-  const handleReload = () => {
-    setError(null);
-    setLoading(true);
-    setKey(prev => prev + 1);
-  };
-
-  return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {error ? (
-        <View style={styles.errorContainer}>
-          <MaterialCommunityIcons name="wifi-off" size={64} color={theme.colors.error} />
-          <Text style={styles.errorTitle}>Không thể kết nối Tour 3D</Text>
-          <Text style={styles.errorDesc}>
-            Vui lòng kiểm tra kết nối mạng và đảm bảo máy chủ Web đang hoạt động tại địa chỉ:{"\n"}
-            <Text style={{ fontWeight: 'bold' }}>{tourUrl}</Text>
-          </Text>
-          <Button
-            mode="contained"
-            onPress={handleReload}
-            style={styles.retryButton}
-            buttonColor={theme.colors.primary}
-            textColor={theme.colors.onPrimary}
-          >
-            Thử lại
-          </Button>
-        </View>
-      ) : (
-        <View style={styles.flex}>
-          <WebView
-            key={key}
-            source={{ uri: tourUrl }}
-            style={styles.flex}
-            javaScriptEnabled={true}
-            domStorageEnabled={true}
-            allowsInlineMediaPlayback={true}
-            scrollEnabled={false}
-            deviceMotionPermission={true} // For iOS Gyroscope support inside WebView
-            onLoadStart={() => setLoading(true)}
-            onLoadEnd={() => setLoading(false)}
-            onError={(syntheticEvent) => {
-              const { nativeEvent } = syntheticEvent;
-              console.warn('WebView load error: ', nativeEvent);
-              setError(nativeEvent.description || 'Connection failed');
-              setLoading(false);
-            }}
-          />
-
-          {loading && (
-            <View style={[styles.loadingOverlay, { backgroundColor: theme.colors.background }]}>
-              <ActivityIndicator size="large" color={theme.colors.primary} />
-              <Text style={[styles.loadingText, { color: theme.colors.onBackground }]}>
-                Đang mở không gian 3D...
-              </Text>
-            </View>
-          )}
-        </View>
-      )}
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  flex: {
-    flex: 1,
-  },
-  loadingOverlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 999,
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  errorTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  errorDesc: {
-    textAlign: 'center',
-    fontSize: 14,
-    color: '#888',
-    marginBottom: 24,
-    lineHeight: 20,
-  },
-  retryButton: {
-    borderRadius: 20,
-    paddingHorizontal: 24,
-  },
-});
-</file>
-
 <file path="e2e/flows/401-handling-flow.yaml">
 appId: com.library.mobile
 name: 401 Handling Flow
@@ -1748,7 +1328,7 @@ export const NetworkProvider: React.FC<{ children: ReactNode }> = ({ children })
 };
 </file>
 
-<file path="src/screens/AvailabilityScreen.tsx">
+<file path="src/screens/CreateSwapScreen.tsx">
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -1762,31 +1342,42 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { scheduleApi } from '../api/schedule';
-import { StaffAvailabilityRequest } from '../types';
+import { useNavigation } from '@react-navigation/native';
+import { scheduleApi, ShiftSwap } from '../api/schedule';
+import { StaffScheduleAssignment } from '../types';
+import { toDateInput } from '../utils/dateUtils';
 
-export default function AvailabilityScreen() {
-  const [requests, setRequests] = useState<StaffAvailabilityRequest[]>([]);
+export default function CreateSwapScreen() {
+  const navigation = useNavigation();
+  const [myAssignments, setMyAssignments] = useState<StaffScheduleAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [showForm, setShowForm] = useState(false);
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [selectedAssignment, setSelectedAssignment] = useState<StaffScheduleAssignment | null>(null);
+  const [targetStaffId, setTargetStaffId] = useState('');
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [errors, setErrors] = useState<{ dateFrom?: string; dateTo?: string; general?: string }>({});
+  const [errors, setErrors] = useState<{ assignment?: string; general?: string }>({});
+
+  const todayStr = toDateInput(new Date());
 
   const loadData = useCallback(async () => {
     try {
-      const result = await scheduleApi.getMyAvailability();
-      setRequests(Array.isArray(result) ? result : []);
+      const result = await scheduleApi.getMySchedules();
+      const upcoming = (result.items || []).filter(
+        (a: StaffScheduleAssignment) => a.workDate >= todayStr
+      );
+      upcoming.sort((a: StaffScheduleAssignment, b: StaffScheduleAssignment) =>
+        a.workDate.localeCompare(b.workDate) ||
+        ((a.shift?.startTime || '').localeCompare(b.shift?.startTime || ''))
+      );
+      setMyAssignments(upcoming);
     } catch (err) {
-      console.error('Failed to load availability:', err);
+      console.error('Failed to load assignments:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [todayStr]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -1795,65 +1386,44 @@ export default function AvailabilityScreen() {
     loadData();
   }, [loadData]);
 
-  const validateDate = (dateStr: string): boolean => {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
-    const d = new Date(dateStr);
-    return !isNaN(d.getTime());
+  const formatAssignment = (a: StaffScheduleAssignment) => {
+    const date = new Date(a.workDate + 'T00:00:00');
+    const dateStr = date.toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' });
+    const time = a.shift
+      ? `${a.shift.startTime?.slice(0, 5)} — ${a.shift.endTime?.slice(0, 5)}`
+      : '';
+    const zone = a.zone?.zoneName || a.zoneId || '';
+    return { dateStr, time, zone, shiftName: a.shift?.name || 'Ca' };
   };
 
   const handleSubmit = async () => {
-    const newErrors: { dateFrom?: string; dateTo?: string } = {};
-    setErrors({});
-
-    if (!dateFrom) {
-      newErrors.dateFrom = 'Vui lòng nhập ngày bắt đầu';
-    } else if (!validateDate(dateFrom)) {
-      newErrors.dateFrom = 'Định dạng ngày không hợp lệ (YYYY-MM-DD)';
+    const newErrors: { assignment?: string; general?: string } = {};
+    if (!selectedAssignment) {
+      newErrors.assignment = 'Vui lòng chọn ca muốn đổi';
     }
-
-    if (!dateTo) {
-      newErrors.dateTo = 'Vui lòng nhập ngày kết thúc';
-    } else if (!validateDate(dateTo)) {
-      newErrors.dateTo = 'Định dạng ngày không hợp lệ (YYYY-MM-DD)';
-    } else if (dateFrom && dateTo && dateTo < dateFrom) {
-      newErrors.dateTo = 'Ngày kết thúc phải >= ngày bắt đầu';
-    }
-
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
     }
 
     setSubmitting(true);
+    setErrors({});
     try {
-      await scheduleApi.requestAvailability(dateFrom, dateTo, reason || undefined);
-      setShowForm(false);
-      setDateFrom('');
-      setDateTo('');
-      setReason('');
-      setErrors({});
-      loadData();
-      Alert.alert('Thành công', 'Đã gửi yêu cầu xin nghỉ');
+      const payload: Parameters<typeof scheduleApi.createSwap>[0] = {
+        requesterAssignmentId: selectedAssignment!.id,
+        reason: reason.trim() || undefined,
+      };
+      if (targetStaffId.trim()) {
+        payload.targetStaffId = targetStaffId.trim();
+      }
+      await scheduleApi.createSwap(payload);
+      Alert.alert('Thành công', 'Đã gửi yêu cầu đổi ca', [
+        { text: 'OK', onPress: () => navigation.goBack() },
+      ]);
     } catch (err: any) {
-      setErrors({ general: err?.response?.data?.error || 'Không thể gửi yêu cầu' });
+      setErrors({ general: err?.response?.data?.error || err?.message || 'Không thể tạo yêu cầu đổi ca' });
     } finally {
       setSubmitting(false);
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'approved': return '#10b981';
-      case 'rejected': return '#ef4444';
-      default: return '#f59e0b';
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'approved': return 'Đã duyệt';
-      case 'rejected': return 'Từ chối';
-      default: return 'Chờ duyệt';
     }
   };
 
@@ -1871,91 +1441,93 @@ export default function AvailabilityScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
       <View style={styles.header}>
-        <Text style={styles.title}>Xin nghỉ / Không khả dụng</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setShowForm(!showForm)}
-        >
-          <Ionicons name={showForm ? 'close' : 'add'} size={20} color="#fff" />
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={22} color="#e2e8f0" />
         </TouchableOpacity>
+        <Text style={styles.title}>Yêu cầu đổi ca</Text>
       </View>
 
-      {showForm && (
-        <View style={styles.formCard}>
-          {errors.general && (
-            <View style={styles.errorBanner}>
-              <Ionicons name="warning" size={16} color="#ef4444" />
-              <Text style={styles.errorBannerText}>{errors.general}</Text>
-            </View>
-          )}
-          <Text style={styles.formLabel}>Từ ngày (YYYY-MM-DD)</Text>
-          <TextInput
-            style={[styles.input, errors.dateFrom && styles.inputError]}
-            value={dateFrom}
-            onChangeText={(t) => { setDateFrom(t); setErrors(e => ({ ...e, dateFrom: undefined })); }}
-            placeholder="2026-07-01"
-            placeholderTextColor="#666"
-          />
-          {errors.dateFrom && (
-            <Text style={styles.fieldErrorText}>{errors.dateFrom}</Text>
-          )}
-          <Text style={styles.formLabel}>Đến ngày (YYYY-MM-DD)</Text>
-          <TextInput
-            style={[styles.input, errors.dateTo && styles.inputError]}
-            value={dateTo}
-            onChangeText={(t) => { setDateTo(t); setErrors(e => ({ ...e, dateTo: undefined })); }}
-            placeholder="2026-07-05"
-            placeholderTextColor="#666"
-          />
-          {errors.dateTo && (
-            <Text style={styles.fieldErrorText}>{errors.dateTo}</Text>
-          )}
-          <Text style={styles.formLabel}>Lý do (không bắt buộc)</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            value={reason}
-            onChangeText={setReason}
-            placeholder="Nhập lý do..."
-            placeholderTextColor="#666"
-            multiline
-            numberOfLines={3}
-          />
-          <TouchableOpacity
-            style={[styles.submitButton, submitting && styles.disabledButton]}
-            onPress={handleSubmit}
-            disabled={submitting}
-          >
-            <Text style={styles.submitButtonText}>
-              {submitting ? 'Đang gửi...' : 'Gửi yêu cầu'}
-            </Text>
-          </TouchableOpacity>
+      {errors.general && (
+        <View style={styles.errorBanner}>
+          <Ionicons name="warning" size={16} color="#ef4444" />
+          <Text style={styles.errorBannerText}>{errors.general}</Text>
         </View>
       )}
 
-      {requests.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="calendar-outline" size={48} color="#666" />
-          <Text style={styles.emptyText}>Chưa có yêu cầu nào</Text>
-        </View>
-      ) : (
-        requests.map((req) => (
-          <View key={req.id} style={styles.requestCard}>
-            <View style={styles.requestHeader}>
-              <Text style={styles.requestDate}>
-                {req.dateFrom} — {req.dateTo}
-              </Text>
-              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(req.status) + '20' }]}>
-                <Text style={[styles.statusText, { color: getStatusColor(req.status) }]}>
-                  {getStatusLabel(req.status)}
-                </Text>
-              </View>
-            </View>
-            {req.reason && (
-              <Text style={styles.requestReason}>Lý do: {req.reason}</Text>
-            )}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>1. Chọn ca muốn đổi *</Text>
+        {errors.assignment && (
+          <Text style={styles.fieldErrorText}>{errors.assignment}</Text>
+        )}
+        {myAssignments.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyText}>Không có ca sắp tới để đổi</Text>
           </View>
-        ))
-      )}
+        ) : (
+          myAssignments.slice(0, 20).map((a) => {
+            const { dateStr, time, zone, shiftName } = formatAssignment(a);
+            const isSelected = selectedAssignment?.id === a.id;
+            return (
+              <TouchableOpacity
+                key={a.id}
+                style={[styles.shiftCard, isSelected && styles.shiftCardSelected]}
+                onPress={() => {
+                  setSelectedAssignment(a);
+                  setErrors(e => ({ ...e, assignment: undefined }));
+                }}
+              >
+                <View style={styles.shiftRadio}>
+                  {isSelected
+                    ? <Ionicons name="radio-button-on" size={22} color="#6366f1" />
+                    : <Ionicons name="radio-button-off" size={22} color="#64748b" />}
+                </View>
+                <View style={styles.shiftInfo}>
+                  <Text style={styles.shiftName}>{shiftName}</Text>
+                  <Text style={styles.shiftZone}>{zone}</Text>
+                  <Text style={styles.shiftTime}>{dateStr} · {time}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })
+        )}
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>2. Người muốn đổi cùng (không bắt buộc)</Text>
+        <Text style={styles.sectionHint}>Nhập ID nhân viên muốn đổi, hoặc để trống để gửi yêu cầu công khai</Text>
+        <TextInput
+          style={styles.input}
+          value={targetStaffId}
+          onChangeText={setTargetStaffId}
+          placeholder="Staff ID hoặc để trống"
+          placeholderTextColor="#666"
+        />
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>3. Lý do (không bắt buộc)</Text>
+        <TextInput
+          style={[styles.input, styles.textArea]}
+          value={reason}
+          onChangeText={setReason}
+          placeholder="VD: Trùng lịch học, việc gia đình..."
+          placeholderTextColor="#666"
+          multiline
+          numberOfLines={3}
+        />
+      </View>
+
+      <TouchableOpacity
+        style={[styles.submitButton, submitting && styles.disabledButton]}
+        onPress={handleSubmit}
+        disabled={submitting}
+      >
+        <Text style={styles.submitButtonText}>
+          {submitting ? 'Đang gửi...' : 'Gửi yêu cầu đổi ca'}
+        </Text>
+      </TouchableOpacity>
+
+      <View style={{ height: 40 }} />
     </ScrollView>
   );
 }
@@ -1965,31 +1537,53 @@ const styles = StyleSheet.create({
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a' },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
     paddingBottom: 8,
+    gap: 12,
   },
+  backBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
   title: { fontSize: 18, fontWeight: '700', color: '#e2e8f0' },
-  addButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#6366f1',
-    justifyContent: 'center',
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fef2f2',
+    marginHorizontal: 16,
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  errorBannerText: { fontSize: 13, color: '#ef4444', flex: 1 },
+  section: { paddingHorizontal: 16, paddingTop: 16 },
+  sectionTitle: { fontSize: 14, fontWeight: '700', color: '#e2e8f0', marginBottom: 8 },
+  sectionHint: { fontSize: 12, color: '#64748b', marginBottom: 8, marginTop: -4 },
+  fieldErrorText: { fontSize: 11, color: '#ef4444', marginBottom: 8 },
+  emptyCard: {
+    backgroundColor: '#1e293b',
+    padding: 16,
+    borderRadius: 10,
     alignItems: 'center',
   },
-  formCard: {
+  emptyText: { color: '#64748b', fontSize: 14 },
+  shiftCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#1e293b',
-    margin: 16,
-    padding: 16,
-    borderRadius: 12,
+    padding: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#334155',
+    marginBottom: 8,
   },
-  formLabel: { fontSize: 12, color: '#94a3b8', marginBottom: 4, fontWeight: '600' },
+  shiftCardSelected: { borderColor: '#6366f1', backgroundColor: '#6366f115' },
+  shiftRadio: { marginRight: 12 },
+  shiftInfo: { flex: 1 },
+  shiftName: { fontSize: 14, fontWeight: '700', color: '#e2e8f0' },
+  shiftZone: { fontSize: 12, color: '#94a3b8', marginTop: 2 },
+  shiftTime: { fontSize: 11, color: '#64748b', marginTop: 4 },
   input: {
-    backgroundColor: '#0f172a',
+    backgroundColor: '#1e293b',
     borderWidth: 1,
     borderColor: '#334155',
     borderRadius: 8,
@@ -1998,43 +1592,17 @@ const styles = StyleSheet.create({
     color: '#e2e8f0',
     marginBottom: 12,
   },
-  inputError: { borderColor: '#ef4444' },
-  fieldErrorText: { fontSize: 11, color: '#ef4444', marginTop: -8, marginBottom: 8 },
-  errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#fef2f2',
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  errorBannerText: { fontSize: 13, color: '#ef4444', flex: 1 },
   textArea: { height: 80, textAlignVertical: 'top' },
   submitButton: {
     backgroundColor: '#6366f1',
-    padding: 12,
+    marginHorizontal: 16,
+    marginTop: 8,
+    padding: 14,
     borderRadius: 8,
     alignItems: 'center',
   },
   disabledButton: { opacity: 0.5 },
-  submitButtonText: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  emptyContainer: { alignItems: 'center', paddingVertical: 48 },
-  emptyText: { color: '#666', fontSize: 14, marginTop: 12 },
-  requestCard: {
-    backgroundColor: '#1e293b',
-    marginHorizontal: 16,
-    marginBottom: 8,
-    padding: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  requestHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  requestDate: { fontSize: 14, fontWeight: '600', color: '#e2e8f0' },
-  statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 },
-  statusText: { fontSize: 11, fontWeight: '700' },
-  requestReason: { fontSize: 12, color: '#94a3b8', marginTop: 6 },
+  submitButtonText: { color: '#fff', fontWeight: '700', fontSize: 15 },
 });
 </file>
 
@@ -2629,197 +2197,145 @@ function createStyles(theme: AppTheme) {
 }
 </file>
 
-<file path="src/screens/MySwapsScreen.tsx">
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-  RefreshControl,
-  ActivityIndicator,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import { scheduleApi, ShiftSwap } from '../api/schedule';
+<file path="src/screens/LibraryTourScreen.tsx">
+import React, { useState, useMemo } from 'react';
+import { StyleSheet, View, ActivityIndicator } from 'react-native';
+import { WebView } from 'react-native-webview';
+import { Text, Button, useTheme } from 'react-native-paper';
+import { AppTheme } from '../theme/DarkTheme';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
-export default function MySwapsScreen() {
-  const navigation = useNavigation<any>();
-  const [swaps, setSwaps] = useState<ShiftSwap[]>([]);
+export default function LibraryTourScreen() {
+  const theme = useTheme() as AppTheme;
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [key, setKey] = useState(0); // Used to reload WebView
 
-  const loadData = useCallback(async () => {
-    try {
-      const result = await scheduleApi.listMySwaps();
-      setSwaps(Array.isArray(result) ? result.filter((s) => s.status === 'pending') : []);
-    } catch (err) {
-      console.error('Failed to load swaps:', err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+  // Calculate WebVR URL dynamically based on current API URL to support local development on physical devices
+  const tourUrl = useMemo(() => {
+    if (process.env.EXPO_PUBLIC_WEB_URL) {
+      return `${process.env.EXPO_PUBLIC_WEB_URL}/library/vr-tour`;
     }
+
+    const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:80/api';
+    try {
+      const match = apiUrl.match(/^(https?:\/\/[^\/:]+)/);
+      if (match) {
+        // e.g. http://10.68.153.35:80/api -> http://10.68.153.35:3000/library/vr-tour
+        return `${match[1]}:3000/library/vr-tour`;
+      }
+    } catch (e) {
+      console.error('Error parsing EXPO_PUBLIC_API_URL:', e);
+    }
+    return 'http://10.0.2.2:3000/library/vr-tour'; // Android emulator fallback
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
-
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    loadData();
-  }, [loadData]);
-
-  const handleRespond = async (id: string, action: 'accepted' | 'rejected') => {
-    setRespondingId(id);
-    try {
-      await scheduleApi.respondSwap(id, action);
-      loadData();
-    } catch (err: any) {
-      Alert.alert('Lỗi', err?.response?.data?.error || 'Không thể xử lý');
-    } finally {
-      setRespondingId(null);
-    }
+  const handleReload = () => {
+    setError(null);
+    setLoading(true);
+    setKey(prev => prev + 1);
   };
 
-  if (loading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
-      </View>
-    );
-  }
-
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-    >
-      <View style={styles.header}>
-        <Text style={styles.title}>Yêu cầu đổi ca</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => navigation.navigate('CreateSwap')}
-        >
-          <Ionicons name="add" size={22} color="#fff" />
-        </TouchableOpacity>
-      </View>
-
-      {swaps.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="swap-horizontal-outline" size={48} color="#666" />
-          <Text style={styles.emptyText}>Không có yêu cầu đổi ca nào</Text>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      {error ? (
+        <View style={styles.errorContainer}>
+          <MaterialCommunityIcons name="wifi-off" size={64} color={theme.colors.error} />
+          <Text style={styles.errorTitle}>Không thể kết nối Tour 3D</Text>
+          <Text style={styles.errorDesc}>
+            Vui lòng kiểm tra kết nối mạng và đảm bảo máy chủ Web đang hoạt động tại địa chỉ:{"\n"}
+            <Text style={{ fontWeight: 'bold' }}>{tourUrl}</Text>
+          </Text>
+          <Button
+            mode="contained"
+            onPress={handleReload}
+            style={styles.retryButton}
+            buttonColor={theme.colors.primary}
+            textColor={theme.colors.onPrimary}
+          >
+            Thử lại
+          </Button>
         </View>
       ) : (
-        swaps.map((swap) => (
-          <View key={swap.id} style={styles.swapCard}>
-            <View style={styles.swapHeader}>
-              <Ionicons name="swap-horizontal" size={20} color="#6366f1" />
-              <View style={styles.swapInfo}>
-                <Text style={styles.swapLabel}>Yêu cầu từ</Text>
-                <Text style={styles.swapStaff}>{swap.requesterStaffId.slice(0, 8)}...</Text>
-              </View>
-              {swap.targetStaffId && (
-                <View style={styles.swapInfo}>
-                  <Text style={styles.swapLabel}>Đến</Text>
-                  <Text style={styles.swapStaff}>{swap.targetStaffId.slice(0, 8)}...</Text>
-                </View>
-              )}
-              <View style={styles.swapStatus}>
-                <Text style={[styles.swapStatusText, { color: '#f59e0b' }]}>Chờ duyệt</Text>
-              </View>
-            </View>
-            {swap.reason && (
-              <Text style={styles.swapReason}>Lý do: {swap.reason}</Text>
-            )}
-            <View style={styles.swapMeta}>
-              <Text style={styles.swapMetaText}>
-                Ca: {swap.requesterAssignmentId.slice(0, 8)}... → {swap.targetAssignmentId?.slice(0, 8) || 'chưa chọn'}
+        <View style={styles.flex}>
+          <WebView
+            key={key}
+            source={{ uri: tourUrl }}
+            style={styles.flex}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            allowsInlineMediaPlayback={true}
+            scrollEnabled={false}
+            deviceMotionPermission={true} // For iOS Gyroscope support inside WebView
+            onLoadStart={() => setLoading(true)}
+            onLoadEnd={() => setLoading(false)}
+            onError={(syntheticEvent) => {
+              const { nativeEvent } = syntheticEvent;
+              console.warn('WebView load error: ', nativeEvent);
+              setError(nativeEvent.description || 'Connection failed');
+              setLoading(false);
+            }}
+          />
+
+          {loading && (
+            <View style={[styles.loadingOverlay, { backgroundColor: theme.colors.background }]}>
+              <ActivityIndicator size="large" color={theme.colors.primary} />
+              <Text style={[styles.loadingText, { color: theme.colors.onBackground }]}>
+                Đang mở không gian 3D...
               </Text>
             </View>
-            <View style={styles.actionRow}>
-              <TouchableOpacity
-                style={[styles.acceptButton, respondingId === swap.id && styles.disabledButton]}
-                onPress={() => handleRespond(swap.id, 'accepted')}
-                disabled={respondingId === swap.id}
-              >
-                <Ionicons name="checkmark" size={16} color="#fff" />
-                <Text style={styles.acceptButtonText}>Chấp nhận</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.rejectButton, respondingId === swap.id && styles.disabledButton]}
-                onPress={() => handleRespond(swap.id, 'rejected')}
-                disabled={respondingId === swap.id}
-              >
-                <Ionicons name="close" size={16} color="#fff" />
-                <Text style={styles.rejectButtonText}>Từ chối</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ))
+          )}
+        </View>
       )}
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a' },
-  header: { padding: 16, paddingBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  title: { fontSize: 18, fontWeight: '700', color: '#e2e8f0' },
-  addButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#6366f1',
+  container: {
+    flex: 1,
+  },
+  flex: {
+    flex: 1,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 999,
   },
-  emptyContainer: { alignItems: 'center', paddingVertical: 48 },
-  emptyText: { color: '#666', fontSize: 14, marginTop: 12 },
-  swapCard: {
-    backgroundColor: '#1e293b',
-    marginHorizontal: 16,
+  loadingText: {
+    marginTop: 16,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginTop: 16,
     marginBottom: 8,
-    padding: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#334155',
   },
-  swapHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  swapInfo: { flex: 1 },
-  swapLabel: { fontSize: 11, color: '#64748b' },
-  swapStaff: { fontSize: 14, fontWeight: '600', color: '#e2e8f0' },
-  swapReason: { fontSize: 12, color: '#94a3b8', marginTop: 8 },
-  swapMeta: { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#334155' },
-  swapMetaText: { fontSize: 11, color: '#64748b' },
-  swapStatus: { alignItems: 'flex-end' },
-  swapStatusText: { fontSize: 11, fontWeight: '700' },
-  actionRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
-  acceptButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#10b981',
-    padding: 10,
-    borderRadius: 8,
-    gap: 4,
+  errorDesc: {
+    textAlign: 'center',
+    fontSize: 14,
+    color: '#888',
+    marginBottom: 24,
+    lineHeight: 20,
   },
-  rejectButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#ef4444',
-    padding: 10,
-    borderRadius: 8,
-    gap: 4,
+  retryButton: {
+    borderRadius: 20,
+    paddingHorizontal: 24,
   },
-  disabledButton: { opacity: 0.5 },
-  acceptButtonText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  rejectButtonText: { color: '#fff', fontSize: 12, fontWeight: '700' },
 });
 </file>
 
@@ -2983,168 +2499,6 @@ function createStyles(theme: AppTheme) {
     },
   });
 }
-</file>
-
-<file path="src/screens/OpenShiftsScreen.tsx">
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-  RefreshControl,
-  ActivityIndicator,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { scheduleApi } from '../api/schedule';
-
-interface OpenShift {
-  shift: { id: string; name: string; startTime: string; endTime: string } | null;
-  zone: { id: string; zoneName: string } | null;
-  workDate: string;
-}
-
-export default function OpenShiftsScreen() {
-  const [shifts, setShifts] = useState<OpenShift[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [biddingId, setBiddingId] = useState<string | null>(null);
-
-  const loadData = useCallback(async () => {
-    try {
-      const result = await scheduleApi.getOpenShifts();
-      setShifts(Array.isArray(result) ? result.slice(0, 30) : []);
-    } catch (err) {
-      console.error('Failed to load open shifts:', err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => { loadData(); }, [loadData]);
-
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    loadData();
-  }, [loadData]);
-
-  const handleBid = async (shift: OpenShift) => {
-    if (!shift.shift?.id || !shift.zone?.id) {
-      Alert.alert('Lỗi', 'Thông tin ca không đầy đủ');
-      return;
-    }
-    const key = `${shift.shift?.id}-${shift.zone?.id}-${shift.workDate}`;
-    setBiddingId(key);
-    try {
-      const assignmentResult = await scheduleApi.createBid(shift.shift.id, `Open shift - ${shift.zone?.zoneName} - ${shift.workDate}`);
-      if (assignmentResult && assignmentResult.id) {
-        Alert.alert('Thành công', 'Đã đăng ký ca trống thành công!');
-      } else {
-        Alert.alert('Thành công', 'Đã gửi yêu cầu đăng ký ca trống. Chờ admin duyệt.');
-      }
-      loadData();
-    } catch (err: any) {
-      const msg = err?.response?.data?.error || err?.message || 'Không thể đăng ký';
-      Alert.alert('Lỗi', msg);
-    } finally {
-      setBiddingId(null);
-    }
-  };
-
-  if (loading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
-      </View>
-    );
-  }
-
-  return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-    >
-      <View style={styles.header}>
-        <Text style={styles.title}>Ca trống sắp tới</Text>
-      </View>
-
-      {shifts.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="checkmark-circle-outline" size={48} color="#666" />
-          <Text style={styles.emptyText}>Không có ca trống trong 2 tuần tới</Text>
-        </View>
-      ) : (
-        shifts.map((s, idx) => {
-          const key = `${s.shift?.id}-${s.zone?.id}-${s.workDate}-${idx}`;
-          const isBidding = biddingId === key;
-          return (
-            <View key={key} style={styles.shiftCard}>
-              <View style={styles.shiftInfo}>
-                <Text style={styles.shiftName}>{s.shift?.name || 'Ca'}</Text>
-                <Text style={styles.shiftZone}>{s.zone?.zoneName}</Text>
-                <Text style={styles.shiftTime}>
-                  {new Date(s.workDate + 'T00:00:00').toLocaleDateString('vi-VN', {
-                    weekday: 'short',
-                    day: '2-digit',
-                    month: '2-digit',
-                  })}
-                  {' • '}
-                  {s.shift?.startTime?.slice(0, 5)} — {s.shift?.endTime?.slice(0, 5)}
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={[styles.bidButton, isBidding && styles.disabledButton]}
-                onPress={() => handleBid(s)}
-                disabled={isBidding}
-              >
-                <Ionicons name="hand-left-outline" size={16} color="#fff" />
-                <Text style={styles.bidButtonText}>Đăng ký</Text>
-              </TouchableOpacity>
-            </View>
-          );
-        })
-      )}
-    </ScrollView>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a' },
-  header: { padding: 16, paddingBottom: 8 },
-  title: { fontSize: 18, fontWeight: '700', color: '#e2e8f0' },
-  emptyContainer: { alignItems: 'center', paddingVertical: 48 },
-  emptyText: { color: '#666', fontSize: 14, marginTop: 12 },
-  shiftCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1e293b',
-    marginHorizontal: 16,
-    marginBottom: 8,
-    padding: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  shiftInfo: { flex: 1 },
-  shiftName: { fontSize: 14, fontWeight: '700', color: '#e2e8f0' },
-  shiftZone: { fontSize: 12, color: '#94a3b8', marginTop: 2 },
-  shiftTime: { fontSize: 11, color: '#64748b', marginTop: 4 },
-  bidButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#6366f1',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 4,
-  },
-  disabledButton: { opacity: 0.5 },
-  bidButtonText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-});
 </file>
 
 <file path="src/theme/BaseColors.ts">
@@ -4165,114 +3519,6 @@ export const openLibraryApi = {
       devError('OpenLibrary API error:', error);
       return null;
     }
-  },
-};
-</file>
-
-<file path="src/api/schedule.ts">
-import api from './client';
-import { ScheduleAssignmentList, StaffAvailabilityRequest, StaffScheduleAssignment } from '../types';
-
-export interface ShiftBid {
-  id: string;
-  staffId: string;
-  assignmentId: string;
-  status: string;
-  note?: string | null;
-  createdAt: string;
-}
-
-export interface ShiftSwap {
-  id: string;
-  requesterStaffId: string;
-  targetStaffId: string;
-  requesterAssignmentId: string;
-  targetAssignmentId?: string | null;
-  reason?: string | null;
-  status: string;
-  responseNote?: string | null;
-  createdAt: string;
-}
-
-export const scheduleApi = {
-  getMySchedules: async (from?: string, to?: string): Promise<ScheduleAssignmentList> => {
-    const response = await api.get<ScheduleAssignmentList>('/schedules/me', {
-      params: { from, to },
-    });
-    return response.data;
-  },
-
-  requestAvailability: async (
-    dateFrom: string,
-    dateTo: string,
-    reason?: string,
-  ): Promise<StaffAvailabilityRequest> => {
-    const response = await api.post<StaffAvailabilityRequest>('/schedules/me/availability', {
-      dateFrom,
-      dateTo,
-      reason,
-    });
-    return response.data;
-  },
-
-  getMyAvailability: async (): Promise<StaffAvailabilityRequest[]> => {
-    const response = await api.get<StaffAvailabilityRequest[]>('/schedules/me/availability');
-    return response.data;
-  },
-
-  confirmAssignment: async (id: string): Promise<StaffScheduleAssignment> => {
-    const response = await api.post<StaffScheduleAssignment>(`/schedules/assignments/${id}/confirm`);
-    return response.data;
-  },
-
-  checkIn: async (id: string): Promise<unknown> => {
-    const response = await api.post(`/schedules/assignments/${id}/check-in`, { method: 'mobile' });
-    return response.data;
-  },
-
-  checkOut: async (id: string): Promise<unknown> => {
-    const response = await api.post(`/schedules/assignments/${id}/check-out`, { method: 'mobile' });
-    return response.data;
-  },
-
-  getOpenShifts: async (): Promise<any[]> => {
-    const response = await api.get<any[]>('/schedules/open-shifts');
-    return response.data;
-  },
-
-  createBid: async (assignmentId: string, note?: string): Promise<ShiftBid> => {
-    const response = await api.post<ShiftBid>('/schedules/bids', { assignmentId, note });
-    return response.data;
-  },
-
-  listMyBids: async (status?: string): Promise<ShiftBid[]> => {
-    const response = await api.get<ShiftBid[]>('/schedules/bids', { params: { status } });
-    return response.data;
-  },
-
-  cancelBid: async (id: string): Promise<ShiftBid> => {
-    const response = await api.post<ShiftBid>(`/schedules/bids/${id}/cancel`);
-    return response.data;
-  },
-
-  createSwap: async (data: {
-    targetStaffId?: string;
-    requesterAssignmentId: string;
-    targetAssignmentId?: string;
-    reason?: string;
-  }): Promise<ShiftSwap> => {
-    const response = await api.post<ShiftSwap>('/schedules/swaps', data);
-    return response.data;
-  },
-
-  listMySwaps: async (status?: string): Promise<ShiftSwap[]> => {
-    const response = await api.get<ShiftSwap[]>('/schedules/swaps', { params: { status } });
-    return response.data;
-  },
-
-  respondSwap: async (id: string, action: 'accepted' | 'rejected', responseNote?: string): Promise<ShiftSwap> => {
-    const response = await api.post<ShiftSwap>(`/schedules/swaps/${id}/respond`, { action, responseNote });
-    return response.data;
   },
 };
 </file>
@@ -5820,6 +5066,296 @@ function createStyles(theme: AppTheme) {
 }
 </file>
 
+<file path="src/screens/AvailabilityScreen.tsx">
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  TextInput,
+  Alert,
+  RefreshControl,
+  ActivityIndicator,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { scheduleApi } from '../api/schedule';
+import { StaffAvailabilityRequest } from '../types';
+
+export default function AvailabilityScreen() {
+  const [requests, setRequests] = useState<StaffAvailabilityRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [reason, setReason] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [errors, setErrors] = useState<{ dateFrom?: string; dateTo?: string; general?: string }>({});
+
+  const loadData = useCallback(async () => {
+    try {
+      const result = await scheduleApi.getMyAvailability();
+      setRequests(Array.isArray(result) ? result : []);
+    } catch (err) {
+      console.error('Failed to load availability:', err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadData();
+  }, [loadData]);
+
+  const validateDate = (dateStr: string): boolean => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
+    const d = new Date(dateStr);
+    return !isNaN(d.getTime());
+  };
+
+  const handleSubmit = async () => {
+    const newErrors: { dateFrom?: string; dateTo?: string } = {};
+    setErrors({});
+
+    if (!dateFrom) {
+      newErrors.dateFrom = 'Vui lòng nhập ngày bắt đầu';
+    } else if (!validateDate(dateFrom)) {
+      newErrors.dateFrom = 'Định dạng ngày không hợp lệ (YYYY-MM-DD)';
+    }
+
+    if (!dateTo) {
+      newErrors.dateTo = 'Vui lòng nhập ngày kết thúc';
+    } else if (!validateDate(dateTo)) {
+      newErrors.dateTo = 'Định dạng ngày không hợp lệ (YYYY-MM-DD)';
+    } else if (dateFrom && dateTo && dateTo < dateFrom) {
+      newErrors.dateTo = 'Ngày kết thúc phải >= ngày bắt đầu';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await scheduleApi.requestAvailability(dateFrom, dateTo, reason || undefined);
+      setShowForm(false);
+      setDateFrom('');
+      setDateTo('');
+      setReason('');
+      setErrors({});
+      loadData();
+      Alert.alert('Thành công', 'Đã gửi yêu cầu xin nghỉ');
+    } catch (err: any) {
+      setErrors({ general: err?.response?.data?.error || 'Không thể gửi yêu cầu' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'approved': return '#10b981';
+      case 'rejected': return '#ef4444';
+      default: return '#f59e0b';
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'approved': return 'Đã duyệt';
+      case 'rejected': return 'Từ chối';
+      default: return 'Chờ duyệt';
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#6366f1" />
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView
+      style={styles.container}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    >
+      <View style={styles.header}>
+        <Text style={styles.title}>Xin nghỉ / Không khả dụng</Text>
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => setShowForm(!showForm)}
+        >
+          <Ionicons name={showForm ? 'close' : 'add'} size={20} color="#fff" />
+        </TouchableOpacity>
+      </View>
+
+      {showForm && (
+        <View style={styles.formCard}>
+          {errors.general && (
+            <View style={styles.errorBanner}>
+              <Ionicons name="warning" size={16} color="#ef4444" />
+              <Text style={styles.errorBannerText}>{errors.general}</Text>
+            </View>
+          )}
+          <Text style={styles.formLabel}>Từ ngày (YYYY-MM-DD)</Text>
+          <TextInput
+            style={[styles.input, errors.dateFrom && styles.inputError]}
+            value={dateFrom}
+            onChangeText={(t) => { setDateFrom(t); setErrors(e => ({ ...e, dateFrom: undefined })); }}
+            placeholder="2026-07-01"
+            placeholderTextColor="#666"
+          />
+          {errors.dateFrom && (
+            <Text style={styles.fieldErrorText}>{errors.dateFrom}</Text>
+          )}
+          <Text style={styles.formLabel}>Đến ngày (YYYY-MM-DD)</Text>
+          <TextInput
+            style={[styles.input, errors.dateTo && styles.inputError]}
+            value={dateTo}
+            onChangeText={(t) => { setDateTo(t); setErrors(e => ({ ...e, dateTo: undefined })); }}
+            placeholder="2026-07-05"
+            placeholderTextColor="#666"
+          />
+          {errors.dateTo && (
+            <Text style={styles.fieldErrorText}>{errors.dateTo}</Text>
+          )}
+          <Text style={styles.formLabel}>Lý do (không bắt buộc)</Text>
+          <TextInput
+            style={[styles.input, styles.textArea]}
+            value={reason}
+            onChangeText={setReason}
+            placeholder="Nhập lý do..."
+            placeholderTextColor="#666"
+            multiline
+            numberOfLines={3}
+          />
+          <TouchableOpacity
+            style={[styles.submitButton, submitting && styles.disabledButton]}
+            onPress={handleSubmit}
+            disabled={submitting}
+          >
+            <Text style={styles.submitButtonText}>
+              {submitting ? 'Đang gửi...' : 'Gửi yêu cầu'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {requests.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="calendar-outline" size={48} color="#666" />
+          <Text style={styles.emptyText}>Chưa có yêu cầu nào</Text>
+        </View>
+      ) : (
+        requests.map((req) => (
+          <View key={req.id} style={styles.requestCard}>
+            <View style={styles.requestHeader}>
+              <Text style={styles.requestDate}>
+                {req.dateFrom} — {req.dateTo}
+              </Text>
+              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(req.status) + '20' }]}>
+                <Text style={[styles.statusText, { color: getStatusColor(req.status) }]}>
+                  {getStatusLabel(req.status)}
+                </Text>
+              </View>
+            </View>
+            {req.reason && (
+              <Text style={styles.requestReason}>Lý do: {req.reason}</Text>
+            )}
+          </View>
+        ))
+      )}
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#0f172a' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a' },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    paddingBottom: 8,
+  },
+  title: { fontSize: 18, fontWeight: '700', color: '#e2e8f0' },
+  addButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#6366f1',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  formCard: {
+    backgroundColor: '#1e293b',
+    margin: 16,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  formLabel: { fontSize: 12, color: '#94a3b8', marginBottom: 4, fontWeight: '600' },
+  input: {
+    backgroundColor: '#0f172a',
+    borderWidth: 1,
+    borderColor: '#334155',
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 14,
+    color: '#e2e8f0',
+    marginBottom: 12,
+  },
+  inputError: { borderColor: '#ef4444' },
+  fieldErrorText: { fontSize: 11, color: '#ef4444', marginTop: -8, marginBottom: 8 },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fef2f2',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  errorBannerText: { fontSize: 13, color: '#ef4444', flex: 1 },
+  textArea: { height: 80, textAlignVertical: 'top' },
+  submitButton: {
+    backgroundColor: '#6366f1',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  disabledButton: { opacity: 0.5 },
+  submitButtonText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  emptyContainer: { alignItems: 'center', paddingVertical: 48 },
+  emptyText: { color: '#666', fontSize: 14, marginTop: 12 },
+  requestCard: {
+    backgroundColor: '#1e293b',
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  requestHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  requestDate: { fontSize: 14, fontWeight: '600', color: '#e2e8f0' },
+  statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 },
+  statusText: { fontSize: 11, fontWeight: '700' },
+  requestReason: { fontSize: 12, color: '#94a3b8', marginTop: 6 },
+});
+</file>
+
 <file path="src/screens/EditProfileScreen.tsx">
 import React, { useState, useMemo } from 'react';
 import { View, StyleSheet, KeyboardAvoidingView, Platform, Alert, ScrollView } from 'react-native';
@@ -7295,6 +6831,200 @@ function createStyles(theme: AppTheme) {
 }
 </file>
 
+<file path="src/screens/MySwapsScreen.tsx">
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  RefreshControl,
+  ActivityIndicator,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { scheduleApi, ShiftSwap } from '../api/schedule';
+
+export default function MySwapsScreen() {
+  const navigation = useNavigation<any>();
+  const [swaps, setSwaps] = useState<ShiftSwap[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [respondingId, setRespondingId] = useState<string | null>(null);
+
+  const loadData = useCallback(async () => {
+    try {
+      const result = await scheduleApi.listMySwaps();
+      setSwaps(Array.isArray(result) ? result.filter((s) => s.status === 'pending') : []);
+    } catch (err) {
+      console.error('Failed to load swaps:', err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadData();
+  }, [loadData]);
+
+  const handleRespond = async (id: string, action: 'accepted' | 'rejected') => {
+    setRespondingId(id);
+    try {
+      await scheduleApi.respondSwap(id, action);
+      loadData();
+    } catch (err: any) {
+      Alert.alert('Lỗi', err?.response?.data?.error || 'Không thể xử lý');
+    } finally {
+      setRespondingId(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#6366f1" />
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView
+      style={styles.container}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    >
+      <View style={styles.header}>
+        <Text style={styles.title}>Yêu cầu đổi ca</Text>
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => navigation.navigate('CreateSwap')}
+        >
+          <Ionicons name="add" size={22} color="#fff" />
+        </TouchableOpacity>
+      </View>
+
+      {swaps.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="swap-horizontal-outline" size={48} color="#666" />
+          <Text style={styles.emptyText}>Không có yêu cầu đổi ca nào</Text>
+        </View>
+      ) : (
+        swaps.map((swap) => (
+          <View key={swap.id} style={styles.swapCard}>
+            <View style={styles.swapHeader}>
+              <Ionicons name="swap-horizontal" size={20} color="#6366f1" />
+              <View style={styles.swapInfo}>
+                <Text style={styles.swapLabel}>Yêu cầu từ</Text>
+                <Text style={styles.swapStaff}>{swap.requesterStaffId.slice(0, 8)}...</Text>
+              </View>
+              {swap.targetStaffId && (
+                <View style={styles.swapInfo}>
+                  <Text style={styles.swapLabel}>Đến</Text>
+                  <Text style={styles.swapStaff}>{swap.targetStaffId.slice(0, 8)}...</Text>
+                </View>
+              )}
+              <View style={styles.swapStatus}>
+                <Text style={[styles.swapStatusText, { color: '#f59e0b' }]}>Chờ duyệt</Text>
+              </View>
+            </View>
+            {swap.reason && (
+              <Text style={styles.swapReason}>Lý do: {swap.reason}</Text>
+            )}
+            <View style={styles.swapMeta}>
+              <Text style={styles.swapMetaText}>
+                Ca: {swap.requesterAssignmentId.slice(0, 8)}... → {swap.targetAssignmentId?.slice(0, 8) || 'chưa chọn'}
+              </Text>
+            </View>
+            <View style={styles.actionRow}>
+              <TouchableOpacity
+                style={[styles.acceptButton, respondingId === swap.id && styles.disabledButton]}
+                onPress={() => handleRespond(swap.id, 'accepted')}
+                disabled={respondingId === swap.id}
+              >
+                <Ionicons name="checkmark" size={16} color="#fff" />
+                <Text style={styles.acceptButtonText}>Chấp nhận</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.rejectButton, respondingId === swap.id && styles.disabledButton]}
+                onPress={() => handleRespond(swap.id, 'rejected')}
+                disabled={respondingId === swap.id}
+              >
+                <Ionicons name="close" size={16} color="#fff" />
+                <Text style={styles.rejectButtonText}>Từ chối</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ))
+      )}
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#0f172a' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a' },
+  header: { padding: 16, paddingBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  title: { fontSize: 18, fontWeight: '700', color: '#e2e8f0' },
+  addButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#6366f1',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyContainer: { alignItems: 'center', paddingVertical: 48 },
+  emptyText: { color: '#666', fontSize: 14, marginTop: 12 },
+  swapCard: {
+    backgroundColor: '#1e293b',
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  swapHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  swapInfo: { flex: 1 },
+  swapLabel: { fontSize: 11, color: '#64748b' },
+  swapStaff: { fontSize: 14, fontWeight: '600', color: '#e2e8f0' },
+  swapReason: { fontSize: 12, color: '#94a3b8', marginTop: 8 },
+  swapMeta: { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#334155' },
+  swapMetaText: { fontSize: 11, color: '#64748b' },
+  swapStatus: { alignItems: 'flex-end' },
+  swapStatusText: { fontSize: 11, fontWeight: '700' },
+  actionRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  acceptButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#10b981',
+    padding: 10,
+    borderRadius: 8,
+    gap: 4,
+  },
+  rejectButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ef4444',
+    padding: 10,
+    borderRadius: 8,
+    gap: 4,
+  },
+  disabledButton: { opacity: 0.5 },
+  acceptButtonText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  rejectButtonText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+});
+</file>
+
 <file path="src/screens/NotificationScreen.tsx">
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -7560,6 +7290,168 @@ function createStyles(theme: AppTheme) {
 }
 </file>
 
+<file path="src/screens/OpenShiftsScreen.tsx">
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  RefreshControl,
+  ActivityIndicator,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { scheduleApi } from '../api/schedule';
+
+interface OpenShift {
+  shift: { id: string; name: string; startTime: string; endTime: string } | null;
+  zone: { id: string; zoneName: string } | null;
+  workDate: string;
+}
+
+export default function OpenShiftsScreen() {
+  const [shifts, setShifts] = useState<OpenShift[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [biddingId, setBiddingId] = useState<string | null>(null);
+
+  const loadData = useCallback(async () => {
+    try {
+      const result = await scheduleApi.getOpenShifts();
+      setShifts(Array.isArray(result) ? result.slice(0, 30) : []);
+    } catch (err) {
+      console.error('Failed to load open shifts:', err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadData();
+  }, [loadData]);
+
+  const handleBid = async (shift: OpenShift) => {
+    if (!shift.shift?.id || !shift.zone?.id) {
+      Alert.alert('Lỗi', 'Thông tin ca không đầy đủ');
+      return;
+    }
+    const key = `${shift.shift?.id}-${shift.zone?.id}-${shift.workDate}`;
+    setBiddingId(key);
+    try {
+      const assignmentResult = await scheduleApi.createBid(shift.shift.id, `Open shift - ${shift.zone?.zoneName} - ${shift.workDate}`);
+      if (assignmentResult && assignmentResult.id) {
+        Alert.alert('Thành công', 'Đã đăng ký ca trống thành công!');
+      } else {
+        Alert.alert('Thành công', 'Đã gửi yêu cầu đăng ký ca trống. Chờ admin duyệt.');
+      }
+      loadData();
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || err?.message || 'Không thể đăng ký';
+      Alert.alert('Lỗi', msg);
+    } finally {
+      setBiddingId(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#6366f1" />
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView
+      style={styles.container}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    >
+      <View style={styles.header}>
+        <Text style={styles.title}>Ca trống sắp tới</Text>
+      </View>
+
+      {shifts.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="checkmark-circle-outline" size={48} color="#666" />
+          <Text style={styles.emptyText}>Không có ca trống trong 2 tuần tới</Text>
+        </View>
+      ) : (
+        shifts.map((s, idx) => {
+          const key = `${s.shift?.id}-${s.zone?.id}-${s.workDate}-${idx}`;
+          const isBidding = biddingId === key;
+          return (
+            <View key={key} style={styles.shiftCard}>
+              <View style={styles.shiftInfo}>
+                <Text style={styles.shiftName}>{s.shift?.name || 'Ca'}</Text>
+                <Text style={styles.shiftZone}>{s.zone?.zoneName}</Text>
+                <Text style={styles.shiftTime}>
+                  {new Date(s.workDate + 'T00:00:00').toLocaleDateString('vi-VN', {
+                    weekday: 'short',
+                    day: '2-digit',
+                    month: '2-digit',
+                  })}
+                  {' • '}
+                  {s.shift?.startTime?.slice(0, 5)} — {s.shift?.endTime?.slice(0, 5)}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.bidButton, isBidding && styles.disabledButton]}
+                onPress={() => handleBid(s)}
+                disabled={isBidding}
+              >
+                <Ionicons name="hand-left-outline" size={16} color="#fff" />
+                <Text style={styles.bidButtonText}>Đăng ký</Text>
+              </TouchableOpacity>
+            </View>
+          );
+        })
+      )}
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#0f172a' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a' },
+  header: { padding: 16, paddingBottom: 8 },
+  title: { fontSize: 18, fontWeight: '700', color: '#e2e8f0' },
+  emptyContainer: { alignItems: 'center', paddingVertical: 48 },
+  emptyText: { color: '#666', fontSize: 14, marginTop: 12 },
+  shiftCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1e293b',
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  shiftInfo: { flex: 1 },
+  shiftName: { fontSize: 14, fontWeight: '700', color: '#e2e8f0' },
+  shiftZone: { fontSize: 12, color: '#94a3b8', marginTop: 2 },
+  shiftTime: { fontSize: 11, color: '#64748b', marginTop: 4 },
+  bidButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#6366f1',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 4,
+  },
+  disabledButton: { opacity: 0.5 },
+  bidButtonText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+});
+</file>
+
 <file path="src/theme/colors.ts">
 export { baseColors as colors } from './BaseColors';
 export type { BaseColors as Colors } from './BaseColors';
@@ -7700,6 +7592,114 @@ repomix-output.xml
 # generated native folders
 /ios
 /android
+</file>
+
+<file path="src/api/schedule.ts">
+import api from './client';
+import { ScheduleAssignmentList, StaffAvailabilityRequest, StaffScheduleAssignment } from '../types';
+
+export interface ShiftBid {
+  id: string;
+  staffId: string;
+  assignmentId: string;
+  status: string;
+  note?: string | null;
+  createdAt: string;
+}
+
+export interface ShiftSwap {
+  id: string;
+  requesterStaffId: string;
+  targetStaffId: string;
+  requesterAssignmentId: string;
+  targetAssignmentId?: string | null;
+  reason?: string | null;
+  status: string;
+  responseNote?: string | null;
+  createdAt: string;
+}
+
+export const scheduleApi = {
+  getMySchedules: async (from?: string, to?: string): Promise<ScheduleAssignmentList> => {
+    const response = await api.get<ScheduleAssignmentList>('/schedules/me', {
+      params: { from, to },
+    });
+    return response.data;
+  },
+
+  requestAvailability: async (
+    dateFrom: string,
+    dateTo: string,
+    reason?: string,
+  ): Promise<StaffAvailabilityRequest> => {
+    const response = await api.post<StaffAvailabilityRequest>('/schedules/me/availability', {
+      dateFrom,
+      dateTo,
+      reason,
+    });
+    return response.data;
+  },
+
+  getMyAvailability: async (): Promise<StaffAvailabilityRequest[]> => {
+    const response = await api.get<StaffAvailabilityRequest[]>('/schedules/me/availability');
+    return response.data;
+  },
+
+  confirmAssignment: async (id: string): Promise<StaffScheduleAssignment> => {
+    const response = await api.post<StaffScheduleAssignment>(`/schedules/assignments/${id}/confirm`);
+    return response.data;
+  },
+
+  checkIn: async (id: string): Promise<unknown> => {
+    const response = await api.post(`/schedules/assignments/${id}/check-in`, { method: 'mobile' });
+    return response.data;
+  },
+
+  checkOut: async (id: string): Promise<unknown> => {
+    const response = await api.post(`/schedules/assignments/${id}/check-out`, { method: 'mobile' });
+    return response.data;
+  },
+
+  getOpenShifts: async (): Promise<any[]> => {
+    const response = await api.get<any[]>('/schedules/open-shifts');
+    return response.data;
+  },
+
+  createBid: async (assignmentId: string, note?: string): Promise<ShiftBid> => {
+    const response = await api.post<ShiftBid>('/schedules/bids', { assignmentId, note });
+    return response.data;
+  },
+
+  listMyBids: async (status?: string): Promise<ShiftBid[]> => {
+    const response = await api.get<ShiftBid[]>('/schedules/bids', { params: { status } });
+    return response.data;
+  },
+
+  cancelBid: async (id: string): Promise<ShiftBid> => {
+    const response = await api.post<ShiftBid>(`/schedules/bids/${id}/cancel`);
+    return response.data;
+  },
+
+  createSwap: async (data: {
+    targetStaffId?: string;
+    requesterAssignmentId: string;
+    targetAssignmentId?: string;
+    reason?: string;
+  }): Promise<ShiftSwap> => {
+    const response = await api.post<ShiftSwap>('/schedules/swaps', data);
+    return response.data;
+  },
+
+  listMySwaps: async (status?: string): Promise<ShiftSwap[]> => {
+    const response = await api.get<ShiftSwap[]>('/schedules/swaps', { params: { status } });
+    return response.data;
+  },
+
+  respondSwap: async (id: string, action: 'accepted' | 'rejected', responseNote?: string): Promise<ShiftSwap> => {
+    const response = await api.post<ShiftSwap>(`/schedules/swaps/${id}/respond`, { action, responseNote });
+    return response.data;
+  },
+};
 </file>
 
 <file path="src/components/ai/BookRecommendationCard.tsx">
@@ -9807,6 +9807,140 @@ export { notificationApi } from './notification';
 export { scheduleApi } from './schedule';
 </file>
 
+<file path=".env.example">
+# ============================================
+# Library Mobile App - Environment Config
+# ============================================
+#
+# IMPORTANT: Copy this file to .env and update values for your setup
+#
+# Android Emulator: http://10.0.2.2:80/api (default - maps to host localhost)
+# iOS Simulator: http://localhost:80/api
+# Real Device (same network): http://<your-pc-ip>:80/api
+#
+# To find your PC IP on Windows:
+#   ipconfig | Select-String "IPv4"
+#
+# If login fails with "Cannot connect to server":
+#   1. Make sure Docker containers are running: docker compose up -d
+#   2. Try accessing http://localhost:80/api/healthz from your browser
+#   3. If localhost works but 10.0.2.2 doesn't, the emulator can't reach Docker
+#   4. On Windows with Docker Desktop, try restarting Docker and running:
+#      docker compose down && docker compose up -d
+
+EXPO_PUBLIC_API_URL=http://192.168.1.166:80/api
+</file>
+
+<file path="app.json">
+{
+  "expo": {
+    "name": "Thư Viện",
+    "slug": "LibraryMobileApp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.library.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Ứng dụng cần quyền camera để đăng nhập bằng khuôn mặt và quét mã vạch sách"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#121212",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "com.library.app",
+      "usesCleartextTraffic": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Ứng dụng cần quyền camera để đăng nhập bằng khuôn mặt và quét mã vạch sách"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "7fbf891b-c0a3-414d-ad06-f813882df4a3"
+      }
+    },
+    "owner": "22664321a"
+  }
+}
+</file>
+
+<file path="src/api/client.ts">
+import axios, { AxiosInstance, AxiosError } from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { devError } from '../utils/logger';
+
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:80/api';
+
+const api: AxiosInstance = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 30000,
+});
+
+api.interceptors.request.use(
+  async (config) => {
+    try {
+      const token = await AsyncStorage.getItem('accessToken');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } catch (err) {
+      devError('[API] Failed to get token from storage:', err);
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error: AxiosError) => {
+    if (error.response?.status === 401 && !(error.config as any).__isRetry) {
+      const refreshToken = await AsyncStorage.getItem('refreshToken');
+      if (refreshToken) {
+        try {
+          const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
+            refresh_token: refreshToken,
+          });
+          const { access_token, refresh_token: newRefreshToken } = response.data;
+          await AsyncStorage.setItem('accessToken', access_token);
+          if (newRefreshToken) {
+            await AsyncStorage.setItem('refreshToken', newRefreshToken);
+          }
+          if (error.config) {
+            error.config.headers.Authorization = `Bearer ${access_token}`;
+            (error.config as any).__isRetry = true;
+            return api.request(error.config);
+          }
+        } catch (refreshError) {
+          await AsyncStorage.multiRemove(['accessToken', 'refreshToken']);
+        }
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+export default api;
+</file>
+
 <file path="src/screens/AIChatScreen.tsx">
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, FlatList, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
@@ -10381,140 +10515,6 @@ function createStyles(theme: AppTheme) {
     },
   });
 }
-</file>
-
-<file path=".env.example">
-# ============================================
-# Library Mobile App - Environment Config
-# ============================================
-#
-# IMPORTANT: Copy this file to .env and update values for your setup
-#
-# Android Emulator: http://10.0.2.2:80/api (default - maps to host localhost)
-# iOS Simulator: http://localhost:80/api
-# Real Device (same network): http://<your-pc-ip>:80/api
-#
-# To find your PC IP on Windows:
-#   ipconfig | Select-String "IPv4"
-#
-# If login fails with "Cannot connect to server":
-#   1. Make sure Docker containers are running: docker compose up -d
-#   2. Try accessing http://localhost:80/api/healthz from your browser
-#   3. If localhost works but 10.0.2.2 doesn't, the emulator can't reach Docker
-#   4. On Windows with Docker Desktop, try restarting Docker and running:
-#      docker compose down && docker compose up -d
-
-EXPO_PUBLIC_API_URL=http://192.168.1.166:80/api
-</file>
-
-<file path="app.json">
-{
-  "expo": {
-    "name": "Thư Viện",
-    "slug": "LibraryMobileApp",
-    "version": "1.0.0",
-    "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.library.app",
-      "infoPlist": {
-        "NSCameraUsageDescription": "Ứng dụng cần quyền camera để đăng nhập bằng khuôn mặt và quét mã vạch sách"
-      }
-    },
-    "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#121212",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
-      },
-      "package": "com.library.app",
-      "usesCleartextTraffic": false,
-      "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
-      ]
-    },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    },
-    "plugins": [
-      [
-        "expo-camera",
-        {
-          "cameraPermission": "Ứng dụng cần quyền camera để đăng nhập bằng khuôn mặt và quét mã vạch sách"
-        }
-      ]
-    ],
-    "extra": {
-      "eas": {
-        "projectId": "7fbf891b-c0a3-414d-ad06-f813882df4a3"
-      }
-    },
-    "owner": "22664321a"
-  }
-}
-</file>
-
-<file path="src/api/client.ts">
-import axios, { AxiosInstance, AxiosError } from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { devError } from '../utils/logger';
-
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:80/api';
-
-const api: AxiosInstance = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 30000,
-});
-
-api.interceptors.request.use(
-  async (config) => {
-    try {
-      const token = await AsyncStorage.getItem('accessToken');
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
-    } catch (err) {
-      devError('[API] Failed to get token from storage:', err);
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
-api.interceptors.response.use(
-  (response) => response,
-  async (error: AxiosError) => {
-    if (error.response?.status === 401 && !(error.config as any).__isRetry) {
-      const refreshToken = await AsyncStorage.getItem('refreshToken');
-      if (refreshToken) {
-        try {
-          const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-            refresh_token: refreshToken,
-          });
-          const { access_token, refresh_token: newRefreshToken } = response.data;
-          await AsyncStorage.setItem('accessToken', access_token);
-          if (newRefreshToken) {
-            await AsyncStorage.setItem('refreshToken', newRefreshToken);
-          }
-          if (error.config) {
-            error.config.headers.Authorization = `Bearer ${access_token}`;
-            (error.config as any).__isRetry = true;
-            return api.request(error.config);
-          }
-        } catch (refreshError) {
-          await AsyncStorage.multiRemove(['accessToken', 'refreshToken']);
-        }
-      }
-    }
-    return Promise.reject(error);
-  }
-);
-
-export default api;
 </file>
 
 <file path="src/screens/BookCatalogScreen.tsx">
@@ -11697,610 +11697,6 @@ function createStyles(theme: AppTheme) {
 }
 </file>
 
-<file path="src/screens/StaffBorrowScreen.tsx">
-import React, { useState, useCallback, useMemo } from 'react';
-import { View, StyleSheet, Alert, FlatList } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, Button, Surface, TextInput, ActivityIndicator, Divider, Snackbar, Portal, useTheme } from 'react-native-paper';
-import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { borrowApi } from '../api/borrow';
-import { Book, BorrowRecord } from '../types';
-import { AppTheme } from '../theme/DarkTheme';
-import { devError } from '../utils/logger';
-import {
-  GradientHeader,
-  SectionCard,
-  StatCard,
-  EmptyState,
-  GRADIENTS,
-} from '../theme/MobileDesignSystem';
-
-interface ScannedBorrowItem {
-  barcode: string;
-  isbn: string;
-  copy_id: string | null;
-  copy_barcode: string | null;
-  book: Book;
-  alreadyBorrowed?: boolean;
-}
-
-export default function StaffBorrowScreen() {
-  const theme = useTheme() as AppTheme;
-  const c = theme.colors;
-  const styles = useMemo(() => createStyles(theme), [theme]);
-  const [scanned, setScanned] = useState(false);
-  const [patronCode, setPatronCode] = useState('');
-  const [patronId, setPatronId] = useState<string | null>(null);
-  const [patronName, setPatronName] = useState('');
-  const [scannedItems, setScannedItems] = useState<ScannedBorrowItem[]>([]);
-  const [isCreating, setIsCreating] = useState(false);
-  const [isLookingUp, setIsLookingUp] = useState(false);
-  const [permission, requestPermission] = useCameraPermissions();
-  const [scanToast, setScanToast] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [cameraReady, setCameraReady] = useState(false);
-  const [activeCount, setActiveCount] = useState(0);
-  const [overdueCount, setOverdueCount] = useState(0);
-  const [activeRecords, setActiveRecords] = useState<BorrowRecord[]>([]);
-
-  const MAX_BORROW = 3;
-  const remaining = MAX_BORROW - activeCount;
-  const canBorrow = remaining > 0 && overdueCount === 0;
-
-  const handleBarCodeScanned = useCallback(async (result: BarcodeScanningResult) => {
-    if (scanned || !result.data) return;
-    setScanned(true);
-    const barcode = result.data;
-
-    if (!patronId) {
-      setTimeout(() => setScanned(false), 500);
-      return;
-    }
-
-    if (scannedItems.find((item) => item.barcode === barcode)) {
-      setScanToast('Sách này đã có trong danh sách');
-      setTimeout(() => setScanned(false), 500);
-      return;
-    }
-
-    if (scannedItems.length >= remaining) {
-      setScanToast(`Chỉ được mượn tối đa ${MAX_BORROW} cuốn`);
-      setTimeout(() => setScanned(false), 500);
-      return;
-    }
-
-    const normalizeCode = (v: string | undefined | null) => v?.replace(/[\s-]+/g, '').replace(/\.0+$/, '') ?? '';
-    const barcodeNormalized = normalizeCode(barcode);
-    const alreadyBorrowedRecord = activeRecords.find(
-      (r) => normalizeCode(r.book?.isbn) === barcodeNormalized || normalizeCode(r.book_id) === barcodeNormalized
-    );
-
-    if (alreadyBorrowedRecord) {
-      const book: Book = {
-        id: alreadyBorrowedRecord.book_id,
-        isbn: alreadyBorrowedRecord.book?.isbn || barcode,
-        title: alreadyBorrowedRecord.book?.title || barcode,
-        author: alreadyBorrowedRecord.book?.author,
-        cover_url: alreadyBorrowedRecord.book?.cover_url,
-        shelf_location: alreadyBorrowedRecord.book?.shelf_location,
-      };
-      setScannedItems((prev) => [...prev, { barcode, isbn: barcode, copy_id: null, copy_barcode: null, book, alreadyBorrowed: true }]);
-      setScanToast(`⚠️ "${alreadyBorrowedRecord.book?.title || barcode}" đã được mượn — sẽ không thêm vào phiếu`);
-      setTimeout(() => setScanned(false), 2000);
-      return;
-    }
-
-    try {
-      const result = await borrowApi.lookupBorrowSlip({
-        patron_id: patronId!,
-        items: [{ barcode, isbn: barcode }],
-      });
-      const item = result.items.find((i) => i.barcode === barcode);
-      if (!item || !item.can_borrow) {
-        const msg = item?.reason || 'Sách không thể mượn';
-        const title = item?.book?.title || '';
-        Alert.alert('Thông báo', title ? `"${title}": ${msg}` : `${msg} (ISBN: ${barcode})`);
-        setTimeout(() => setScanned(false), 500);
-        return;
-      }
-      const book: Book = {
-        id: item.book!.id,
-        isbn: item.book!.isbn,
-        title: item.book!.title,
-        author: item.book!.author || undefined,
-        cover_url: item.book!.cover_url || undefined,
-        shelf_location: item.book!.shelf_location || undefined,
-      };
-      setScannedItems((prev) => [...prev, {
-        barcode,
-        isbn: barcode,
-        copy_id: item.copy?.id || null,
-        copy_barcode: item.copy?.barcode || null,
-        book,
-      }]);
-      setScanToast(`Đã thêm: ${book.title}`);
-    } catch (error: any) {
-      let msg = `Không tìm thấy sách: ${barcode}`;
-      if (error.response?.status === 403) {
-        msg = error.response?.data?.detail || 'Bạn không thể mượn sách lúc này';
-      } else if (error.response?.data?.detail) {
-        msg = error.response.data.detail;
-      }
-      Alert.alert('Thông báo', msg);
-    }
-    setTimeout(() => setScanned(false), 500);
-  }, [scanned, scannedItems, remaining, activeRecords, patronId]);
-
-  const lookupPatron = async () => {
-    if (!patronCode.trim()) return;
-    setIsLookingUp(true);
-    setError(null);
-    try {
-      const data = await borrowApi.getActiveBorrowsByStudentCode(patronCode.trim());
-      if (data.patron) {
-        setPatronId(data.patron.id);
-        setPatronName(data.patron.full_name || data.patron.student_code);
-        setActiveCount(data.total ?? 0);
-        setOverdueCount(data.overdue_count ?? 0);
-        setActiveRecords(data.records ?? []);
-        setScanToast(`Đã chọn độc giả: ${data.patron.full_name || data.patron.student_code}`);
-      }
-    } catch (err: any) {
-      const status = err?.response?.status || err?.status;
-      const detail = err?.response?.data?.detail || err?.message || '';
-      if (status === 403) {
-        if (detail.includes('chua vao thu vien')) {
-          setError('Độc giả chưa ở trong thư viện. Vui lòng yêu cầu độc giả quét thẻ tại cửa vào.');
-        } else {
-          setError('Thẻ độc giả đã bị khóa/hết hạn. Vui lòng liên hệ thư viện.');
-        }
-      } else {
-        setError('Không tìm thấy độc giả với mã số này');
-      }
-      setPatronId(null);
-      setPatronName('');
-      setActiveCount(0);
-      setOverdueCount(0);
-      setActiveRecords([]);
-    } finally {
-      setIsLookingUp(false);
-    }
-  };
-
-  const removeItem = (index: number) => {
-    setScannedItems((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const resetState = () => {
-    setScanned(false);
-    setScannedItems([]);
-    setPatronCode('');
-    setPatronId(null);
-    setPatronName('');
-    setActiveCount(0);
-    setOverdueCount(0);
-    setActiveRecords([]);
-    setCameraReady(false);
-    setError(null);
-  };
-
-  const handleCreateSlip = async () => {
-    if (!scannedItems.length || !patronId) return;
-
-    const validItems = scannedItems.filter((item) => !item.alreadyBorrowed);
-    const alreadyBorrowedItems = scannedItems.filter((item) => item.alreadyBorrowed);
-
-    if (alreadyBorrowedItems.length > 0) {
-      const titles = alreadyBorrowedItems.map((b) => `"${b.book.title || b.barcode}"`).join(', ');
-      Alert.alert(
-        'Sách đã được mượn trước đó',
-        `${alreadyBorrowedItems.length} sách trong danh sách đang được mượn: ${titles}`,
-        [
-          { text: 'Bỏ qua', style: 'cancel' },
-          {
-            text: 'Tạo phiếu',
-            onPress: () => submitSlip(validItems),
-          },
-        ]
-      );
-      return;
-    }
-
-    if (activeCount + validItems.length > MAX_BORROW) {
-      Alert.alert('Vượt quá giới hạn', `Tổng sách mượn sẽ là ${activeCount + validItems.length} cuốn, tối đa ${MAX_BORROW} cuốn`);
-      return;
-    }
-
-    submitSlip(validItems);
-  };
-
-  const submitSlip = async (items: ScannedBorrowItem[]) => {
-    if (!items.length || !patronId) return;
-    setIsCreating(true);
-    try {
-      const apiItems = items.map((item) => ({
-        barcode: item.copy_barcode || item.barcode,
-        isbn: item.isbn,
-        book_id: item.book.id,
-        copy_id: item.copy_id!,
-      }));
-      const result = await borrowApi.confirmBorrowSlip({ patron_id: patronId, items: apiItems });
-      if (result.status === 'success') {
-        Alert.alert('Thành công', result.message, [
-          { text: 'OK', onPress: resetState },
-        ]);
-      }
-    } catch (error: any) {
-      devError('[StaffBorrow] Create slip error:', error);
-      let msg = 'Tạo phiếu mượn thất bại';
-      if (error.response?.data?.detail) msg = error.response.data.detail;
-      Alert.alert('Lỗi', msg);
-    } finally {
-      setIsCreating(false);
-    }
-  };
-
-  if (!permission) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <ActivityIndicator color={c.primary} />
-      </SafeAreaView>
-    );
-  }
-
-  if (!permission.granted) {
-    return (
-      <SafeAreaView style={styles.permissionContainer} edges={['bottom']}>
-        <MaterialCommunityIcons name="camera-off-outline" size={48} color={c.onSurfaceVariant} />
-        <Text style={styles.permissionText}>Cần quyền camera để quét mã vạch sách</Text>
-        <Button mode="contained" onPress={requestPermission} style={styles.permissionButton}>
-          Cấp quyền
-        </Button>
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
-      <GradientHeader
-        title="Mượn sách"
-        subtitle={patronId ? `Độc giả: ${patronName}` : 'Quét sách cho độc giả'}
-        icon="book-plus-outline"
-      />
-
-      <SectionCard
-        title="Độc giả"
-        icon="account-outline"
-        accentColor={GRADIENTS.indigo[0]}
-        right={
-          patronId ? (
-            <Button mode="text" compact onPress={resetState} textColor={c.error}>
-              Đặt lại
-            </Button>
-          ) : undefined
-        }
-      >
-        <View style={styles.patronRow}>
-          <TextInput
-            value={patronCode}
-            onChangeText={setPatronCode}
-            placeholder="Nhập MSSV..."
-            mode="outlined"
-            style={styles.patronField}
-            outlineStyle={styles.inputOutline}
-            activeOutlineColor={c.primary}
-          />
-          <Button mode="contained" onPress={lookupPatron} loading={isLookingUp} disabled={isLookingUp || !patronCode.trim()} style={styles.lookupButton}>
-            Tra cứu
-          </Button>
-        </View>
-
-        {error ? (
-          <View style={styles.errorBox}>
-            <MaterialCommunityIcons name="alert-circle-outline" size={18} color={c.error} />
-            <Text style={styles.errorText} selectable>{error}</Text>
-          </View>
-        ) : null}
-
-        {patronId ? (
-          <View style={styles.quotaRow}>
-            <View style={styles.patronReadyBanner}>
-              <MaterialCommunityIcons name="check-circle" size={15} color={theme.dark ? '#4A8C5C' : '#067647'} />
-              <Text style={styles.patronReadyText}>{patronName}</Text>
-            </View>
-            <View style={[styles.quotaBadge, !canBorrow && overdueCount > 0 ? styles.quotaBadgeError : !canBorrow ? styles.quotaBadgeWarning : styles.quotaBadgeOk]}>
-              <MaterialCommunityIcons
-                name={canBorrow ? 'check-circle' : 'alert-circle'}
-                size={13}
-                color={canBorrow ? (theme.dark ? '#4A8C5C' : '#067647') : c.error}
-              />
-              <Text style={[styles.quotaBadgeText, !canBorrow && styles.quotaBadgeTextError]}>
-                {overdueCount > 0
-                  ? `${overdueCount} quá hạn`
-                  : `${remaining} cuốn khả dụng`}
-              </Text>
-            </View>
-          </View>
-        ) : null}
-      </SectionCard>
-
-      {patronId ? (
-        <View style={styles.statsRow}>
-          <View style={styles.statHalf}>
-            <StatCard
-              label="Đang mượn"
-              value={activeCount}
-              icon="book-open-variant"
-              gradient={GRADIENTS.blue}
-              pct={(activeCount / MAX_BORROW) * 100}
-            />
-          </View>
-          <View style={styles.statHalf}>
-            <StatCard
-              label="Khả dụng"
-              value={remaining}
-              icon="book-check-outline"
-              gradient={canBorrow ? GRADIENTS.emerald : GRADIENTS.amber}
-            />
-          </View>
-        </View>
-      ) : null}
-
-      <View style={styles.scannerContainer}>
-        {permission?.granted && patronId && canBorrow ? (
-          <>
-            <CameraView
-              style={styles.camera}
-              facing="back"
-              onCameraReady={() => setCameraReady(true)}
-              barcodeScannerSettings={{
-                barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
-              }}
-              onBarcodeScanned={cameraReady && !scanned ? handleBarCodeScanned : undefined}
-            />
-            <View style={styles.overlay}>
-              <View style={styles.scanArea}>
-                <View style={[styles.corner, styles.topLeft]} />
-                <View style={[styles.corner, styles.topRight]} />
-                <View style={[styles.corner, styles.bottomLeft]} />
-                <View style={[styles.corner, styles.bottomRight]} />
-              </View>
-              <Text style={styles.scanText}>Quét mã vạch sách</Text>
-            </View>
-          </>
-        ) : (
-          <View style={styles.cameraPlaceholder}>
-            <MaterialCommunityIcons
-              name={!canBorrow ? 'book-lock-outline' : 'barcode-scan'}
-              size={48}
-              color={c.onSurfaceVariant}
-            />
-            <Text style={styles.cameraPlaceholderText}>
-              {!canBorrow
-                ? overdueCount > 0
-                  ? 'Có sách quá hạn, không thể mượn thêm'
-                  : 'Đã mượn tối đa 3 cuốn'
-                : permission?.granted
-                  ? 'Cần tra độc giả trước'
-                  : 'Cần cấp quyền camera'}
-            </Text>
-          </View>
-        )}
-      </View>
-
-      <SectionCard
-        title={`Danh sách mượn (${scannedItems.length} cuốn)`}
-        icon="book-open-variant"
-        accentColor={GRADIENTS.violet[0]}
-        right={
-          scannedItems.length > 0 ? (
-            <Button mode="text" compact onPress={() => setScannedItems([])} textColor={c.error}>
-              Xoá tất cả
-            </Button>
-          ) : undefined
-        }
-        style={styles.listSection}
-      >
-        {scannedItems.length === 0 ? (
-          <EmptyState icon="barcode-scan" message="Quét sách để thêm vào phiếu mượn" />
-        ) : (
-          <FlatList
-            data={scannedItems}
-            keyExtractor={(_, index) => String(index)}
-            style={styles.list}
-            renderItem={({ item, index }) => (
-              <Surface
-                style={[
-                  styles.itemCard,
-                  item.alreadyBorrowed && styles.itemCardAlreadyBorrowed,
-                ]}
-                elevation={0}
-              >
-                <View style={styles.itemRow}>
-                  {item.book.cover_url ? (
-                    <View style={styles.itemCoverWrap}>
-                      <MaterialCommunityIcons name="book-open-variant" size={20} color={c.primary} />
-                    </View>
-                  ) : (
-                    <View style={styles.itemCoverPlaceholder}>
-                      <MaterialCommunityIcons name="book-open-variant" size={24} color={c.onSurfaceVariant} />
-                    </View>
-                  )}
-                  <View style={styles.itemInfo}>
-                    <View style={styles.itemTitleRow}>
-                      <Text style={styles.itemTitle} numberOfLines={2}>{item.book.title}</Text>
-                      {item.alreadyBorrowed && (
-                        <View style={styles.alreadyBorrowedBadge}>
-                          <MaterialCommunityIcons name="book-lock" size={12} color={c.error} />
-                          <Text style={styles.alreadyBorrowedText}>Đã mượn</Text>
-                        </View>
-                      )}
-                    </View>
-                    {item.book.author && <Text style={styles.itemAuthor} numberOfLines={1}>{item.book.author}</Text>}
-                    <Text style={styles.itemIsbn}>{item.barcode}</Text>
-                    {item.alreadyBorrowed && (
-                      <Text style={styles.alreadyBorrowedNote}>Sách này đang được mượn — sẽ không thêm vào phiếu</Text>
-                    )}
-                  </View>
-                  <Button mode="text" compact onPress={() => removeItem(index)} textColor={c.error} style={styles.removeButton}>
-                    Xoá
-                  </Button>
-                </View>
-              </Surface>
-            )}
-          />
-        )}
-      </SectionCard>
-
-      <View style={styles.actionRow}>
-        <Button mode="outlined" onPress={resetState} style={styles.actionButton} textColor={c.onSurfaceVariant}>
-          Xoá tất cả
-        </Button>
-        <Button mode="contained" onPress={handleCreateSlip} loading={isCreating} disabled={isCreating || scannedItems.length === 0 || !patronId || !canBorrow} style={styles.actionButton}>
-          {isCreating ? 'Đang tạo phiếu...' : `Tạo phiếu mượn (${scannedItems.length} cuốn)`}
-        </Button>
-      </View>
-
-      <Portal>
-        <View style={styles.topSnackbarWrapper}>
-          <Snackbar
-            visible={!!scanToast}
-            onDismiss={() => setScanToast('')}
-            duration={2000}
-            style={styles.topSnackbar}
-          >
-            {scanToast}
-          </Snackbar>
-        </View>
-      </Portal>
-    </SafeAreaView>
-  );
-}
-
-function createStyles(theme: AppTheme) {
-  const c = theme.colors;
-  return StyleSheet.create({
-    container: { flex: 1, backgroundColor: c.background },
-    permissionContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: c.background, gap: 12 },
-    permissionText: { color: c.onSurface, fontSize: 16, marginBottom: 8, textAlign: 'center' },
-    permissionButton: { borderRadius: 10, paddingHorizontal: 24 },
-    patronRow: { flexDirection: 'row', gap: 8, alignItems: 'center', paddingHorizontal: 16, paddingBottom: 12 },
-    patronField: { flex: 1, backgroundColor: 'transparent' },
-    inputOutline: { borderRadius: 10, borderColor: c.outlineVariant },
-    lookupButton: { borderRadius: 10, height: 44 },
-    errorBox: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      gap: 8,
-      marginHorizontal: 16,
-      marginBottom: 12,
-      padding: 10,
-      borderRadius: 10,
-      backgroundColor: c.errorContainer,
-      borderWidth: 1,
-      borderColor: c.error,
-    },
-    errorText: {
-      color: c.error,
-      flex: 1,
-      fontSize: 13,
-    },
-    patronReadyBanner: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8, backgroundColor: theme.dark ? 'rgba(74, 140, 92, 0.12)' : 'rgba(6, 118, 71, 0.08)' },
-    patronReadyText: { color: theme.dark ? '#4A8C5C' : '#067647', fontSize: 12, fontWeight: '600' },
-    quotaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 12, gap: 8 },
-    quotaBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 12 },
-    quotaBadgeOk: { backgroundColor: theme.dark ? 'rgba(74, 140, 92, 0.12)' : 'rgba(6, 118, 71, 0.08)' },
-    quotaBadgeWarning: { backgroundColor: theme.dark ? 'rgba(196, 154, 60, 0.15)' : 'rgba(181, 71, 8, 0.08)' },
-    quotaBadgeError: { backgroundColor: 'rgba(196, 78, 78, 0.15)' },
-    quotaBadgeText: { fontSize: 12, fontWeight: '700', color: c.onSurface },
-    quotaBadgeTextError: { color: c.error },
-    statsRow: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, paddingBottom: 12 },
-    statHalf: { flex: 1 },
-    scannerContainer: { height: 220, marginHorizontal: 16, borderRadius: 14, overflow: 'hidden', backgroundColor: c.surfaceVariant, marginBottom: 12 },
-    camera: { flex: 1 },
-    overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' },
-    scanArea: { width: 280, height: 100, borderRadius: 12, position: 'relative' },
-    corner: { position: 'absolute', width: 28, height: 28, borderColor: c.primary, borderWidth: 2.5 },
-    topLeft: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 12 },
-    topRight: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 12 },
-    bottomLeft: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 12 },
-    bottomRight: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 12 },
-    scanText: { color: '#FFFFFF', marginTop: 12, fontSize: 14, textAlign: 'center', fontWeight: '600' },
-    cameraPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 10, backgroundColor: c.surfaceVariant },
-    cameraPlaceholderText: { color: c.onSurfaceVariant, fontSize: 14, fontWeight: '600' },
-    listSection: { flex: 1, marginHorizontal: 16 },
-    list: { flex: 1 },
-    itemCard: { marginVertical: 4, marginHorizontal: 16, backgroundColor: c.surface, borderRadius: 14, borderWidth: 0.5, borderColor: c.outlineVariant },
-    itemRow: { flexDirection: 'row', alignItems: 'center', padding: 12 },
-    itemCoverWrap: { width: 44, height: 60, borderRadius: 8, backgroundColor: c.primaryContainer, justifyContent: 'center', alignItems: 'center' },
-    itemCoverPlaceholder: { width: 44, height: 60, borderRadius: 8, backgroundColor: c.surfaceVariant, justifyContent: 'center', alignItems: 'center' },
-    itemInfo: { flex: 1, marginLeft: 12 },
-    itemTitle: { fontSize: 14, fontWeight: '600', color: c.onSurface },
-    itemAuthor: { fontSize: 12, color: c.onSurfaceVariant, marginTop: 2 },
-    itemIsbn: { fontSize: 11, color: c.primary, marginTop: 2, fontFamily: 'monospace' },
-    itemTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-    alreadyBorrowedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, backgroundColor: 'rgba(196, 78, 78, 0.15)' },
-    alreadyBorrowedText: { color: c.error, fontSize: 10, fontWeight: '700' },
-    alreadyBorrowedNote: { color: c.error, fontSize: 11, marginTop: 2, fontStyle: 'italic' },
-    itemCardAlreadyBorrowed: { backgroundColor: c.surfaceVariant, borderColor: c.error, borderWidth: 1, opacity: 0.7 },
-    removeButton: { marginLeft: 4 },
-    actionRow: { flexDirection: 'row', padding: 16, gap: 8, paddingBottom: 20 },
-    actionButton: { flex: 1, borderRadius: 10 },
-    topSnackbarWrapper: { position: 'absolute', top: 8, left: 0, right: 0, zIndex: 9999, paddingHorizontal: 16 },
-    topSnackbar: { width: '100%' },
-  });
-}
-</file>
-
-<file path="package.json">
-{
-  "name": "librarymobileapp",
-  "version": "1.0.0",
-  "main": "index.ts",
-  "dependencies": {
-    "@expo/vector-icons": "^15.1.1",
-    "@react-native-async-storage/async-storage": "2.2.0",
-    "@react-native-ml-kit/text-recognition": "^2.0.0",
-    "@react-navigation/bottom-tabs": "^7.18.0",
-    "@react-navigation/native": "^7.3.1",
-    "@react-navigation/stack": "^7.10.3",
-    "axios": "^1.17.0",
-    "expo": "~56.0.11",
-    "expo-camera": "^56.0.8",
-    "expo-dev-client": "~56.0.20",
-    "expo-file-system": "~56.0.8",
-    "expo-status-bar": "~56.0.4",
-    "react": "19.2.3",
-    "react-native": "0.85.3",
-    "react-native-gesture-handler": "~2.31.1",
-    "react-native-paper": "^5.15.3",
-    "react-native-safe-area-context": "~5.7.0",
-    "react-native-screens": "^4.25.2",
-    "react-native-vector-icons": "^10.3.0",
-    "react-native-webview": "^14.0.1"
-  },
-  "devDependencies": {
-    "@react-native/jest-preset": "^0.85.3",
-    "@testing-library/react-native": "^14.0.0",
-    "@types/jest": "29.5.14",
-    "@types/react": "~19.2.2",
-    "@types/react-native-vector-icons": "^6.4.18",
-    "jest": "~29.7.0",
-    "ts-jest": "^29.4.11",
-    "typescript": "~6.0.3"
-  },
-  "scripts": {
-    "start": "expo start",
-    "android": "expo run:android",
-    "ios": "expo run:ios",
-    "web": "expo start --web",
-    "test": "jest"
-  },
-  "private": true
-}
-</file>
-
 <file path="src/screens/LoginScreen.tsx">
 import React, { useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
@@ -13390,6 +12786,610 @@ function createStyles(theme: AppTheme) {
       fontWeight: '600',
     },
   });
+}
+</file>
+
+<file path="src/screens/StaffBorrowScreen.tsx">
+import React, { useState, useCallback, useMemo } from 'react';
+import { View, StyleSheet, Alert, FlatList } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Text, Button, Surface, TextInput, ActivityIndicator, Divider, Snackbar, Portal, useTheme } from 'react-native-paper';
+import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { borrowApi } from '../api/borrow';
+import { Book, BorrowRecord } from '../types';
+import { AppTheme } from '../theme/DarkTheme';
+import { devError } from '../utils/logger';
+import {
+  GradientHeader,
+  SectionCard,
+  StatCard,
+  EmptyState,
+  GRADIENTS,
+} from '../theme/MobileDesignSystem';
+
+interface ScannedBorrowItem {
+  barcode: string;
+  isbn: string;
+  copy_id: string | null;
+  copy_barcode: string | null;
+  book: Book;
+  alreadyBorrowed?: boolean;
+}
+
+export default function StaffBorrowScreen() {
+  const theme = useTheme() as AppTheme;
+  const c = theme.colors;
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const [scanned, setScanned] = useState(false);
+  const [patronCode, setPatronCode] = useState('');
+  const [patronId, setPatronId] = useState<string | null>(null);
+  const [patronName, setPatronName] = useState('');
+  const [scannedItems, setScannedItems] = useState<ScannedBorrowItem[]>([]);
+  const [isCreating, setIsCreating] = useState(false);
+  const [isLookingUp, setIsLookingUp] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
+  const [scanToast, setScanToast] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [activeCount, setActiveCount] = useState(0);
+  const [overdueCount, setOverdueCount] = useState(0);
+  const [activeRecords, setActiveRecords] = useState<BorrowRecord[]>([]);
+
+  const MAX_BORROW = 3;
+  const remaining = MAX_BORROW - activeCount;
+  const canBorrow = remaining > 0 && overdueCount === 0;
+
+  const handleBarCodeScanned = useCallback(async (result: BarcodeScanningResult) => {
+    if (scanned || !result.data) return;
+    setScanned(true);
+    const barcode = result.data;
+
+    if (!patronId) {
+      setTimeout(() => setScanned(false), 500);
+      return;
+    }
+
+    if (scannedItems.find((item) => item.barcode === barcode)) {
+      setScanToast('Sách này đã có trong danh sách');
+      setTimeout(() => setScanned(false), 500);
+      return;
+    }
+
+    if (scannedItems.length >= remaining) {
+      setScanToast(`Chỉ được mượn tối đa ${MAX_BORROW} cuốn`);
+      setTimeout(() => setScanned(false), 500);
+      return;
+    }
+
+    const normalizeCode = (v: string | undefined | null) => v?.replace(/[\s-]+/g, '').replace(/\.0+$/, '') ?? '';
+    const barcodeNormalized = normalizeCode(barcode);
+    const alreadyBorrowedRecord = activeRecords.find(
+      (r) => normalizeCode(r.book?.isbn) === barcodeNormalized || normalizeCode(r.book_id) === barcodeNormalized
+    );
+
+    if (alreadyBorrowedRecord) {
+      const book: Book = {
+        id: alreadyBorrowedRecord.book_id,
+        isbn: alreadyBorrowedRecord.book?.isbn || barcode,
+        title: alreadyBorrowedRecord.book?.title || barcode,
+        author: alreadyBorrowedRecord.book?.author,
+        cover_url: alreadyBorrowedRecord.book?.cover_url,
+        shelf_location: alreadyBorrowedRecord.book?.shelf_location,
+      };
+      setScannedItems((prev) => [...prev, { barcode, isbn: barcode, copy_id: null, copy_barcode: null, book, alreadyBorrowed: true }]);
+      setScanToast(`⚠️ "${alreadyBorrowedRecord.book?.title || barcode}" đã được mượn — sẽ không thêm vào phiếu`);
+      setTimeout(() => setScanned(false), 2000);
+      return;
+    }
+
+    try {
+      const result = await borrowApi.lookupBorrowSlip({
+        patron_id: patronId!,
+        items: [{ barcode, isbn: barcode }],
+      });
+      const item = result.items.find((i) => i.barcode === barcode);
+      if (!item || !item.can_borrow) {
+        const msg = item?.reason || 'Sách không thể mượn';
+        const title = item?.book?.title || '';
+        Alert.alert('Thông báo', title ? `"${title}": ${msg}` : `${msg} (ISBN: ${barcode})`);
+        setTimeout(() => setScanned(false), 500);
+        return;
+      }
+      const book: Book = {
+        id: item.book!.id,
+        isbn: item.book!.isbn,
+        title: item.book!.title,
+        author: item.book!.author || undefined,
+        cover_url: item.book!.cover_url || undefined,
+        shelf_location: item.book!.shelf_location || undefined,
+      };
+      setScannedItems((prev) => [...prev, {
+        barcode,
+        isbn: barcode,
+        copy_id: item.copy?.id || null,
+        copy_barcode: item.copy?.barcode || null,
+        book,
+      }]);
+      setScanToast(`Đã thêm: ${book.title}`);
+    } catch (error: any) {
+      let msg = `Không tìm thấy sách: ${barcode}`;
+      if (error.response?.status === 403) {
+        msg = error.response?.data?.detail || 'Bạn không thể mượn sách lúc này';
+      } else if (error.response?.data?.detail) {
+        msg = error.response.data.detail;
+      }
+      Alert.alert('Thông báo', msg);
+    }
+    setTimeout(() => setScanned(false), 500);
+  }, [scanned, scannedItems, remaining, activeRecords, patronId]);
+
+  const lookupPatron = async () => {
+    if (!patronCode.trim()) return;
+    setIsLookingUp(true);
+    setError(null);
+    try {
+      const data = await borrowApi.getActiveBorrowsByStudentCode(patronCode.trim());
+      if (data.patron) {
+        setPatronId(data.patron.id);
+        setPatronName(data.patron.full_name || data.patron.student_code);
+        setActiveCount(data.total ?? 0);
+        setOverdueCount(data.overdue_count ?? 0);
+        setActiveRecords(data.records ?? []);
+        setScanToast(`Đã chọn độc giả: ${data.patron.full_name || data.patron.student_code}`);
+      }
+    } catch (err: any) {
+      const status = err?.response?.status || err?.status;
+      const detail = err?.response?.data?.detail || err?.message || '';
+      if (status === 403) {
+        if (detail.includes('chua vao thu vien')) {
+          setError('Độc giả chưa ở trong thư viện. Vui lòng yêu cầu độc giả quét thẻ tại cửa vào.');
+        } else {
+          setError('Thẻ độc giả đã bị khóa/hết hạn. Vui lòng liên hệ thư viện.');
+        }
+      } else {
+        setError('Không tìm thấy độc giả với mã số này');
+      }
+      setPatronId(null);
+      setPatronName('');
+      setActiveCount(0);
+      setOverdueCount(0);
+      setActiveRecords([]);
+    } finally {
+      setIsLookingUp(false);
+    }
+  };
+
+  const removeItem = (index: number) => {
+    setScannedItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const resetState = () => {
+    setScanned(false);
+    setScannedItems([]);
+    setPatronCode('');
+    setPatronId(null);
+    setPatronName('');
+    setActiveCount(0);
+    setOverdueCount(0);
+    setActiveRecords([]);
+    setCameraReady(false);
+    setError(null);
+  };
+
+  const handleCreateSlip = async () => {
+    if (!scannedItems.length || !patronId) return;
+
+    const validItems = scannedItems.filter((item) => !item.alreadyBorrowed);
+    const alreadyBorrowedItems = scannedItems.filter((item) => item.alreadyBorrowed);
+
+    if (alreadyBorrowedItems.length > 0) {
+      const titles = alreadyBorrowedItems.map((b) => `"${b.book.title || b.barcode}"`).join(', ');
+      Alert.alert(
+        'Sách đã được mượn trước đó',
+        `${alreadyBorrowedItems.length} sách trong danh sách đang được mượn: ${titles}`,
+        [
+          { text: 'Bỏ qua', style: 'cancel' },
+          {
+            text: 'Tạo phiếu',
+            onPress: () => submitSlip(validItems),
+          },
+        ]
+      );
+      return;
+    }
+
+    if (activeCount + validItems.length > MAX_BORROW) {
+      Alert.alert('Vượt quá giới hạn', `Tổng sách mượn sẽ là ${activeCount + validItems.length} cuốn, tối đa ${MAX_BORROW} cuốn`);
+      return;
+    }
+
+    submitSlip(validItems);
+  };
+
+  const submitSlip = async (items: ScannedBorrowItem[]) => {
+    if (!items.length || !patronId) return;
+    setIsCreating(true);
+    try {
+      const apiItems = items.map((item) => ({
+        barcode: item.copy_barcode || item.barcode,
+        isbn: item.isbn,
+        book_id: item.book.id,
+        copy_id: item.copy_id!,
+      }));
+      const result = await borrowApi.confirmBorrowSlip({ patron_id: patronId, items: apiItems });
+      if (result.status === 'success') {
+        Alert.alert('Thành công', result.message, [
+          { text: 'OK', onPress: resetState },
+        ]);
+      }
+    } catch (error: any) {
+      devError('[StaffBorrow] Create slip error:', error);
+      let msg = 'Tạo phiếu mượn thất bại';
+      if (error.response?.data?.detail) msg = error.response.data.detail;
+      Alert.alert('Lỗi', msg);
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  if (!permission) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <ActivityIndicator color={c.primary} />
+      </SafeAreaView>
+    );
+  }
+
+  if (!permission.granted) {
+    return (
+      <SafeAreaView style={styles.permissionContainer} edges={['bottom']}>
+        <MaterialCommunityIcons name="camera-off-outline" size={48} color={c.onSurfaceVariant} />
+        <Text style={styles.permissionText}>Cần quyền camera để quét mã vạch sách</Text>
+        <Button mode="contained" onPress={requestPermission} style={styles.permissionButton}>
+          Cấp quyền
+        </Button>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      <GradientHeader
+        title="Mượn sách"
+        subtitle={patronId ? `Độc giả: ${patronName}` : 'Quét sách cho độc giả'}
+        icon="book-plus-outline"
+      />
+
+      <SectionCard
+        title="Độc giả"
+        icon="account-outline"
+        accentColor={GRADIENTS.indigo[0]}
+        right={
+          patronId ? (
+            <Button mode="text" compact onPress={resetState} textColor={c.error}>
+              Đặt lại
+            </Button>
+          ) : undefined
+        }
+      >
+        <View style={styles.patronRow}>
+          <TextInput
+            value={patronCode}
+            onChangeText={setPatronCode}
+            placeholder="Nhập MSSV..."
+            mode="outlined"
+            style={styles.patronField}
+            outlineStyle={styles.inputOutline}
+            activeOutlineColor={c.primary}
+          />
+          <Button mode="contained" onPress={lookupPatron} loading={isLookingUp} disabled={isLookingUp || !patronCode.trim()} style={styles.lookupButton}>
+            Tra cứu
+          </Button>
+        </View>
+
+        {error ? (
+          <View style={styles.errorBox}>
+            <MaterialCommunityIcons name="alert-circle-outline" size={18} color={c.error} />
+            <Text style={styles.errorText} selectable>{error}</Text>
+          </View>
+        ) : null}
+
+        {patronId ? (
+          <View style={styles.quotaRow}>
+            <View style={styles.patronReadyBanner}>
+              <MaterialCommunityIcons name="check-circle" size={15} color={theme.dark ? '#4A8C5C' : '#067647'} />
+              <Text style={styles.patronReadyText}>{patronName}</Text>
+            </View>
+            <View style={[styles.quotaBadge, !canBorrow && overdueCount > 0 ? styles.quotaBadgeError : !canBorrow ? styles.quotaBadgeWarning : styles.quotaBadgeOk]}>
+              <MaterialCommunityIcons
+                name={canBorrow ? 'check-circle' : 'alert-circle'}
+                size={13}
+                color={canBorrow ? (theme.dark ? '#4A8C5C' : '#067647') : c.error}
+              />
+              <Text style={[styles.quotaBadgeText, !canBorrow && styles.quotaBadgeTextError]}>
+                {overdueCount > 0
+                  ? `${overdueCount} quá hạn`
+                  : `${remaining} cuốn khả dụng`}
+              </Text>
+            </View>
+          </View>
+        ) : null}
+      </SectionCard>
+
+      {patronId ? (
+        <View style={styles.statsRow}>
+          <View style={styles.statHalf}>
+            <StatCard
+              label="Đang mượn"
+              value={activeCount}
+              icon="book-open-variant"
+              gradient={GRADIENTS.blue}
+              pct={(activeCount / MAX_BORROW) * 100}
+            />
+          </View>
+          <View style={styles.statHalf}>
+            <StatCard
+              label="Khả dụng"
+              value={remaining}
+              icon="book-check-outline"
+              gradient={canBorrow ? GRADIENTS.emerald : GRADIENTS.amber}
+            />
+          </View>
+        </View>
+      ) : null}
+
+      <View style={styles.scannerContainer}>
+        {permission?.granted && patronId && canBorrow ? (
+          <>
+            <CameraView
+              style={styles.camera}
+              facing="back"
+              onCameraReady={() => setCameraReady(true)}
+              barcodeScannerSettings={{
+                barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
+              }}
+              onBarcodeScanned={cameraReady && !scanned ? handleBarCodeScanned : undefined}
+            />
+            <View style={styles.overlay}>
+              <View style={styles.scanArea}>
+                <View style={[styles.corner, styles.topLeft]} />
+                <View style={[styles.corner, styles.topRight]} />
+                <View style={[styles.corner, styles.bottomLeft]} />
+                <View style={[styles.corner, styles.bottomRight]} />
+              </View>
+              <Text style={styles.scanText}>Quét mã vạch sách</Text>
+            </View>
+          </>
+        ) : (
+          <View style={styles.cameraPlaceholder}>
+            <MaterialCommunityIcons
+              name={!canBorrow ? 'book-lock-outline' : 'barcode-scan'}
+              size={48}
+              color={c.onSurfaceVariant}
+            />
+            <Text style={styles.cameraPlaceholderText}>
+              {!canBorrow
+                ? overdueCount > 0
+                  ? 'Có sách quá hạn, không thể mượn thêm'
+                  : 'Đã mượn tối đa 3 cuốn'
+                : permission?.granted
+                  ? 'Cần tra độc giả trước'
+                  : 'Cần cấp quyền camera'}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      <SectionCard
+        title={`Danh sách mượn (${scannedItems.length} cuốn)`}
+        icon="book-open-variant"
+        accentColor={GRADIENTS.violet[0]}
+        right={
+          scannedItems.length > 0 ? (
+            <Button mode="text" compact onPress={() => setScannedItems([])} textColor={c.error}>
+              Xoá tất cả
+            </Button>
+          ) : undefined
+        }
+        style={styles.listSection}
+      >
+        {scannedItems.length === 0 ? (
+          <EmptyState icon="barcode-scan" message="Quét sách để thêm vào phiếu mượn" />
+        ) : (
+          <FlatList
+            data={scannedItems}
+            keyExtractor={(_, index) => String(index)}
+            style={styles.list}
+            renderItem={({ item, index }) => (
+              <Surface
+                style={[
+                  styles.itemCard,
+                  item.alreadyBorrowed && styles.itemCardAlreadyBorrowed,
+                ]}
+                elevation={0}
+              >
+                <View style={styles.itemRow}>
+                  {item.book.cover_url ? (
+                    <View style={styles.itemCoverWrap}>
+                      <MaterialCommunityIcons name="book-open-variant" size={20} color={c.primary} />
+                    </View>
+                  ) : (
+                    <View style={styles.itemCoverPlaceholder}>
+                      <MaterialCommunityIcons name="book-open-variant" size={24} color={c.onSurfaceVariant} />
+                    </View>
+                  )}
+                  <View style={styles.itemInfo}>
+                    <View style={styles.itemTitleRow}>
+                      <Text style={styles.itemTitle} numberOfLines={2}>{item.book.title}</Text>
+                      {item.alreadyBorrowed && (
+                        <View style={styles.alreadyBorrowedBadge}>
+                          <MaterialCommunityIcons name="book-lock" size={12} color={c.error} />
+                          <Text style={styles.alreadyBorrowedText}>Đã mượn</Text>
+                        </View>
+                      )}
+                    </View>
+                    {item.book.author && <Text style={styles.itemAuthor} numberOfLines={1}>{item.book.author}</Text>}
+                    <Text style={styles.itemIsbn}>{item.barcode}</Text>
+                    {item.alreadyBorrowed && (
+                      <Text style={styles.alreadyBorrowedNote}>Sách này đang được mượn — sẽ không thêm vào phiếu</Text>
+                    )}
+                  </View>
+                  <Button mode="text" compact onPress={() => removeItem(index)} textColor={c.error} style={styles.removeButton}>
+                    Xoá
+                  </Button>
+                </View>
+              </Surface>
+            )}
+          />
+        )}
+      </SectionCard>
+
+      <View style={styles.actionRow}>
+        <Button mode="outlined" onPress={resetState} style={styles.actionButton} textColor={c.onSurfaceVariant}>
+          Xoá tất cả
+        </Button>
+        <Button mode="contained" onPress={handleCreateSlip} loading={isCreating} disabled={isCreating || scannedItems.length === 0 || !patronId || !canBorrow} style={styles.actionButton}>
+          {isCreating ? 'Đang tạo phiếu...' : `Tạo phiếu mượn (${scannedItems.length} cuốn)`}
+        </Button>
+      </View>
+
+      <Portal>
+        <View style={styles.topSnackbarWrapper}>
+          <Snackbar
+            visible={!!scanToast}
+            onDismiss={() => setScanToast('')}
+            duration={2000}
+            style={styles.topSnackbar}
+          >
+            {scanToast}
+          </Snackbar>
+        </View>
+      </Portal>
+    </SafeAreaView>
+  );
+}
+
+function createStyles(theme: AppTheme) {
+  const c = theme.colors;
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: c.background },
+    permissionContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: c.background, gap: 12 },
+    permissionText: { color: c.onSurface, fontSize: 16, marginBottom: 8, textAlign: 'center' },
+    permissionButton: { borderRadius: 10, paddingHorizontal: 24 },
+    patronRow: { flexDirection: 'row', gap: 8, alignItems: 'center', paddingHorizontal: 16, paddingBottom: 12 },
+    patronField: { flex: 1, backgroundColor: 'transparent' },
+    inputOutline: { borderRadius: 10, borderColor: c.outlineVariant },
+    lookupButton: { borderRadius: 10, height: 44 },
+    errorBox: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+      marginHorizontal: 16,
+      marginBottom: 12,
+      padding: 10,
+      borderRadius: 10,
+      backgroundColor: c.errorContainer,
+      borderWidth: 1,
+      borderColor: c.error,
+    },
+    errorText: {
+      color: c.error,
+      flex: 1,
+      fontSize: 13,
+    },
+    patronReadyBanner: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8, backgroundColor: theme.dark ? 'rgba(74, 140, 92, 0.12)' : 'rgba(6, 118, 71, 0.08)' },
+    patronReadyText: { color: theme.dark ? '#4A8C5C' : '#067647', fontSize: 12, fontWeight: '600' },
+    quotaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 12, gap: 8 },
+    quotaBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 12 },
+    quotaBadgeOk: { backgroundColor: theme.dark ? 'rgba(74, 140, 92, 0.12)' : 'rgba(6, 118, 71, 0.08)' },
+    quotaBadgeWarning: { backgroundColor: theme.dark ? 'rgba(196, 154, 60, 0.15)' : 'rgba(181, 71, 8, 0.08)' },
+    quotaBadgeError: { backgroundColor: 'rgba(196, 78, 78, 0.15)' },
+    quotaBadgeText: { fontSize: 12, fontWeight: '700', color: c.onSurface },
+    quotaBadgeTextError: { color: c.error },
+    statsRow: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, paddingBottom: 12 },
+    statHalf: { flex: 1 },
+    scannerContainer: { height: 220, marginHorizontal: 16, borderRadius: 14, overflow: 'hidden', backgroundColor: c.surfaceVariant, marginBottom: 12 },
+    camera: { flex: 1 },
+    overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' },
+    scanArea: { width: 280, height: 100, borderRadius: 12, position: 'relative' },
+    corner: { position: 'absolute', width: 28, height: 28, borderColor: c.primary, borderWidth: 2.5 },
+    topLeft: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 12 },
+    topRight: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 12 },
+    bottomLeft: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 12 },
+    bottomRight: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 12 },
+    scanText: { color: '#FFFFFF', marginTop: 12, fontSize: 14, textAlign: 'center', fontWeight: '600' },
+    cameraPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 10, backgroundColor: c.surfaceVariant },
+    cameraPlaceholderText: { color: c.onSurfaceVariant, fontSize: 14, fontWeight: '600' },
+    listSection: { flex: 1, marginHorizontal: 16 },
+    list: { flex: 1 },
+    itemCard: { marginVertical: 4, marginHorizontal: 16, backgroundColor: c.surface, borderRadius: 14, borderWidth: 0.5, borderColor: c.outlineVariant },
+    itemRow: { flexDirection: 'row', alignItems: 'center', padding: 12 },
+    itemCoverWrap: { width: 44, height: 60, borderRadius: 8, backgroundColor: c.primaryContainer, justifyContent: 'center', alignItems: 'center' },
+    itemCoverPlaceholder: { width: 44, height: 60, borderRadius: 8, backgroundColor: c.surfaceVariant, justifyContent: 'center', alignItems: 'center' },
+    itemInfo: { flex: 1, marginLeft: 12 },
+    itemTitle: { fontSize: 14, fontWeight: '600', color: c.onSurface },
+    itemAuthor: { fontSize: 12, color: c.onSurfaceVariant, marginTop: 2 },
+    itemIsbn: { fontSize: 11, color: c.primary, marginTop: 2, fontFamily: 'monospace' },
+    itemTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+    alreadyBorrowedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, backgroundColor: 'rgba(196, 78, 78, 0.15)' },
+    alreadyBorrowedText: { color: c.error, fontSize: 10, fontWeight: '700' },
+    alreadyBorrowedNote: { color: c.error, fontSize: 11, marginTop: 2, fontStyle: 'italic' },
+    itemCardAlreadyBorrowed: { backgroundColor: c.surfaceVariant, borderColor: c.error, borderWidth: 1, opacity: 0.7 },
+    removeButton: { marginLeft: 4 },
+    actionRow: { flexDirection: 'row', padding: 16, gap: 8, paddingBottom: 20 },
+    actionButton: { flex: 1, borderRadius: 10 },
+    topSnackbarWrapper: { position: 'absolute', top: 8, left: 0, right: 0, zIndex: 9999, paddingHorizontal: 16 },
+    topSnackbar: { width: '100%' },
+  });
+}
+</file>
+
+<file path="package.json">
+{
+  "name": "librarymobileapp",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "dependencies": {
+    "@expo/vector-icons": "^15.1.1",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-ml-kit/text-recognition": "^2.0.0",
+    "@react-navigation/bottom-tabs": "^7.18.0",
+    "@react-navigation/native": "^7.3.1",
+    "@react-navigation/stack": "^7.10.3",
+    "axios": "^1.17.0",
+    "expo": "~56.0.11",
+    "expo-camera": "^56.0.8",
+    "expo-dev-client": "~56.0.20",
+    "expo-file-system": "~56.0.8",
+    "expo-status-bar": "~56.0.4",
+    "react": "19.2.3",
+    "react-native": "0.85.3",
+    "react-native-gesture-handler": "~2.31.1",
+    "react-native-paper": "^5.15.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "^4.25.2",
+    "react-native-vector-icons": "^10.3.0",
+    "react-native-webview": "^14.0.1"
+  },
+  "devDependencies": {
+    "@react-native/jest-preset": "^0.85.3",
+    "@testing-library/react-native": "^14.0.0",
+    "@types/jest": "29.5.14",
+    "@types/react": "~19.2.2",
+    "@types/react-native-vector-icons": "^6.4.18",
+    "jest": "~29.7.0",
+    "ts-jest": "^29.4.11",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "test": "jest"
+  },
+  "private": true
 }
 </file>
 
@@ -16081,61 +16081,6 @@ function createStyles(theme: AppTheme) {
 }
 </file>
 
-<file path="src/navigation/types.ts">
-import { NavigatorScreenParams } from '@react-navigation/native';
-import { Notification } from '../types';
-
-export type AuthStackParamList = {
-  Login: undefined;
-  Register: undefined;
-  FaceLogin: undefined;
-  ForgotPassword: undefined;
-};
-
-export type MainTabParamList = {
-  Home: undefined;
-  AIChat: undefined;
-  BookRecommendations: undefined;
-  BookCatalog: undefined;
-  Profile: undefined;
-};
-
-export type MainStackParamList = {
-  MainTabs: NavigatorScreenParams<MainTabParamList>;
-  NotificationDetail: { notification: Notification };
-  FaceCamera: undefined;
-  ChangePassword: undefined;
-  ImportBooks: undefined;
-  AIChat: undefined;
-  AIHealth: undefined;
-  BookRecommendations: undefined;
-  MyReservations: undefined;
-  BookCatalog: undefined;
-  Notifications: undefined;
-  StaffReturn: undefined;
-  StaffBorrow: undefined;
-  Schedule: undefined;
-  History: undefined;
-  EditProfile: undefined;
-  Availability: undefined;
-  OpenShifts: undefined;
-  MySwaps: undefined;
-  CreateSwap: undefined;
-  LibraryTour: undefined;
-};
-
-export type RootStackParamList = {
-  Auth: NavigatorScreenParams<AuthStackParamList>;
-  Main: NavigatorScreenParams<MainStackParamList>;
-};
-
-declare global {
-  namespace ReactNavigation {
-    interface RootParamList extends RootStackParamList {}
-  }
-}
-</file>
-
 <file path="src/types/index.ts">
 export interface User {
   id: string;
@@ -16455,6 +16400,61 @@ export interface NotificationListResponse {
   items: Notification[];
   total: number;
   unread: number;
+}
+</file>
+
+<file path="src/navigation/types.ts">
+import { NavigatorScreenParams } from '@react-navigation/native';
+import { Notification } from '../types';
+
+export type AuthStackParamList = {
+  Login: undefined;
+  Register: undefined;
+  FaceLogin: undefined;
+  ForgotPassword: undefined;
+};
+
+export type MainTabParamList = {
+  Home: undefined;
+  AIChat: undefined;
+  BookRecommendations: undefined;
+  BookCatalog: undefined;
+  Profile: undefined;
+};
+
+export type MainStackParamList = {
+  MainTabs: NavigatorScreenParams<MainTabParamList>;
+  NotificationDetail: { notification: Notification };
+  FaceCamera: undefined;
+  ChangePassword: undefined;
+  ImportBooks: undefined;
+  AIChat: undefined;
+  AIHealth: undefined;
+  BookRecommendations: undefined;
+  MyReservations: undefined;
+  BookCatalog: undefined;
+  Notifications: undefined;
+  StaffReturn: undefined;
+  StaffBorrow: undefined;
+  Schedule: undefined;
+  History: undefined;
+  EditProfile: undefined;
+  Availability: undefined;
+  OpenShifts: undefined;
+  MySwaps: undefined;
+  CreateSwap: undefined;
+  LibraryTour: undefined;
+};
+
+export type RootStackParamList = {
+  Auth: NavigatorScreenParams<AuthStackParamList>;
+  Main: NavigatorScreenParams<MainStackParamList>;
+};
+
+declare global {
+  namespace ReactNavigation {
+    interface RootParamList extends RootStackParamList {}
+  }
 }
 </file>
 
