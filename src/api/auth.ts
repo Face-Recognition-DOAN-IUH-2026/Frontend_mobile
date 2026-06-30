@@ -20,6 +20,7 @@ export interface PatronRegisterRequest {
   class_name?: string;
   course?: string;
   permanent_address?: string;
+  verification_token?: string;
 }
 
 export interface LoginResponse {
@@ -70,12 +71,42 @@ export const authApi = {
   },
 
   patronRegister: async (data: PatronRegisterRequest): Promise<PatronLoginResponse> => {
-    const response = await api.post<PatronLoginResponse>('/patrons/register', data);
+    const params: any = {
+      student_code: data.student_code,
+      password: data.password,
+      full_name: data.full_name,
+      email: data.email,
+    };
+    if (data.class_name) params.class_name = data.class_name;
+    if (data.course) params.course = data.course;
+    if (data.permanent_address) params.permanent_address = data.permanent_address;
+    if (data.verification_token) params.verification_token = data.verification_token;
+    const response = await api.post<PatronLoginResponse>('/patrons/register', params);
     if (!response.data.user) {
       throw new Error('Invalid response: missing user data');
     }
-    await AsyncStorage.setItem('accessToken', response.data.access_token);
-    await AsyncStorage.setItem('patronData', JSON.stringify(response.data.user));
+    return response.data;
+  },
+
+  preRegisterOtp: async (email: string): Promise<void> => {
+    await api.post('/auth/pre-register-otp', { email });
+  },
+
+  preRegisterVerify: async (email: string, code: string): Promise<{ verification_token: string }> => {
+    const response = await api.post<{ verification_token: string }>('/auth/pre-register-verify', { email, code });
+    return response.data;
+  },
+
+  checkExists: async (studentCode: string, email: string): Promise<{ student_code_exists: boolean; email_exists: boolean }> => {
+    const response = await api.post<{ student_code_exists: boolean; email_exists: boolean }>('/patrons/check-exists', {
+      student_code: studentCode,
+      email,
+    });
+    return response.data;
+  },
+
+  checkStudentCode: async (code: string): Promise<{ exists: boolean }> => {
+    const response = await api.get<{ exists: boolean }>(`/patrons/check-code/${code}`);
     return response.data;
   },
 

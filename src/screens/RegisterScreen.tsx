@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ActivityIndicator, Button, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
@@ -6,6 +6,7 @@ import api from '../api/client';
 import { authApi } from '../api/auth';
 import AutoFaceCapture from '../components/AutoFaceCapture';
 import StudentCardScanner, { ScannedCardData } from '../components/StudentCardScanner';
+import CodeInput from '../components/CodeInput';
 import { AppTheme } from '../theme/DarkTheme';
 import { SectionCard, GRADIENTS } from '../theme/MobileDesignSystem';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -14,17 +15,18 @@ interface RegisterScreenProps {
   navigation: any;
 }
 
-type StepKey = 'scan' | 'form' | 'choice' | 'consent' | 'face';
+type StepKey = 'scan' | 'form' | 'otp' | 'choice' | 'consent' | 'face';
 
 const STEP_META: Record<StepKey, { label: string; icon: string }> = {
   scan: { label: 'Quét thẻ', icon: 'card-account-details-outline' },
   form: { label: 'Thông tin', icon: 'form-textbox' },
+  otp: { label: 'Xác thực', icon: 'email-check-outline' },
   choice: { label: 'Hoàn tất', icon: 'check-circle-outline' },
   consent: { label: 'Đồng ý', icon: 'file-document-check' },
   face: { label: 'Khuôn mặt', icon: 'face-recognition' },
 };
 
-const FORM_STEPS: StepKey[] = ['form', 'choice', 'consent', 'face'];
+const FORM_STEPS: StepKey[] = ['form', 'otp', 'choice', 'consent', 'face'];
 
 function StepIndicator({ currentStep }: { currentStep: StepKey }) {
   const currentIdx = FORM_STEPS.indexOf(currentStep);
@@ -142,8 +144,140 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [snackbar, setSnackbar] = useState('');
   const [consentGiven, setConsentGiven] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [verificationToken, setVerificationToken] = useState('');
+  const [otpSending, setOtpSending] = useState(false);
+  const [otpCooldown, setOtpCooldown] = useState(0);
+  const [studentCodeCheck, setStudentCodeCheck] = useState<'idle' | 'checking' | 'exists' | 'available'>('idle');
+  const [emailCheck, setEmailCheck] = useState<'idle' | 'checking' | 'exists' | 'available'>('idle');
+  const otpTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const checkExistsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (otpTimerRef.current) clearInterval(otpTimerRef.current);
+      if (checkExistsDebounceRef.current) clearTimeout(checkExistsDebounceRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (step !== 'otp') {
+      if (otpTimerRef.current) {
+        clearInterval(otpTimerRef.current);
+        otpTimerRef.current = null;
+      }
+    }
+  }, [step]);
+
+  useEffect(() => {
+    let ignore = false;
+    if (checkExistsDebounceRef.current) clearTimeout(checkExistsDebounceRef.current);
+
+    const code = studentCode.trim();
+    const mail = email.trim();
+    const codeValid = code.length >= 4;
+    const mailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail);
+
+    if (!codeValid && !mailValid) {
+      setStudentCodeCheck('idle');
+      setEmailCheck('idle');
+      return;
+    }
+
+    if (codeValid) setStudentCodeCheck('checking');
+    if (mailValid) setEmailCheck('checking');
+
+    checkExistsDebounceRef.current = setTimeout(() => {
+      authApi.checkExists(codeValid ? code : '', mailValid ? mail : '').then(result => {
+        if (ignore) return;
+        setStudentCodeCheck(codeValid ? (result.student_code_exists ? 'exists' : 'available') : 'idle');
+        setEmailCheck(mailValid ? (result.email_exists ? 'exists' : 'available') : 'idle');
+      }).catch(() => {
+        if (!ignore) {
+          setStudentCodeCheck('idle');
+          setEmailCheck('idle');
+        }
+      });
+    }, 500);
+
+    return () => { ignore = true; };
+  }, [studentCode, email]);
+
+  const startOtpCooldown = () => {
+    setOtpCooldown(60);
+    if (otpTimerRef.current) clearInterval(otpTimerRef.current);
+    otpTimerRef.current = setInterval(() => {
+      setOtpCooldown((prev) => {
+        if (prev <= 1) {
+          if (otpTimerRef.current) clearInterval(otpTimerRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
 
   const showError = (message: string) => setSnackbar(message);
+
+  const handleSendOtp = async () => {
+    setOtpSending(true);
+    try {
+      await authApi.preRegisterOtp(email.trim());
+      startOtpCooldown();
+      setStep('otp');
+    } catch (error: any) {
+      const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || 'Gui ma OTP that bai';
+      showError(message);
+    } finally {
+      setOtpSending(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (otpCode.length < 6) {
+      showError('Vui long nhap day du ma OTP');
+      return;
+    }
+    setOtpSending(true);
+    try {
+      const result = await authApi.preRegisterVerify(email.trim(), otpCode);
+      setVerificationToken(result.verification_token);
+      await authApi.patronRegister({
+        student_code: studentCode.trim(),
+        password,
+        full_name: fullName.trim(),
+        email: email.trim(),
+        class_name: className.trim() || undefined,
+        course: course.trim() || undefined,
+        permanent_address: permanentAddress.trim() || undefined,
+        verification_token: result.verification_token,
+      }).then(response => {
+        setRegisteredUser(response.user);
+        setStep('choice');
+      }).catch(error => {
+        const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || 'Dang ky that bai';
+        showError(message);
+      });
+    } catch (error: any) {
+      const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || 'Ma OTP khong hop le';
+      showError(message);
+    } finally {
+      setOtpSending(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (otpCooldown > 0) return;
+    try {
+      await authApi.preRegisterOtp(email.trim());
+      startOtpCooldown();
+      setOtpCode('');
+      showError('Da gui lai ma OTP');
+    } catch (error: any) {
+      const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || 'Gui lai OTP that bai';
+      showError(message);
+    }
+  };
 
   const handleScanned = (data: ScannedCardData) => {
     setStudentCode(data.studentCode || '');
@@ -188,30 +322,6 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
       return false;
     }
     return true;
-  };
-
-  const handleRegisterClick = async () => {
-    if (!validateForm()) return;
-
-    setIsUploading(true);
-    try {
-      const response = await authApi.patronRegister({
-        student_code: studentCode.trim(),
-        password,
-        full_name: fullName.trim(),
-        email: email.trim(),
-        class_name: className.trim() || undefined,
-        course: course.trim() || undefined,
-        permanent_address: permanentAddress.trim() || undefined,
-      });
-      setRegisteredUser(response.user);
-      setStep('choice');
-    } catch (error: any) {
-      const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || 'Đăng ký thất bại';
-      showError(message);
-    } finally {
-      setIsUploading(false);
-    }
   };
 
   const handleFaceEnroll = async (images: string[]) => {
@@ -267,6 +377,75 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
             setStep('form');
           }}
         />
+        <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
+          {snackbar}
+        </Snackbar>
+      </SafeAreaView>
+    );
+  }
+
+  if (step === 'otp') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.headerBar}>
+          <Button
+            mode="text"
+            onPress={() => setStep('form')}
+            icon="arrow-left"
+            compact
+            labelStyle={styles.backLabel}
+          >
+            Quay lại
+          </Button>
+          <Text variant="titleMedium" style={styles.headerTitle}>Xác thực email</Text>
+          <View style={{ width: 60 }} />
+        </View>
+
+        <StepIndicator currentStep={step} />
+
+        <View style={styles.centeredContent}>
+          <SectionCard
+            title="Mã xác thực"
+            icon="email-check-outline"
+            accentColor={GRADIENTS.blue[0]}
+            style={styles.choiceCard}
+          >
+            <View style={styles.otpInner}>
+              <View style={styles.otpIconWrap}>
+                <MaterialCommunityIcons name="email-check" size={48} color={GRADIENTS.blue[0]} />
+              </View>
+              <Text style={styles.otpTitle}>Nhập mã OTP</Text>
+              <Text style={styles.otpSubtitle}>
+                Mã xác thực gồm 6 chữ số đã được gửi đến email{'\n'}
+                <Text style={styles.otpEmail}>{email}</Text>
+              </Text>
+
+              <CodeInput value={otpCode} onChange={setOtpCode} length={6} theme={theme} />
+
+              <Button
+                mode="contained"
+                onPress={handleVerifyOtp}
+                loading={otpSending}
+                disabled={otpSending || otpCode.length < 6}
+                contentStyle={styles.primaryBtn}
+                labelStyle={styles.primaryBtnLabel}
+                style={styles.primaryBtnWrapper}
+              >
+                Xác thực
+              </Button>
+
+              <Button
+                mode="text"
+                onPress={handleResendOtp}
+                disabled={otpCooldown > 0}
+                labelStyle={[styles.resendLabel, otpCooldown > 0 && styles.resendLabelDisabled]}
+              >
+                {otpCooldown > 0 ? `Gửi lại sau ${otpCooldown}s` : 'Gửi lại mã'}
+              </Button>
+            </View>
+          </SectionCard>
+        </View>
+
         <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
           {snackbar}
         </Snackbar>
@@ -438,6 +617,22 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               outlineStyle={styles.inputOutline}
               style={styles.input}
             />
+            {studentCodeCheck === 'checking' ? (
+              <View style={styles.codeCheckRow}>
+                <ActivityIndicator size={14} color={theme.colors.primary} />
+                <Text style={styles.codeCheckText}>Đang kiểm tra...</Text>
+              </View>
+            ) : studentCodeCheck === 'exists' ? (
+              <View style={[styles.codeCheckRow, styles.codeCheckRowError]}>
+                <MaterialCommunityIcons name="close-circle" size={16} color={theme.colors.error} />
+                <Text style={[styles.codeCheckText, { color: theme.colors.error }]}>Mã sinh viên đã tồn tại</Text>
+              </View>
+            ) : studentCodeCheck === 'available' ? (
+              <View style={[styles.codeCheckRow, styles.codeCheckRowSuccess]}>
+                <MaterialCommunityIcons name="check-circle" size={16} color={GRADIENTS.emerald[0]} />
+                <Text style={[styles.codeCheckText, { color: GRADIENTS.emerald[0] }]}>Mã sinh viên hợp lệ</Text>
+              </View>
+            ) : null}
 
             <TextInput
               label="Họ và tên"
@@ -492,6 +687,22 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               outlineStyle={styles.inputOutline}
               style={styles.input}
             />
+            {emailCheck === 'checking' ? (
+              <View style={styles.codeCheckRow}>
+                <ActivityIndicator size={14} color={theme.colors.primary} />
+                <Text style={styles.codeCheckText}>Đang kiểm tra email...</Text>
+              </View>
+            ) : emailCheck === 'exists' ? (
+              <View style={[styles.codeCheckRow, styles.codeCheckRowError]}>
+                <MaterialCommunityIcons name="close-circle" size={16} color={theme.colors.error} />
+                <Text style={[styles.codeCheckText, { color: theme.colors.error }]}>Email đã được đăng ký</Text>
+              </View>
+            ) : emailCheck === 'available' ? (
+              <View style={[styles.codeCheckRow, styles.codeCheckRowSuccess]}>
+                <MaterialCommunityIcons name="check-circle" size={16} color={GRADIENTS.emerald[0]} />
+                <Text style={[styles.codeCheckText, { color: GRADIENTS.emerald[0] }]}>Email hợp lệ</Text>
+              </View>
+            ) : null}
 
             <TextInput
               label="Mật khẩu"
@@ -517,9 +728,27 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
 
             <Button
               mode="contained"
-              onPress={handleRegisterClick}
-              loading={isUploading}
-              disabled={isUploading}
+              onPress={async () => {
+                if (!validateForm()) return;
+                if (otpSending) return;
+                try {
+                  const result = await authApi.checkExists(studentCode.trim(), email.trim());
+                  if (result.student_code_exists) {
+                    showError('Mã sinh viên đã tồn tại');
+                    return;
+                  }
+                  if (result.email_exists) {
+                    showError('Email đã được đăng ký');
+                    return;
+                  }
+                } catch {
+                  showError('Không thể kiểm tra thông tin');
+                  return;
+                }
+                handleSendOtp();
+              }}
+              loading={otpSending}
+              disabled={otpSending || studentCodeCheck === 'checking' || emailCheck === 'checking' || studentCodeCheck === 'exists' || emailCheck === 'exists'}
               contentStyle={styles.primaryBtn}
               labelStyle={styles.primaryBtnLabel}
               style={styles.primaryBtnWrapper}
@@ -623,6 +852,29 @@ function createStyles(theme: AppTheme) {
       fontSize: 14,
       fontWeight: '600',
     },
+    codeCheckRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 4,
+      paddingVertical: 4,
+    },
+    codeCheckRowError: {
+      backgroundColor: `${theme.colors.error}15`,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 6,
+    },
+    codeCheckRowSuccess: {
+      backgroundColor: `${GRADIENTS.emerald[0]}15`,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 6,
+    },
+    codeCheckText: {
+      fontSize: 12,
+      color: theme.colors.onSurfaceVariant,
+    },
     choiceCard: {
       borderRadius: 14,
     },
@@ -704,6 +956,41 @@ function createStyles(theme: AppTheme) {
       color: theme.colors.onSurface,
       fontSize: 15,
       fontWeight: '600',
+    },
+    otpInner: {
+      alignItems: 'center',
+      gap: 14,
+      padding: 24,
+    },
+    otpIconWrap: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: `${GRADIENTS.blue[0]}20`,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    otpTitle: {
+      color: theme.colors.onSurface,
+      fontSize: 18,
+      fontWeight: '900',
+      textAlign: 'center',
+    },
+    otpSubtitle: {
+      color: theme.colors.onSurfaceVariant,
+      textAlign: 'center',
+      lineHeight: 20,
+    },
+    otpEmail: {
+      color: theme.colors.primary,
+      fontWeight: '700',
+    },
+    resendLabel: {
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    resendLabelDisabled: {
+      opacity: 0.5,
     },
   });
 }
