@@ -23,7 +23,7 @@ export default function MySwapsScreen() {
   const loadData = useCallback(async () => {
     try {
       const result = await scheduleApi.listMySwaps();
-      setSwaps(Array.isArray(result) ? result.filter((s) => s.status === 'pending') : []);
+      setSwaps(Array.isArray(result) ? result : []);
     } catch (err) {
       console.error('Failed to load swaps:', err);
     } finally {
@@ -80,52 +80,92 @@ export default function MySwapsScreen() {
           <Text style={styles.emptyText}>Không có yêu cầu đổi ca nào</Text>
         </View>
       ) : (
-        swaps.map((swap) => (
-          <View key={swap.id} style={styles.swapCard}>
-            <View style={styles.swapHeader}>
-              <Ionicons name="swap-horizontal" size={20} color="#6366f1" />
-              <View style={styles.swapInfo}>
-                <Text style={styles.swapLabel}>Yêu cầu từ</Text>
-                <Text style={styles.swapStaff}>{swap.requesterStaffId.slice(0, 8)}...</Text>
-              </View>
-              {swap.targetStaffId && (
+        swaps.map((swap) => {
+          const statusColors: Record<string, string> = {
+            pending: '#f59e0b',
+            accepted: '#10b981',
+            rejected: '#ef4444',
+            cancelled: '#6b7280',
+            expired: '#6b7280',
+          };
+          const statusLabels: Record<string, string> = {
+            pending: 'Chờ xử lý',
+            accepted: 'Chấp nhận',
+            rejected: 'Từ chối',
+            cancelled: 'Đã hủy',
+            expired: 'Hết hạn',
+          };
+          const statusColor = statusColors[swap.status] || '#6b7280';
+          const statusLabel = statusLabels[swap.status] || swap.status;
+          const isOpenSwap = !swap.targetStaffId;
+          return (
+            <View key={swap.id} style={styles.swapCard}>
+              <View style={styles.swapHeader}>
+                <Ionicons name="swap-horizontal" size={20} color="#6366f1" />
                 <View style={styles.swapInfo}>
-                  <Text style={styles.swapLabel}>Đến</Text>
-                  <Text style={styles.swapStaff}>{swap.targetStaffId.slice(0, 8)}...</Text>
+                  <Text style={styles.swapLabel}>Yêu cầu từ</Text>
+                  <Text style={styles.swapStaff}>{swap.requesterStaffId.slice(0, 8)}...</Text>
                 </View>
-              )}
-              <View style={styles.swapStatus}>
-                <Text style={[styles.swapStatusText, { color: '#f59e0b' }]}>Chờ duyệt</Text>
+                {isOpenSwap ? (
+                  <View style={styles.swapInfo}>
+                    <Text style={styles.swapLabel}>Đến</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Ionicons name="globe-outline" size={12} color="#8b5cf6" />
+                      <Text style={[styles.swapStaff, { color: '#8b5cf6' }]}>Mở</Text>
+                    </View>
+                  </View>
+                ) : swap.targetStaffId ? (
+                  <View style={styles.swapInfo}>
+                    <Text style={styles.swapLabel}>Đến</Text>
+                    <Text style={styles.swapStaff}>{swap.targetStaffId.slice(0, 8)}...</Text>
+                  </View>
+                ) : null}
+                <View style={styles.swapStatus}>
+                  <Text style={[styles.swapStatusText, { color: statusColor }]}>{statusLabel}</Text>
+                </View>
               </View>
+              {swap.reason ? (
+                <Text style={styles.swapReason}>Lý do: {swap.reason}</Text>
+              ) : null}
+              {swap.responseNote ? (
+                <Text style={[styles.swapReason, { color: '#ef4444' }]}>Phản hồi: {swap.responseNote}</Text>
+              ) : null}
+              <View style={styles.swapMeta}>
+                <Text style={styles.swapMetaText}>
+                  Ca: {swap.requesterAssignmentId.slice(0, 8)}... → {swap.targetAssignmentId?.slice(0, 8) || 'chưa chọn'}
+                </Text>
+              </View>
+              <View style={styles.timeline}>
+                <Text style={styles.timelineText}>Tạo: {new Date(swap.createdAt).toLocaleString('vi-VN')}</Text>
+                {swap.reviewedAt ? (
+                  <Text style={styles.timelineText}>
+                    {swap.status === 'accepted' ? 'Chấp nhận' : 'Từ chối'}: {new Date(swap.reviewedAt).toLocaleString('vi-VN')}
+                  </Text>
+                ) : null}
+              </View>
+              {swap.status === 'pending' ? (
+                <View style={styles.actionRow}>
+                  <TouchableOpacity
+                    style={[styles.acceptButton, respondingId === swap.id && styles.disabledButton]}
+                    onPress={() => handleRespond(swap.id, 'accepted')}
+                    disabled={respondingId === swap.id}
+                  >
+                    <Ionicons name="checkmark" size={16} color="#fff" />
+                    <Text style={styles.acceptButtonText}>Chấp nhận</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.rejectButton, respondingId === swap.id && styles.disabledButton]}
+                    onPress={() => handleRespond(swap.id, 'rejected')}
+                    disabled={respondingId === swap.id}
+                  >
+                    <Ionicons name="close" size={16} color="#fff" />
+                    <Text style={styles.rejectButtonText}>Từ chối</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
             </View>
-            {swap.reason && (
-              <Text style={styles.swapReason}>Lý do: {swap.reason}</Text>
-            )}
-            <View style={styles.swapMeta}>
-              <Text style={styles.swapMetaText}>
-                Ca: {swap.requesterAssignmentId.slice(0, 8)}... → {swap.targetAssignmentId?.slice(0, 8) || 'chưa chọn'}
-              </Text>
-            </View>
-            <View style={styles.actionRow}>
-              <TouchableOpacity
-                style={[styles.acceptButton, respondingId === swap.id && styles.disabledButton]}
-                onPress={() => handleRespond(swap.id, 'accepted')}
-                disabled={respondingId === swap.id}
-              >
-                <Ionicons name="checkmark" size={16} color="#fff" />
-                <Text style={styles.acceptButtonText}>Chấp nhận</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.rejectButton, respondingId === swap.id && styles.disabledButton]}
-                onPress={() => handleRespond(swap.id, 'rejected')}
-                disabled={respondingId === swap.id}
-              >
-                <Ionicons name="close" size={16} color="#fff" />
-                <Text style={styles.rejectButtonText}>Từ chối</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ))
+          );
+        })
       )}
     </ScrollView>
   );
@@ -188,4 +228,6 @@ const styles = StyleSheet.create({
   disabledButton: { opacity: 0.5 },
   acceptButtonText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   rejectButtonText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  timeline: { marginTop: 6, gap: 2 },
+  timelineText: { fontSize: 10, color: '#475569' },
 });
