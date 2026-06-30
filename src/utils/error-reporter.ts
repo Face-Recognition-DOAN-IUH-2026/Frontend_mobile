@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 
-const API_BASE = 'http://10.0.2.2:80'; // Android emulator localhost
+const API_BASE = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://10.31.94.35:80';
 
 interface ReportErrorParams {
   title: string;

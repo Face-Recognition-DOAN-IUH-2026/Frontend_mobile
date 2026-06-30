@@ -98,15 +98,15 @@ export function SectionCard({
   return (
     <Surface style={[dhStyles.sectionCard, { borderColor: c.outline }, style]} elevation={0}>
       {accentColor && <View style={[dhStyles.sectionAccent, { backgroundColor: accentColor }]} />}
-      {(title || right) && (
+      {(title || right) ? (
         <View style={dhStyles.sectionHeader}>
           <View style={dhStyles.sectionHeaderLeft}>
-            {icon && <MaterialCommunityIcons name={icon as any} size={18} color={c.primary} />}
-            {title && <Text variant="titleSmall" style={[dhStyles.sectionTitle, { color: c.onSurface }]}>{title}</Text>}
+            {icon ? <MaterialCommunityIcons name={icon as any} size={18} color={c.primary} /> : null}
+            {title ? <Text variant="titleSmall" style={[dhStyles.sectionTitle, { color: c.onSurface }]}>{title}</Text> : null}
           </View>
           {right}
         </View>
-      )}
+      ) : null}
       {children}
     </Surface>
   );
