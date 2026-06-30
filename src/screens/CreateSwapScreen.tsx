@@ -163,14 +163,20 @@ export default function CreateSwapScreen() {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>2. Người muốn đổi cùng (không bắt buộc)</Text>
-        <Text style={styles.sectionHint}>Nhập ID nhân viên muốn đổi, hoặc để trống để gửi yêu cầu công khai</Text>
+        <Text style={styles.sectionHint}>Nhập ID nhân viên muốn đổi, hoặc để trống để tạo yêu cầu đổi ca mở — bất kỳ ai cũng có thể nhận</Text>
         <TextInput
           style={styles.input}
           value={targetStaffId}
           onChangeText={setTargetStaffId}
-          placeholder="Staff ID hoặc để trống"
+          placeholder="Staff ID hoặc để trống (mở)"
           placeholderTextColor="#666"
         />
+        {!targetStaffId.trim() ? (
+          <View style={styles.openSwapBadge}>
+            <Ionicons name="globe-outline" size={14} color="#8b5cf6" />
+            <Text style={styles.openSwapText}>Yêu cầu mở — bất kỳ ai cũng có thể nhận</Text>
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.section}>
@@ -262,6 +268,17 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   textArea: { height: 80, textAlignVertical: 'top' },
+  openSwapBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#8b5cf615',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginBottom: 8,
+  },
+  openSwapText: { fontSize: 12, color: '#8b5cf6', fontWeight: '600' },
   submitButton: {
     backgroundColor: '#6366f1',
     marginHorizontal: 16,

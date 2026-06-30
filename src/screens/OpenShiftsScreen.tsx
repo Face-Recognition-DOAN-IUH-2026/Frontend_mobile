@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { scheduleApi } from '../api/schedule';
+import { scheduleApi, ShiftSwap } from '../api/schedule';
 
 interface OpenShift {
   shift: { id: string; name: string; startTime: string; endTime: string } | null;
@@ -20,14 +20,23 @@ interface OpenShift {
 
 export default function OpenShiftsScreen() {
   const [shifts, setShifts] = useState<OpenShift[]>([]);
+  const [openSwaps, setOpenSwaps] = useState<ShiftSwap[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [biddingId, setBiddingId] = useState<string | null>(null);
+  const [claimingId, setClaimingId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
-      const result = await scheduleApi.getOpenShifts();
-      setShifts(Array.isArray(result) ? result.slice(0, 30) : []);
+      const [shiftResult, swapResult] = await Promise.all([
+        scheduleApi.getOpenShifts(),
+        scheduleApi.listMySwaps('pending').catch(() => []),
+      ]);
+      setShifts(Array.isArray(shiftResult) ? shiftResult.slice(0, 30) : []);
+      const openSwapList = Array.isArray(swapResult)
+        ? swapResult.filter((s: ShiftSwap) => !s.targetStaffId && s.status === 'pending')
+        : [];
+      setOpenSwaps(openSwapList);
     } catch (err) {
       console.error('Failed to load open shifts:', err);
     } finally {
@@ -63,6 +72,20 @@ export default function OpenShiftsScreen() {
       Alert.alert('Lỗi', msg);
     } finally {
       setBiddingId(null);
+    }
+  };
+
+  const handleClaimSwap = async (swapId: string) => {
+    setClaimingId(swapId);
+    try {
+      await scheduleApi.claimOpenSwap(swapId);
+      Alert.alert('Thành công', 'Đã nhận yêu cầu đổi ca mở!');
+      loadData();
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || err?.message || 'Không thể nhận yêu cầu đổi ca';
+      Alert.alert('Lỗi', msg);
+    } finally {
+      setClaimingId(null);
     }
   };
 
@@ -119,6 +142,37 @@ export default function OpenShiftsScreen() {
           );
         })
       )}
+
+      {openSwaps.length > 0 ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Đổi ca mở</Text>
+          <Text style={styles.sectionHint}>Bất kỳ ai cũng có thể nhận yêu cầu đổi ca này</Text>
+          {openSwaps.map((swap) => (
+            <View key={swap.id} style={styles.shiftCard}>
+              <View style={styles.shiftInfo}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name="swap-horizontal" size={16} color="#8b5cf6" />
+                  <Text style={[styles.shiftName, { color: '#8b5cf6' }]}>Đổi ca mở</Text>
+                </View>
+                <Text style={styles.shiftTime}>
+                  Ca: {swap.requesterAssignmentId.slice(0, 8)}... · {new Date(swap.createdAt).toLocaleDateString('vi-VN')}
+                </Text>
+                {swap.reason ? (
+                  <Text style={styles.shiftZone}>Lý do: {swap.reason}</Text>
+                ) : null}
+              </View>
+              <TouchableOpacity
+                style={[styles.claimButton, claimingId === swap.id && styles.disabledButton]}
+                onPress={() => handleClaimSwap(swap.id)}
+                disabled={claimingId === swap.id}
+              >
+                <Ionicons name="hand-right-outline" size={16} color="#fff" />
+                <Text style={styles.bidButtonText}>Nhận</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      ) : null}
     </ScrollView>
   );
 }
@@ -156,4 +210,16 @@ const styles = StyleSheet.create({
   },
   disabledButton: { opacity: 0.5 },
   bidButtonText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  section: { paddingHorizontal: 16, paddingTop: 16 },
+  sectionTitle: { fontSize: 14, fontWeight: '700', color: '#e2e8f0', marginBottom: 4 },
+  sectionHint: { fontSize: 11, color: '#64748b', marginBottom: 8 },
+  claimButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#8b5cf6',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 4,
+  },
 });

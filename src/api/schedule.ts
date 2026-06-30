@@ -13,12 +13,13 @@ export interface ShiftBid {
 export interface ShiftSwap {
   id: string;
   requesterStaffId: string;
-  targetStaffId: string;
+  targetStaffId: string | null;
   requesterAssignmentId: string;
   targetAssignmentId?: string | null;
   reason?: string | null;
   status: string;
   responseNote?: string | null;
+  reviewedAt?: string | null;
   createdAt: string;
 }
 
@@ -53,8 +54,13 @@ export const scheduleApi = {
     return response.data;
   },
 
-  checkIn: async (id: string): Promise<unknown> => {
-    const response = await api.post(`/schedules/assignments/${id}/check-in`, { method: 'mobile' });
+  checkIn: async (id: string, lat?: number, lng?: number): Promise<unknown> => {
+    const body: Record<string, unknown> = { method: 'mobile' };
+    if (lat != null && lng != null) {
+      body.lat = lat;
+      body.lng = lng;
+    }
+    const response = await api.post(`/schedules/assignments/${id}/check-in`, body);
     return response.data;
   },
 
@@ -100,6 +106,16 @@ export const scheduleApi = {
 
   respondSwap: async (id: string, action: 'accepted' | 'rejected', responseNote?: string): Promise<ShiftSwap> => {
     const response = await api.post<ShiftSwap>(`/schedules/swaps/${id}/respond`, { action, responseNote });
+    return response.data;
+  },
+
+  requestManualCheckIn: async (assignmentId: string, reason?: string): Promise<any> => {
+    const response = await api.post('/schedules/attendance/manual-checkin', { assignmentId, reason });
+    return response.data;
+  },
+
+  claimOpenSwap: async (swapId: string): Promise<ShiftSwap> => {
+    const response = await api.post<ShiftSwap>(`/schedules/swaps/${swapId}/claim`);
     return response.data;
   },
 };

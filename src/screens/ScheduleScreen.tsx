@@ -4,6 +4,7 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Animated, Dimensions, FlatList, Modal, PanResponder, RefreshControl, ScrollView, SectionList, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ActivityIndicator, Text, useTheme } from 'react-native-paper';
+import * as Location from 'expo-location';
 import { scheduleApi } from '../api/schedule';
 import AssignmentCard from '../components/AssignmentCard';
 import { StaffScheduleAssignment } from '../types';
@@ -12,22 +13,7 @@ import { AppTheme } from '../theme/DarkTheme';
 import { devError } from '../utils/logger';
 import CacheManager from '../utils/cache/CacheManager';
 import { CACHE_KEYS, CACHE_TTL } from '../utils/cache/CacheKeys';
-
-type AssignmentTimeState = 'now' | 'today' | 'upcoming' | 'past';
-
-function getAssignmentTimeState(item: StaffScheduleAssignment): AssignmentTimeState {
-  const now = new Date();
-  const today = toDateInput(now);
-  if (item.workDate < today) return 'past';
-  if (item.workDate > today) return 'upcoming';
-  const startTime = (item.shift?.startTime || '').slice(0, 5);
-  const endTime = (item.shift?.endTime || '').slice(0, 5);
-  if (startTime && endTime) {
-    const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    if (currentTime >= startTime && currentTime <= endTime) return 'now';
-  }
-  return 'today';
-}
+import { getAssignmentTimeState, AssignmentTimeState } from '../utils/assignmentUtils';
 
 function getErrorMessage(err: any, fallback: string) {
   return err?.response?.data?.detail || err?.response?.data?.error || err?.message || fallback;
@@ -374,11 +360,40 @@ export default function ScheduleScreen() {
     setActionLoadingId(`${id}:${action}`);
     setError(null);
     try {
-      if (action === 'check-in') { await scheduleApi.checkIn(id); setSnackbar('Đã check-in thành công'); }
-      else { await scheduleApi.checkOut(id); setSnackbar('Đã check-out thành công'); }
+      if (action === 'check-in') {
+        let lat: number | undefined;
+        let lng: number | undefined;
+        try {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status === 'granted') {
+            const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+            lat = pos.coords.latitude;
+            lng = pos.coords.longitude;
+          }
+        } catch (locErr) {
+          devError('[ScheduleScreen] Location error:', locErr);
+        }
+        await scheduleApi.checkIn(id, lat, lng);
+        setSnackbar('Đã check-in thành công');
+      } else {
+        await scheduleApi.checkOut(id);
+        setSnackbar('Đã check-out thành công');
+      }
       await loadSchedules();
     } catch (err: any) {
       setError(getErrorMessage(err, action === 'check-in' ? 'Check-in thất bại' : 'Check-out thất bại'));
+    } finally { setActionLoadingId(null); }
+  };
+
+  const handleRequestManualCheckIn = async (assignmentId: string) => {
+    setActionLoadingId(`${assignmentId}:manual-checkin`);
+    setError(null);
+    try {
+      await scheduleApi.requestManualCheckIn(assignmentId);
+      setSnackbar('Đã gửi yêu cầu check-in thủ công');
+      await loadSchedules();
+    } catch (err: any) {
+      setError(getErrorMessage(err, 'Gửi yêu cầu check-in thủ công thất bại'));
     } finally { setActionLoadingId(null); }
   };
 
@@ -510,6 +525,7 @@ export default function ScheduleScreen() {
             item={item}
             onCheckIn={(id) => runAttendanceAction(id, 'check-in')}
             onCheckOut={(id) => runAttendanceAction(id, 'check-out')}
+            onRequestManualCheckIn={handleRequestManualCheckIn}
             actionLoadingId={actionLoadingId}
             shiftLabel={item._shiftName}
             shiftTime={item._shiftTime}
@@ -551,6 +567,7 @@ export default function ScheduleScreen() {
             item={item}
             onCheckIn={(id) => runAttendanceAction(id, 'check-in')}
             onCheckOut={(id) => runAttendanceAction(id, 'check-out')}
+            onRequestManualCheckIn={handleRequestManualCheckIn}
             actionLoadingId={actionLoadingId}
             shiftLabel={item._shiftName}
             shiftTime={item._shiftTime}

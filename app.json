@@ -36,6 +36,12 @@
         {
           "cameraPermission": "Ứng dụng cần quyền camera để đăng nhập bằng khuôn mặt và quét mã vạch sách"
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Ứng dụng cần quyền truy cập thư viện ảnh để bạn có thể đổi ảnh đại diện."
+        }
       ]
     ],
     "extra": {

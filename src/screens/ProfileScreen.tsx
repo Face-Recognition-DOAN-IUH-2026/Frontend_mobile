@@ -15,11 +15,12 @@ import {
   useTheme,
 } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import * as ImagePicker from 'expo-image-picker';
 
 import { useAuth } from '../context/AuthContext';
 import { useMobileTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme/DarkTheme';
-import { authApi } from '../api/auth';
+import { authApi, uploadAvatar } from '../api/auth';
 import { GradientHeader, SectionCard } from '../theme/MobileDesignSystem';
 
 interface ProfileScreenProps {
@@ -96,7 +97,34 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   };
 
   const handlePickAvatar = async () => {
-    Alert.alert('Cần rebuild app', 'Tính năng cập nhật ảnh cần rebuild lại app với expo-image-picker. Vui lòng chạy `npx expo run:android` hoặc `eas build`.');
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert('Quyền truy cập', 'Ứng dụng cần quyền truy cập thư viện ảnh để bạn có thể đổi ảnh đại diện.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      setUploading(true);
+      try {
+        const { avatarUrl } = await uploadAvatar(result.assets[0].uri);
+        if (user) {
+          const updatedUser = { ...user, avatar_url: avatarUrl };
+          await updateUser(updatedUser);
+        }
+        Alert.alert('Thành công', 'Đổi ảnh đại diện thành công!');
+      } catch (error) {
+        Alert.alert('Lỗi', 'Không thể cập nhật ảnh. Vui lòng thử lại.');
+      } finally {
+        setUploading(false);
+      }
+    }
   };
 
   const studentFields = [

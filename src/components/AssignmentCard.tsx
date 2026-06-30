@@ -5,22 +5,7 @@ import { Button, Card, Text, useTheme } from 'react-native-paper';
 import { AppTheme } from '../theme/DarkTheme';
 import { StaffScheduleAssignment } from '../types';
 import { normalizeTime } from '../utils/dateUtils';
-
-type AssignmentTimeState = 'now' | 'today' | 'upcoming' | 'past';
-
-function getAssignmentTimeState(item: StaffScheduleAssignment): AssignmentTimeState {
-  const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  if (item.workDate < today) return 'past';
-  if (item.workDate > today) return 'upcoming';
-  const startTime = normalizeTime(item.shift?.startTime);
-  const endTime = normalizeTime(item.shift?.endTime);
-  if (startTime && endTime) {
-    const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    if (currentTime >= startTime && currentTime <= endTime) return 'now';
-  }
-  return 'today';
-}
+import { getAssignmentTimeState, AssignmentTimeState } from '../utils/assignmentUtils';
 
 function zoneLabel(item: StaffScheduleAssignment) {
   if (!item.zone) return item.zoneId;
@@ -33,12 +18,13 @@ interface AssignmentCardProps {
   item: StaffScheduleAssignment;
   onCheckIn: (id: string) => void;
   onCheckOut: (id: string) => void;
+  onRequestManualCheckIn?: (assignmentId: string) => void;
   actionLoadingId: string | null;
   shiftLabel?: string;
   shiftTime?: string;
 }
 
-export default function AssignmentCard({ item, onCheckIn, onCheckOut, actionLoadingId, shiftLabel, shiftTime }: AssignmentCardProps) {
+export default function AssignmentCard({ item, onCheckIn, onCheckOut, onRequestManualCheckIn, actionLoadingId, shiftLabel, shiftTime }: AssignmentCardProps) {
   const theme = useTheme<AppTheme>();
   const c = theme.colors;
   const state = getAssignmentTimeState(item);
@@ -114,6 +100,20 @@ export default function AssignmentCard({ item, onCheckIn, onCheckOut, actionLoad
                 textColor="#fff"
               >
                 Check-in
+              </Button>
+            ) : null}
+            {canCheckIn && onRequestManualCheckIn ? (
+              <Button
+                mode="outlined"
+                icon="clipboard-text-outline"
+                compact
+                loading={actionLoadingId === `${item.id}:manual-checkin`}
+                onPress={() => onRequestManualCheckIn(item.id)}
+                style={[s.actionBtn, { borderColor: '#8b5cf6' }]}
+                labelStyle={[s.actionLabel, { color: '#8b5cf6' }]}
+                textColor="#8b5cf6"
+              >
+                Thủ công
               </Button>
             ) : null}
             {canCheckOut ? (

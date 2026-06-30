@@ -5,6 +5,7 @@ import { Image, RefreshControl, ScrollView, StyleSheet, View } from 'react-nativ
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar, Button, Chip, Surface, Text, useTheme } from 'react-native-paper';
 import { borrowApi } from '../api/borrow';
+import { scheduleApi } from '../api/schedule';
 import { useAuth } from '../context/AuthContext';
 import { AppTheme } from '../theme/DarkTheme';
 import {
@@ -14,8 +15,9 @@ import {
   EmptyState,
   GRADIENTS,
 } from '../theme/MobileDesignSystem';
-import { BorrowRecord } from '../types';
-import { formatDate, getDaysUntil, isOverdue } from '../utils/dateUtils';
+import { BorrowRecord, StaffScheduleAssignment } from '../types';
+import { formatDate, getDaysUntil, isOverdue, toDateInput } from '../utils/dateUtils';
+import { getAssignmentTimeState } from '../utils/assignmentUtils';
 import CacheManager from '../utils/cache/CacheManager';
 import { CACHE_KEYS, CACHE_TTL } from '../utils/cache/CacheKeys';
 
@@ -37,6 +39,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   const { user, patron } = useAuth();
   const isStaffScanner = user?.role === 'admin' || user?.role === 'staff';
   const [borrows, setBorrows] = useState<BorrowRecord[]>([]);
+  const [todayAssignments, setTodayAssignments] = useState<StaffScheduleAssignment[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -74,15 +77,26 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
     }
   };
 
+  const loadTodaySchedule = async () => {
+    if (!isStaffScanner) return;
+    try {
+      const today = toDateInput(new Date());
+      const tomorrow = toDateInput(new Date(Date.now() + 86400000));
+      const result = await scheduleApi.getMySchedules(today, tomorrow);
+      setTodayAssignments(result.items || []);
+    } catch {}
+  };
+
   useFocusEffect(
     useCallback(() => {
       loadBorrows();
+      loadTodaySchedule();
     }, [isStaffScanner]),
   );
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadBorrows();
+    await Promise.all([loadBorrows(), loadTodaySchedule()]);
     setRefreshing(false);
   };
 
@@ -90,6 +104,11 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   const overdueCount = activeBorrows.filter((item) => isOverdue(item.due_at)).length;
   const displayName = user?.full_name || user?.email || 'Người dùng';
   const roleLabel = user?.role === 'admin' ? 'Quản trị viên' : user?.role === 'staff' ? 'Nhân viên' : 'Độc giả';
+
+  const nowShift = useMemo(() => {
+    const nowItems = todayAssignments.filter((a) => getAssignmentTimeState(a) === 'now');
+    return nowItems.length > 0 ? nowItems[0] : null;
+  }, [todayAssignments]);
 
   const staffActions: StaffAction[] = [
     {
@@ -162,6 +181,42 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             )
           }
         />
+
+        {nowShift ? (
+          <SectionCard
+            title="Ca trực hiện tại"
+            icon="clock-outline"
+            accentColor="#8b5cf6"
+            right={
+              <Button mode="contained-tonal" compact onPress={() => navigation.navigate('Schedule')}>
+                Chi tiết
+              </Button>
+            }
+          >
+            <View style={{ gap: 4 }}>
+              <Text variant="titleSmall" style={styles.cardTitle}>
+                {nowShift.shift?.name || 'Ca trực'}
+              </Text>
+              <Text variant="bodySmall" style={styles.mutedText}>
+                {nowShift.shift?.startTime?.slice(0, 5)} — {nowShift.shift?.endTime?.slice(0, 5)}
+              </Text>
+              {nowShift.zone ? (
+                <Text variant="bodySmall" style={styles.mutedText}>
+                  Khu vực: {nowShift.zone.zoneName || nowShift.zoneId}
+                </Text>
+              ) : null}
+              {nowShift.attendance?.checkInAt ? (
+                <Chip compact icon="check-circle" style={{ alignSelf: 'flex-start', backgroundColor: '#10b98122' }} textStyle={{ color: '#10b981', fontWeight: '700' }}>
+                  Đã check-in
+                </Chip>
+              ) : (
+                <Chip compact icon="alert-circle-outline" style={{ alignSelf: 'flex-start', backgroundColor: '#f59e0b22' }} textStyle={{ color: '#f59e0b', fontWeight: '700' }}>
+                  Chưa check-in
+                </Chip>
+              )}
+            </View>
+          </SectionCard>
+        ) : null}
 
         {patron?.password_auto_generated ? (
           <SectionCard
