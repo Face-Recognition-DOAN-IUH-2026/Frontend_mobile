@@ -20,7 +20,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../context/AuthContext';
 import { useMobileTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme/DarkTheme';
-import { authApi, uploadAvatar } from '../api/auth';
+import { authApi } from '../api/auth';
 import { GradientHeader, SectionCard } from '../theme/MobileDesignSystem';
 
 interface ProfileScreenProps {
@@ -113,7 +113,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     if (!result.canceled && result.assets[0]) {
       setUploading(true);
       try {
-        const { avatarUrl } = await uploadAvatar(result.assets[0].uri);
+        const { avatarUrl } = await authApi.uploadAvatar(result.assets[0].uri);
         if (user) {
           const updatedUser = { ...user, avatar_url: avatarUrl };
           await updateUser(updatedUser);

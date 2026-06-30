@@ -84,6 +84,7 @@ src/components/ai/ToolResultCard.tsx
 src/components/ai/TypingIndicator.tsx
 src/components/AssignmentCard.tsx
 src/components/AutoFaceCapture.tsx
+src/components/CodeInput.tsx
 src/components/OfflineIndicator.tsx
 src/components/StudentCardScanner.tsx
 src/context/AuthContext.tsx
@@ -1256,6 +1257,100 @@ const styles = StyleSheet.create({
 });
 </file>
 
+<file path="src/components/CodeInput.tsx">
+import React, { useRef } from 'react';
+import { View, StyleSheet } from 'react-native';
+import { TextInput } from 'react-native-paper';
+import type { AppTheme } from '../theme/DarkTheme';
+
+interface CodeInputProps {
+  value: string;
+  onChange: (v: string) => void;
+  length: number;
+  theme: AppTheme;
+}
+
+export default function CodeInput({ value, onChange, length, theme }: CodeInputProps) {
+  const inputRefs = useRef<any[]>([]);
+
+  const handleChange = (text: string, index: number) => {
+    const digit = text.replace(/\D/g, '').slice(-1);
+    const newValue = value.split('');
+    while (newValue.length < length) newValue.push('');
+    newValue[index] = digit;
+    const result = newValue.join('').slice(0, length);
+    onChange(result);
+
+    if (digit && index < length - 1) {
+      setTimeout(() => inputRefs.current[index + 1]?.focus(), 50);
+    }
+  };
+
+  const handleKeyPress = (key: string, index: number) => {
+    if (key === 'Backspace' && !value[index] && index > 0) {
+      setTimeout(() => inputRefs.current[index - 1]?.focus(), 50);
+    }
+  };
+
+  return (
+    <View style={styles.row}>
+      {Array.from({ length }, (_, i) => (
+        <View
+          key={i}
+          style={[
+            styles.cell,
+            {
+              borderColor: value[i]
+                ? theme.colors.primary
+                : theme.colors.outlineVariant,
+              backgroundColor: value[i]
+                ? `${theme.colors.primary}10`
+                : theme.colors.surface,
+            },
+          ]}
+        >
+          <TextInput
+            ref={(ref: any) => (inputRefs.current[i] = ref)}
+            value={value[i] || ''}
+            onChangeText={(text) => handleChange(text, i)}
+            onKeyPress={({ nativeEvent }) => handleKeyPress(nativeEvent.key, i)}
+            keyboardType="number-pad"
+            maxLength={1}
+            textAlign="center"
+            style={[styles.input, { color: theme.colors.onSurface }]}
+            underlineColor="transparent"
+            activeUnderlineColor="transparent"
+            outlineColor="transparent"
+            activeOutlineColor="transparent"
+            textColor={theme.colors.onSurface}
+          />
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  cell: {
+    width: 48,
+    height: 56,
+    borderWidth: 2,
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  input: {
+    fontSize: 24,
+    fontWeight: '800',
+    height: 52,
+  },
+});
+</file>
+
 <file path="src/components/OfflineIndicator.tsx">
 import React from 'react';
 import { Banner } from 'react-native-paper';
@@ -1606,597 +1701,6 @@ const styles = StyleSheet.create({
 });
 </file>
 
-<file path="src/screens/ForgotPasswordScreen.tsx">
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  View,
-  Animated,
-  Dimensions,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import {
-  Button,
-  Text,
-  TextInput,
-  useTheme,
-} from 'react-native-paper';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { AppTheme } from '../theme/DarkTheme';
-import { authApi } from '../api/auth';
-import { StackNavigationProp } from '@react-navigation/stack';
-import { AuthStackParamList } from '../navigation/types';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-interface ForgotPasswordScreenProps {
-  navigation: StackNavigationProp<AuthStackParamList, 'ForgotPassword'>;
-}
-
-type Step = 1 | 2 | 3 | 4;
-
-const STEP_COUNT = 3;
-
-function StepIndicator({ current, total, theme }: { current: number; total: number; theme: AppTheme }) {
-  return (
-    <View style={stepStyles.container}>
-      {Array.from({ length: total }, (_, i) => {
-        const step = i + 1;
-        const isActive = step === current;
-        const isDone = step < current;
-        return (
-          <React.Fragment key={i}>
-            <View
-              style={[
-                stepStyles.dot,
-                {
-                  backgroundColor: isDone
-                    ? theme.colors.primary
-                    : isActive
-                      ? theme.colors.primary
-                      : theme.colors.outlineVariant,
-                  width: isActive ? 32 : 10,
-                },
-              ]}
-            />
-            {i < total - 1 && (
-              <View
-                style={[
-                  stepStyles.line,
-                  {
-                    backgroundColor: isDone ? theme.colors.primary : theme.colors.outlineVariant,
-                  },
-                ]}
-              />
-            )}
-          </React.Fragment>
-        );
-      })}
-    </View>
-  );
-}
-
-const stepStyles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 16,
-  },
-  dot: {
-    height: 10,
-    borderRadius: 5,
-  },
-  line: {
-    height: 2,
-    width: 24,
-    borderRadius: 1,
-  },
-});
-
-function CodeInput({
-  value,
-  onChange,
-  length,
-  theme,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  length: number;
-  theme: AppTheme;
-}) {
-  const inputRefs = useRef<any[]>([]);
-
-  const handleChange = (text: string, index: number) => {
-    const digit = text.replace(/\D/g, '').slice(-1);
-    const newValue = value.split('');
-    while (newValue.length < length) newValue.push('');
-    newValue[index] = digit;
-    const result = newValue.join('').slice(0, length);
-    onChange(result);
-
-    if (digit && index < length - 1) {
-      setTimeout(() => inputRefs.current[index + 1]?.focus(), 50);
-    }
-  };
-
-  const handleKeyPress = (key: string, index: number) => {
-    if (key === 'Backspace' && !value[index] && index > 0) {
-      setTimeout(() => inputRefs.current[index - 1]?.focus(), 50);
-    }
-  };
-
-  return (
-    <View style={codeInputStyles.row}>
-      {Array.from({ length }, (_, i) => (
-        <View
-          key={i}
-          style={[
-            codeInputStyles.cell,
-            {
-              borderColor: value[i]
-                ? theme.colors.primary
-                : theme.colors.outlineVariant,
-              backgroundColor: value[i]
-                ? `${theme.colors.primary}10`
-                : theme.colors.surface,
-            },
-          ]}
-        >
-          <TextInput
-            ref={(ref: any) => (inputRefs.current[i] = ref)}
-            value={value[i] || ''}
-            onChangeText={(text) => handleChange(text, i)}
-            onKeyPress={({ nativeEvent }) => handleKeyPress(nativeEvent.key, i)}
-            keyboardType="number-pad"
-            maxLength={1}
-            textAlign="center"
-            style={[codeInputStyles.input, { color: theme.colors.onSurface }]}
-            underlineColor="transparent"
-            activeUnderlineColor="transparent"
-            outlineColor="transparent"
-            activeOutlineColor="transparent"
-            textColor={theme.colors.onSurface}
-          />
-        </View>
-      ))}
-    </View>
-  );
-}
-
-const codeInputStyles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 10,
-  },
-  cell: {
-    width: 48,
-    height: 56,
-    borderWidth: 2,
-    borderRadius: 14,
-    overflow: 'hidden',
-  },
-  input: {
-    fontSize: 24,
-    fontWeight: '800',
-    height: 52,
-  },
-});
-
-export default function ForgotPasswordScreen({ navigation }: ForgotPasswordScreenProps) {
-  const theme = useTheme() as AppTheme;
-  const styles = useMemo(() => createStyles(theme), [theme]);
-
-  const [step, setStep] = useState<Step>(1);
-  const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [resendCooldown, setResendCooldown] = useState(0);
-
-  const fadeAnim = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    if (resendCooldown <= 0) return;
-    const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [resendCooldown]);
-
-  const animateStep = (toStep: Step) => {
-    Animated.timing(fadeAnim, {
-      toValue: 0,
-      duration: 150,
-      useNativeDriver: true,
-    }).start(() => {
-      setStep(toStep);
-      setError('');
-      setSuccess('');
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    });
-  };
-
-  const handleSendCode = async () => {
-    if (!email.trim()) {
-      setError('Vui lòng nhập email');
-      return;
-    }
-    setLoading(true);
-    setError('');
-    try {
-      await authApi.forgotPassword(email.trim());
-      setSuccess('Mã xác minh đã được gửi đến email của bạn');
-      setResendCooldown(60);
-      setTimeout(() => animateStep(2), 800);
-    } catch (err: any) {
-      setError(err?.response?.data?.error || 'Không thể gửi mã xác minh');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyCode = async () => {
-    if (code.length !== 6) {
-      setError('Vui lòng nhập đầy đủ 6 chữ số');
-      return;
-    }
-    setLoading(true);
-    setError('');
-    try {
-      await authApi.verifyResetCode(email.trim(), code);
-      setSuccess('');
-      animateStep(3);
-    } catch (err: any) {
-      setError(err?.response?.data?.error || 'Mã xác minh không đúng');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResetPassword = async () => {
-    if (!newPassword || !confirmPassword) {
-      setError('Vui lòng nhập đầy đủ mật khẩu');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setError('Mật khẩu xác nhận không khớp');
-      return;
-    }
-    if (newPassword.length < 6) {
-      setError('Mật khẩu phải có ít nhất 6 ký tự');
-      return;
-    }
-    setLoading(true);
-    setError('');
-    try {
-      await authApi.resetPassword(email.trim(), code, newPassword);
-      animateStep(4);
-    } catch (err: any) {
-      setError(err?.response?.data?.error || 'Đặt lại mật khẩu thất bại');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const stepTitle = step === 1
-    ? 'Quên mật khẩu'
-    : step === 2
-      ? 'Xác minh mã'
-      : step === 3
-        ? 'Đặt mật khẩu mới'
-        : 'Thành công';
-
-  const stepDescription = step === 1
-    ? 'Nhập email đã đăng ký để nhận mã xác minh'
-    : step === 2
-      ? `Mã 6 chữ số đã được gửi đến ${email}`
-      : step === 3
-        ? 'Tạo mật khẩu mới cho tài khoản của bạn'
-        : '';
-
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <View style={styles.header}>
-          <Button
-            mode="text"
-            icon="arrow-left"
-            onPress={() => {
-              if (step === 1) navigation.goBack();
-              else if (step === 2) animateStep(1);
-              else if (step === 3) animateStep(2);
-              else navigation.goBack();
-            }}
-            compact
-            style={styles.backBtn}
-          >
-            {step === 1 ? 'Quay lại' : 'Bước trước'}
-          </Button>
-        </View>
-
-        <ScrollView
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-        >
-          <StepIndicator current={step} total={STEP_COUNT} theme={theme} />
-
-          <Animated.View style={{ opacity: fadeAnim, flex: 1 }}>
-            {step === 4 ? (
-              <View style={styles.successContainer}>
-                <View style={[styles.successIcon, { backgroundColor: `${theme.colors.primary}15` }]}>
-                  <MaterialCommunityIcons
-                    name="check-circle"
-                    size={72}
-                    color={theme.colors.primary}
-                  />
-                </View>
-                <Text variant="headlineSmall" style={styles.successTitle}>
-                  Đặt lại thành công!
-                </Text>
-                <Text variant="bodyMedium" style={styles.successDesc}>
-                  Mật khẩu của bạn đã được thay đổi.{'\n'}Vui lòng đăng nhập với mật khẩu mới.
-                </Text>
-                <Button
-                  mode="contained"
-                  onPress={() => navigation.goBack()}
-                  contentStyle={styles.largeButton}
-                  style={styles.successButton}
-                >
-                  Đăng nhập
-                </Button>
-              </View>
-            ) : (
-              <View style={styles.stepContainer}>
-                <View style={styles.stepIconContainer}>
-                  <MaterialCommunityIcons
-                    name={
-                      step === 1
-                        ? 'email-outline'
-                        : step === 2
-                          ? 'shield-key-outline'
-                          : 'lock-reset'
-                    }
-                    size={48}
-                    color={theme.colors.primary}
-                  />
-                </View>
-
-                <Text variant="headlineSmall" style={styles.stepTitle}>
-                  {stepTitle}
-                </Text>
-                <Text variant="bodyMedium" style={styles.stepDescription}>
-                  {stepDescription}
-                </Text>
-
-                {error ? (
-                  <View style={[styles.messageBox, { backgroundColor: `${theme.colors.error}12` }]}>
-                    <MaterialCommunityIcons name="alert-circle" size={18} color={theme.colors.error} />
-                    <Text style={[styles.messageText, { color: theme.colors.error }]}>{error}</Text>
-                  </View>
-                ) : null}
-
-                {success ? (
-                  <View style={[styles.messageBox, { backgroundColor: `${theme.colors.primary}12` }]}>
-                    <MaterialCommunityIcons name="check-circle" size={18} color={theme.colors.primary} />
-                    <Text style={[styles.messageText, { color: theme.colors.primary }]}>{success}</Text>
-                  </View>
-                ) : null}
-
-                <View style={styles.stepForm}>
-                {step === 1 && (
-                  <>
-                    <TextInput
-                      label="Email"
-                      value={email}
-                      onChangeText={setEmail}
-                      mode="outlined"
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      keyboardType="email-address"
-                      left={<TextInput.Icon icon="email" color={theme.colors.onSurfaceVariant} />}
-                      style={styles.input}
-                    />
-                    <Button
-                      mode="contained"
-                      onPress={handleSendCode}
-                      loading={loading}
-                      disabled={loading}
-                      contentStyle={styles.largeButton}
-                      style={styles.primaryButton}
-                    >
-                      Gửi mã xác minh
-                    </Button>
-                  </>
-                )}
-
-                {step === 2 && (
-                  <>
-                    <CodeInput value={code} onChange={setCode} length={6} theme={theme} />
-                    <Button
-                      mode="contained"
-                      onPress={handleVerifyCode}
-                      loading={loading}
-                      disabled={loading || code.length !== 6}
-                      contentStyle={styles.largeButton}
-                      style={styles.primaryButton}
-                    >
-                      Xác minh mã
-                    </Button>
-                    <Button
-                      mode="text"
-                      onPress={handleSendCode}
-                      disabled={loading || resendCooldown > 0}
-                      style={styles.resendBtn}
-                    >
-                      {resendCooldown > 0 ? `Gửi lại mã (${resendCooldown}s)` : 'Gửi lại mã'}
-                    </Button>
-                  </>
-                )}
-
-                {step === 3 && (
-                  <>
-                    <TextInput
-                      label="Mật khẩu mới"
-                      value={newPassword}
-                      onChangeText={setNewPassword}
-                      mode="outlined"
-                      secureTextEntry={!showPassword}
-                      left={<TextInput.Icon icon="lock" color={theme.colors.onSurfaceVariant} />}
-                      right={
-                        <TextInput.Icon
-                          icon={showPassword ? 'eye-off' : 'eye'}
-                          onPress={() => setShowPassword(!showPassword)}
-                          color={theme.colors.onSurfaceVariant}
-                        />
-                      }
-                      style={styles.input}
-                    />
-                    <TextInput
-                      label="Xác nhận mật khẩu"
-                      value={confirmPassword}
-                      onChangeText={setConfirmPassword}
-                      mode="outlined"
-                      secureTextEntry={!showPassword}
-                      left={<TextInput.Icon icon="lock-check" color={theme.colors.onSurfaceVariant} />}
-                      style={styles.input}
-                    />
-                    <Button
-                      mode="contained"
-                      onPress={handleResetPassword}
-                      loading={loading}
-                      disabled={loading}
-                      contentStyle={styles.largeButton}
-                      style={styles.primaryButton}
-                    >
-                      Đặt lại mật khẩu
-                    </Button>
-                  </>
-                )}
-                </View>
-              </View>
-            )}
-          </Animated.View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
-  );
-}
-
-function createStyles(theme: AppTheme) {
-  return StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: theme.colors.background,
-    },
-    flex: {
-      flex: 1,
-    },
-    header: {
-      paddingHorizontal: 8,
-    },
-    backBtn: {
-      alignSelf: 'flex-start',
-    },
-    content: {
-      flexGrow: 1,
-      paddingHorizontal: 24,
-      paddingBottom: 40,
-      gap: 8,
-    },
-    stepContainer: {
-      alignItems: 'center',
-      gap: 12,
-    },
-    stepForm: {
-      width: '100%',
-    },
-    stepIconContainer: {
-      width: 80,
-      height: 80,
-      borderRadius: 24,
-      backgroundColor: `${theme.colors.primary}12`,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: 8,
-    },
-    stepTitle: {
-      fontWeight: '800',
-      textAlign: 'center',
-    },
-    stepDescription: {
-      color: theme.colors.onSurfaceVariant,
-      textAlign: 'center',
-      marginBottom: 8,
-    },
-    input: {
-      marginBottom: 12,
-    },
-    primaryButton: {
-      marginTop: 8,
-    },
-    largeButton: {
-      minHeight: 52,
-    },
-    resendBtn: {
-      marginTop: 4,
-    },
-    messageBox: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      padding: 12,
-      borderRadius: 12,
-      marginBottom: 8,
-    },
-    messageText: {
-      fontSize: 13,
-      fontWeight: '600',
-      flex: 1,
-    },
-    successContainer: {
-      alignItems: 'center',
-      gap: 16,
-      paddingTop: 40,
-    },
-    successIcon: {
-      width: 120,
-      height: 120,
-      borderRadius: 60,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    successTitle: {
-      fontWeight: '800',
-      textAlign: 'center',
-    },
-    successDesc: {
-      color: theme.colors.onSurfaceVariant,
-      textAlign: 'center',
-      lineHeight: 22,
-    },
-    successButton: {
-      marginTop: 16,
-      minWidth: 200,
-    },
-  });
-}
-</file>
-
 <file path="src/screens/LibraryTourScreen.tsx">
 import React, { useState, useMemo } from 'react';
 import { StyleSheet, View, ActivityIndicator } from 'react-native';
@@ -2526,303 +2030,6 @@ export const baseColors = {
 };
 
 export type BaseColors = typeof baseColors;
-</file>
-
-<file path="src/theme/MobileDesignSystem.tsx">
-import React from 'react';
-import { View, StyleSheet, ViewStyle } from 'react-native';
-import { Text, Avatar, Surface, useTheme } from 'react-native-paper';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import type { AppTheme } from './DarkTheme';
-
-/* ─── Gradient Header ─── */
-export function GradientHeader({
-  title,
-  subtitle,
-  icon,
-  right,
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  icon: string;
-  right?: React.ReactNode;
-  children?: React.ReactNode;
-}) {
-  const theme = useTheme() as AppTheme;
-  const c = theme.colors;
-
-  return (
-    <Surface style={[dhStyles.header, { backgroundColor: c.primary }]} elevation={0}>
-      {/* decorative circles */}
-      <View style={[dhStyles.circle, { top: -30, right: -30, width: 120, height: 120, backgroundColor: 'rgba(255,255,255,0.08)' }]} />
-      <View style={[dhStyles.circle, { bottom: -40, left: 80, width: 160, height: 160, backgroundColor: 'rgba(255,255,255,0.05)' }]} />
-
-      <View style={dhStyles.headerRow}>
-        <Avatar.Icon size={44} icon={icon} style={dhStyles.headerAvatar} color={c.onPrimary} />
-        <View style={{ flex: 1 }}>
-          <Text variant="titleMedium" style={dhStyles.headerTitle}>{title}</Text>
-          {subtitle ? <Text variant="bodySmall" style={dhStyles.headerSubtitle}>{subtitle}</Text> : null}
-        </View>
-        {right}
-      </View>
-      {children}
-    </Surface>
-  );
-}
-
-/* ─── Stat Card ─── */
-export function StatCard({
-  label,
-  value,
-  icon,
-  gradient,
-  pct,
-}: {
-  label: string;
-  value: string | number;
-  icon: string;
-  gradient: string[];
-  pct?: number;
-}) {
-  const theme = useTheme() as AppTheme;
-  const c = theme.colors;
-
-  return (
-    <Surface style={[dhStyles.statCard, { borderColor: c.outline }]} elevation={0}>
-      <View style={[dhStyles.statAccent, { backgroundColor: gradient[0] }]} />
-      <View style={dhStyles.statRow}>
-        <Avatar.Icon size={40} icon={icon} style={[dhStyles.statIcon, { backgroundColor: gradient[0] + '20' }]} color={gradient[0]} />
-        <View style={{ flex: 1 }}>
-          <Text variant="labelSmall" style={[dhStyles.statLabel, { color: c.onSurfaceVariant }]}>{label}</Text>
-          <Text variant="headlineSmall" style={[dhStyles.statValue, { color: c.onSurface }]}>{value}</Text>
-        </View>
-      </View>
-      {pct !== undefined && (
-        <View style={[dhStyles.progressBg, { backgroundColor: c.outline }]}>
-          <View style={[dhStyles.progressFill, { width: `${Math.min(pct, 100)}%`, backgroundColor: gradient[0] }]} />
-        </View>
-      )}
-    </Surface>
-  );
-}
-
-/* ─── Section Card ─── */
-export function SectionCard({
-  title,
-  icon,
-  accentColor,
-  right,
-  children,
-  style,
-}: {
-  title?: string;
-  icon?: string;
-  accentColor?: string;
-  right?: React.ReactNode;
-  children: React.ReactNode;
-  style?: ViewStyle;
-}) {
-  const theme = useTheme() as AppTheme;
-  const c = theme.colors;
-
-  return (
-    <Surface style={[dhStyles.sectionCard, { borderColor: c.outline }, style]} elevation={0}>
-      {accentColor && <View style={[dhStyles.sectionAccent, { backgroundColor: accentColor }]} />}
-      {(title || right) && (
-        <View style={dhStyles.sectionHeader}>
-          <View style={dhStyles.sectionHeaderLeft}>
-            {icon && <MaterialCommunityIcons name={icon as any} size={18} color={c.primary} />}
-            {title && <Text variant="titleSmall" style={[dhStyles.sectionTitle, { color: c.onSurface }]}>{title}</Text>}
-          </View>
-          {right}
-        </View>
-      )}
-      {children}
-    </Surface>
-  );
-}
-
-/* ─── Filter Pill ─── */
-export function FilterPill({
-  label,
-  active,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  const theme = useTheme() as AppTheme;
-  const c = theme.colors;
-
-  return (
-    <View
-      style={[
-        dhStyles.pill,
-        {
-          backgroundColor: active ? c.primary : 'transparent',
-          borderColor: active ? c.primary : c.outline,
-        },
-      ]}
-      onTouchEnd={onPress}
-    >
-      <Text
-        variant="labelSmall"
-        style={{
-          color: active ? c.onPrimary : c.onSurfaceVariant,
-          fontWeight: active ? '700' : '500',
-        }}
-      >
-        {label}
-      </Text>
-    </View>
-  );
-}
-
-/* ─── Empty State ─── */
-export function EmptyState({ icon, message }: { icon: string; message: string }) {
-  const theme = useTheme() as AppTheme;
-  const c = theme.colors;
-
-  return (
-    <View style={dhStyles.empty}>
-      <MaterialCommunityIcons name={icon as any} size={56} color={c.outline} />
-      <Text variant="bodyMedium" style={{ color: c.onSurfaceVariant, marginTop: 12 }}>{message}</Text>
-    </View>
-  );
-}
-
-/* ─── Gradient presets ─── */
-export const GRADIENTS = {
-  indigo: ['#6366f1', '#4338ca'],
-  emerald: ['#10b981', '#059669'],
-  amber: ['#f59e0b', '#d97706'],
-  blue: ['#3b82f6', '#1d4ed8'],
-  red: ['#ef4444', '#dc2626'],
-  violet: ['#8b5cf6', '#6d28d9'],
-  cyan: ['#06b6d4', '#0891b2'],
-  rose: ['#f43f5e', '#e11d48'],
-};
-
-const dhStyles = StyleSheet.create({
-  header: {
-    borderRadius: 16,
-    padding: 20,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  circle: {
-    position: 'absolute',
-    borderRadius: 999,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    zIndex: 1,
-  },
-  headerAvatar: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-  },
-  headerTitle: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-  },
-  headerSubtitle: {
-    color: 'rgba(255,255,255,0.7)',
-    marginTop: 2,
-  },
-
-  statCard: {
-    borderRadius: 14,
-    padding: 16,
-    position: 'relative',
-    overflow: 'hidden',
-    borderWidth: 0.5,
-  },
-  statAccent: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 3,
-  },
-  statRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  statIcon: {
-    borderRadius: 12,
-  },
-  statLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  statValue: {
-    fontWeight: '800',
-    marginTop: 2,
-  },
-  progressBg: {
-    height: 3,
-    borderRadius: 2,
-    marginTop: 12,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 2,
-  },
-
-  sectionCard: {
-    borderRadius: 14,
-    overflow: 'hidden',
-    position: 'relative',
-    borderWidth: 0.5,
-  },
-  sectionAccent: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 3,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 8,
-  },
-  sectionHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  sectionTitle: {
-    fontWeight: '800',
-    fontSize: 13,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-
-  pill: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-
-  empty: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 48,
-  },
-});
 </file>
 
 <file path="src/theme/types.ts">
@@ -3188,60 +2395,6 @@ export function useCachedData<T>({
   }, [key, cache, fetchData]);
 
   return { data, isLoading, isFromCache, error, refresh };
-}
-</file>
-
-<file path="src/utils/error-reporter.ts">
-import { Platform } from 'react-native';
-
-const API_BASE = 'http://10.0.2.2:80'; // Android emulator localhost
-
-interface ReportErrorParams {
-  title: string;
-  description?: string;
-  priority?: 'Highest' | 'High' | 'Medium' | 'Low';
-  labels?: string[];
-  service?: string;
-  endpoint?: string;
-  method?: string;
-  stacktrace?: string;
-  requestBody?: string;
-}
-
-export async function reportError(params: ReportErrorParams): Promise<void> {
-  try {
-    await fetch(`${API_BASE}/errors/report`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...params,
-        service: params.service || `mobile-${Platform.OS}`,
-        labels: [...(params.labels || []), `mobile-${Platform.OS}`],
-      }),
-    });
-  } catch {
-    // Silent fail — error reporting should never break the app
-  }
-}
-
-// Global error handler for unhandled errors
-export function setupGlobalErrorHandlers() {
-  const originalHandler = ErrorUtils.getGlobalHandler();
-
-  ErrorUtils.setGlobalHandler((error: Error, isFatal?: boolean) => {
-    reportError({
-      title: `[Mobile-${Platform.OS}] ${isFatal ? 'Fatal' : 'Non-fatal'} Error - ${error.message}`,
-      description: error.message,
-      priority: isFatal ? 'Highest' : 'High',
-      labels: [`mobile-${Platform.OS}`, isFatal ? 'fatal' : 'non-fatal'],
-      stacktrace: error.stack,
-    });
-
-    // Call original handler if it exists
-    if (originalHandler) {
-      originalHandler(error, isFatal);
-    }
-  });
 }
 </file>
 
@@ -5712,6 +4865,509 @@ function createStyles(theme: AppTheme) {
 }
 </file>
 
+<file path="src/screens/ForgotPasswordScreen.tsx">
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  View,
+  Animated,
+  Dimensions,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  Button,
+  Text,
+  TextInput,
+  useTheme,
+} from 'react-native-paper';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { AppTheme } from '../theme/DarkTheme';
+import { authApi } from '../api/auth';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { AuthStackParamList } from '../navigation/types';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+interface ForgotPasswordScreenProps {
+  navigation: StackNavigationProp<AuthStackParamList, 'ForgotPassword'>;
+}
+
+type Step = 1 | 2 | 3 | 4;
+
+const STEP_COUNT = 3;
+
+function StepIndicator({ current, total, theme }: { current: number; total: number; theme: AppTheme }) {
+  return (
+    <View style={stepStyles.container}>
+      {Array.from({ length: total }, (_, i) => {
+        const step = i + 1;
+        const isActive = step === current;
+        const isDone = step < current;
+        return (
+          <React.Fragment key={i}>
+            <View
+              style={[
+                stepStyles.dot,
+                {
+                  backgroundColor: isDone
+                    ? theme.colors.primary
+                    : isActive
+                      ? theme.colors.primary
+                      : theme.colors.outlineVariant,
+                  width: isActive ? 32 : 10,
+                },
+              ]}
+            />
+            {i < total - 1 && (
+              <View
+                style={[
+                  stepStyles.line,
+                  {
+                    backgroundColor: isDone ? theme.colors.primary : theme.colors.outlineVariant,
+                  },
+                ]}
+              />
+            )}
+          </React.Fragment>
+        );
+      })}
+    </View>
+  );
+}
+
+const stepStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 16,
+  },
+  dot: {
+    height: 10,
+    borderRadius: 5,
+  },
+  line: {
+    height: 2,
+    width: 24,
+    borderRadius: 1,
+  },
+});
+
+import CodeInput from '../components/CodeInput';
+
+export default function ForgotPasswordScreen({ navigation }: ForgotPasswordScreenProps) {
+  const theme = useTheme() as AppTheme;
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
+  const [step, setStep] = useState<Step>(1);
+  const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
+
+  const animateStep = (toStep: Step) => {
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 150,
+      useNativeDriver: true,
+    }).start(() => {
+      setStep(toStep);
+      setError('');
+      setSuccess('');
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    });
+  };
+
+  const handleSendCode = async () => {
+    if (!email.trim()) {
+      setError('Vui lòng nhập email');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      await authApi.forgotPassword(email.trim());
+      setSuccess('Mã xác minh đã được gửi đến email của bạn');
+      setResendCooldown(60);
+      setTimeout(() => animateStep(2), 800);
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Không thể gửi mã xác minh');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyCode = async () => {
+    if (code.length !== 6) {
+      setError('Vui lòng nhập đầy đủ 6 chữ số');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      await authApi.verifyResetCode(email.trim(), code);
+      setSuccess('');
+      animateStep(3);
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Mã xác minh không đúng');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!newPassword || !confirmPassword) {
+      setError('Vui lòng nhập đầy đủ mật khẩu');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError('Mật khẩu xác nhận không khớp');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setError('Mật khẩu phải có ít nhất 6 ký tự');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      await authApi.resetPassword(email.trim(), code, newPassword);
+      animateStep(4);
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Đặt lại mật khẩu thất bại');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const stepTitle = step === 1
+    ? 'Quên mật khẩu'
+    : step === 2
+      ? 'Xác minh mã'
+      : step === 3
+        ? 'Đặt mật khẩu mới'
+        : 'Thành công';
+
+  const stepDescription = step === 1
+    ? 'Nhập email đã đăng ký để nhận mã xác minh'
+    : step === 2
+      ? `Mã 6 chữ số đã được gửi đến ${email}`
+      : step === 3
+        ? 'Tạo mật khẩu mới cho tài khoản của bạn'
+        : '';
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View style={styles.header}>
+          <Button
+            mode="text"
+            icon="arrow-left"
+            onPress={() => {
+              if (step === 1) navigation.goBack();
+              else if (step === 2) animateStep(1);
+              else if (step === 3) animateStep(2);
+              else navigation.goBack();
+            }}
+            compact
+            style={styles.backBtn}
+          >
+            {step === 1 ? 'Quay lại' : 'Bước trước'}
+          </Button>
+        </View>
+
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+        >
+          <StepIndicator current={step} total={STEP_COUNT} theme={theme} />
+
+          <Animated.View style={{ opacity: fadeAnim, flex: 1 }}>
+            {step === 4 ? (
+              <View style={styles.successContainer}>
+                <View style={[styles.successIcon, { backgroundColor: `${theme.colors.primary}15` }]}>
+                  <MaterialCommunityIcons
+                    name="check-circle"
+                    size={72}
+                    color={theme.colors.primary}
+                  />
+                </View>
+                <Text variant="headlineSmall" style={styles.successTitle}>
+                  Đặt lại thành công!
+                </Text>
+                <Text variant="bodyMedium" style={styles.successDesc}>
+                  Mật khẩu của bạn đã được thay đổi.{'\n'}Vui lòng đăng nhập với mật khẩu mới.
+                </Text>
+                <Button
+                  mode="contained"
+                  onPress={() => navigation.goBack()}
+                  contentStyle={styles.largeButton}
+                  style={styles.successButton}
+                >
+                  Đăng nhập
+                </Button>
+              </View>
+            ) : (
+              <View style={styles.stepContainer}>
+                <View style={styles.stepIconContainer}>
+                  <MaterialCommunityIcons
+                    name={
+                      step === 1
+                        ? 'email-outline'
+                        : step === 2
+                          ? 'shield-key-outline'
+                          : 'lock-reset'
+                    }
+                    size={48}
+                    color={theme.colors.primary}
+                  />
+                </View>
+
+                <Text variant="headlineSmall" style={styles.stepTitle}>
+                  {stepTitle}
+                </Text>
+                <Text variant="bodyMedium" style={styles.stepDescription}>
+                  {stepDescription}
+                </Text>
+
+                {error ? (
+                  <View style={[styles.messageBox, { backgroundColor: `${theme.colors.error}12` }]}>
+                    <MaterialCommunityIcons name="alert-circle" size={18} color={theme.colors.error} />
+                    <Text style={[styles.messageText, { color: theme.colors.error }]}>{error}</Text>
+                  </View>
+                ) : null}
+
+                {success ? (
+                  <View style={[styles.messageBox, { backgroundColor: `${theme.colors.primary}12` }]}>
+                    <MaterialCommunityIcons name="check-circle" size={18} color={theme.colors.primary} />
+                    <Text style={[styles.messageText, { color: theme.colors.primary }]}>{success}</Text>
+                  </View>
+                ) : null}
+
+                <View style={styles.stepForm}>
+                {step === 1 && (
+                  <>
+                    <TextInput
+                      label="Email"
+                      value={email}
+                      onChangeText={setEmail}
+                      mode="outlined"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      keyboardType="email-address"
+                      left={<TextInput.Icon icon="email" color={theme.colors.onSurfaceVariant} />}
+                      style={styles.input}
+                    />
+                    <Button
+                      mode="contained"
+                      onPress={handleSendCode}
+                      loading={loading}
+                      disabled={loading}
+                      contentStyle={styles.largeButton}
+                      style={styles.primaryButton}
+                    >
+                      Gửi mã xác minh
+                    </Button>
+                  </>
+                )}
+
+                {step === 2 && (
+                  <>
+                    <CodeInput value={code} onChange={setCode} length={6} theme={theme} />
+                    <Button
+                      mode="contained"
+                      onPress={handleVerifyCode}
+                      loading={loading}
+                      disabled={loading || code.length !== 6}
+                      contentStyle={styles.largeButton}
+                      style={styles.primaryButton}
+                    >
+                      Xác minh mã
+                    </Button>
+                    <Button
+                      mode="text"
+                      onPress={handleSendCode}
+                      disabled={loading || resendCooldown > 0}
+                      style={styles.resendBtn}
+                    >
+                      {resendCooldown > 0 ? `Gửi lại mã (${resendCooldown}s)` : 'Gửi lại mã'}
+                    </Button>
+                  </>
+                )}
+
+                {step === 3 && (
+                  <>
+                    <TextInput
+                      label="Mật khẩu mới"
+                      value={newPassword}
+                      onChangeText={setNewPassword}
+                      mode="outlined"
+                      secureTextEntry={!showPassword}
+                      left={<TextInput.Icon icon="lock" color={theme.colors.onSurfaceVariant} />}
+                      right={
+                        <TextInput.Icon
+                          icon={showPassword ? 'eye-off' : 'eye'}
+                          onPress={() => setShowPassword(!showPassword)}
+                          color={theme.colors.onSurfaceVariant}
+                        />
+                      }
+                      style={styles.input}
+                    />
+                    <TextInput
+                      label="Xác nhận mật khẩu"
+                      value={confirmPassword}
+                      onChangeText={setConfirmPassword}
+                      mode="outlined"
+                      secureTextEntry={!showPassword}
+                      left={<TextInput.Icon icon="lock-check" color={theme.colors.onSurfaceVariant} />}
+                      style={styles.input}
+                    />
+                    <Button
+                      mode="contained"
+                      onPress={handleResetPassword}
+                      loading={loading}
+                      disabled={loading}
+                      contentStyle={styles.largeButton}
+                      style={styles.primaryButton}
+                    >
+                      Đặt lại mật khẩu
+                    </Button>
+                  </>
+                )}
+                </View>
+              </View>
+            )}
+          </Animated.View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    flex: {
+      flex: 1,
+    },
+    header: {
+      paddingHorizontal: 8,
+    },
+    backBtn: {
+      alignSelf: 'flex-start',
+    },
+    content: {
+      flexGrow: 1,
+      paddingHorizontal: 24,
+      paddingBottom: 40,
+      gap: 8,
+    },
+    stepContainer: {
+      alignItems: 'center',
+      gap: 12,
+    },
+    stepForm: {
+      width: '100%',
+    },
+    stepIconContainer: {
+      width: 80,
+      height: 80,
+      borderRadius: 24,
+      backgroundColor: `${theme.colors.primary}12`,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 8,
+    },
+    stepTitle: {
+      fontWeight: '800',
+      textAlign: 'center',
+    },
+    stepDescription: {
+      color: theme.colors.onSurfaceVariant,
+      textAlign: 'center',
+      marginBottom: 8,
+    },
+    input: {
+      marginBottom: 12,
+    },
+    primaryButton: {
+      marginTop: 8,
+    },
+    largeButton: {
+      minHeight: 52,
+    },
+    resendBtn: {
+      marginTop: 4,
+    },
+    messageBox: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      padding: 12,
+      borderRadius: 12,
+      marginBottom: 8,
+    },
+    messageText: {
+      fontSize: 13,
+      fontWeight: '600',
+      flex: 1,
+    },
+    successContainer: {
+      alignItems: 'center',
+      gap: 16,
+      paddingTop: 40,
+    },
+    successIcon: {
+      width: 120,
+      height: 120,
+      borderRadius: 60,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    successTitle: {
+      fontWeight: '800',
+      textAlign: 'center',
+    },
+    successDesc: {
+      color: theme.colors.onSurfaceVariant,
+      textAlign: 'center',
+      lineHeight: 22,
+    },
+    successButton: {
+      marginTop: 16,
+      minWidth: 200,
+    },
+  });
+}
+</file>
+
 <file path="src/screens/ImportBooksScreen.tsx">
 import React, { useState, useCallback, useRef, useMemo } from 'react';
 import { View, StyleSheet, ScrollView, Image } from 'react-native';
@@ -7535,6 +7191,357 @@ export const LightTheme: AppTheme = {
 };
 </file>
 
+<file path="src/theme/MobileDesignSystem.tsx">
+import React from 'react';
+import { View, StyleSheet, ViewStyle } from 'react-native';
+import { Text, Avatar, Surface, useTheme } from 'react-native-paper';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import type { AppTheme } from './DarkTheme';
+
+/* ─── Gradient Header ─── */
+export function GradientHeader({
+  title,
+  subtitle,
+  icon,
+  right,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  icon: string;
+  right?: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  const theme = useTheme() as AppTheme;
+  const c = theme.colors;
+
+  return (
+    <Surface style={[dhStyles.header, { backgroundColor: c.primary }]} elevation={0}>
+      {/* decorative circles */}
+      <View style={[dhStyles.circle, { top: -30, right: -30, width: 120, height: 120, backgroundColor: 'rgba(255,255,255,0.08)' }]} />
+      <View style={[dhStyles.circle, { bottom: -40, left: 80, width: 160, height: 160, backgroundColor: 'rgba(255,255,255,0.05)' }]} />
+
+      <View style={dhStyles.headerRow}>
+        <Avatar.Icon size={44} icon={icon} style={dhStyles.headerAvatar} color={c.onPrimary} />
+        <View style={{ flex: 1 }}>
+          <Text variant="titleMedium" style={dhStyles.headerTitle}>{title}</Text>
+          {subtitle ? <Text variant="bodySmall" style={dhStyles.headerSubtitle}>{subtitle}</Text> : null}
+        </View>
+        {right}
+      </View>
+      {children}
+    </Surface>
+  );
+}
+
+/* ─── Stat Card ─── */
+export function StatCard({
+  label,
+  value,
+  icon,
+  gradient,
+  pct,
+}: {
+  label: string;
+  value: string | number;
+  icon: string;
+  gradient: string[];
+  pct?: number;
+}) {
+  const theme = useTheme() as AppTheme;
+  const c = theme.colors;
+
+  return (
+    <Surface style={[dhStyles.statCard, { borderColor: c.outline }]} elevation={0}>
+      <View style={[dhStyles.statAccent, { backgroundColor: gradient[0] }]} />
+      <View style={dhStyles.statRow}>
+        <Avatar.Icon size={40} icon={icon} style={[dhStyles.statIcon, { backgroundColor: gradient[0] + '20' }]} color={gradient[0]} />
+        <View style={{ flex: 1 }}>
+          <Text variant="labelSmall" style={[dhStyles.statLabel, { color: c.onSurfaceVariant }]}>{label}</Text>
+          <Text variant="headlineSmall" style={[dhStyles.statValue, { color: c.onSurface }]}>{value}</Text>
+        </View>
+      </View>
+      {pct !== undefined && (
+        <View style={[dhStyles.progressBg, { backgroundColor: c.outline }]}>
+          <View style={[dhStyles.progressFill, { width: `${Math.min(pct, 100)}%`, backgroundColor: gradient[0] }]} />
+        </View>
+      )}
+    </Surface>
+  );
+}
+
+/* ─── Section Card ─── */
+export function SectionCard({
+  title,
+  icon,
+  accentColor,
+  right,
+  children,
+  style,
+}: {
+  title?: string;
+  icon?: string;
+  accentColor?: string;
+  right?: React.ReactNode;
+  children: React.ReactNode;
+  style?: ViewStyle;
+}) {
+  const theme = useTheme() as AppTheme;
+  const c = theme.colors;
+
+  return (
+    <Surface style={[dhStyles.sectionCard, { borderColor: c.outline }, style]} elevation={0}>
+      {accentColor && <View style={[dhStyles.sectionAccent, { backgroundColor: accentColor }]} />}
+      {(title || right) ? (
+        <View style={dhStyles.sectionHeader}>
+          <View style={dhStyles.sectionHeaderLeft}>
+            {icon ? <MaterialCommunityIcons name={icon as any} size={18} color={c.primary} /> : null}
+            {title ? <Text variant="titleSmall" style={[dhStyles.sectionTitle, { color: c.onSurface }]}>{title}</Text> : null}
+          </View>
+          {right}
+        </View>
+      ) : null}
+      {children}
+    </Surface>
+  );
+}
+
+/* ─── Filter Pill ─── */
+export function FilterPill({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  const theme = useTheme() as AppTheme;
+  const c = theme.colors;
+
+  return (
+    <View
+      style={[
+        dhStyles.pill,
+        {
+          backgroundColor: active ? c.primary : 'transparent',
+          borderColor: active ? c.primary : c.outline,
+        },
+      ]}
+      onTouchEnd={onPress}
+    >
+      <Text
+        variant="labelSmall"
+        style={{
+          color: active ? c.onPrimary : c.onSurfaceVariant,
+          fontWeight: active ? '700' : '500',
+        }}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+/* ─── Empty State ─── */
+export function EmptyState({ icon, message }: { icon: string; message: string }) {
+  const theme = useTheme() as AppTheme;
+  const c = theme.colors;
+
+  return (
+    <View style={dhStyles.empty}>
+      <MaterialCommunityIcons name={icon as any} size={56} color={c.outline} />
+      <Text variant="bodyMedium" style={{ color: c.onSurfaceVariant, marginTop: 12 }}>{message}</Text>
+    </View>
+  );
+}
+
+/* ─── Gradient presets ─── */
+export const GRADIENTS = {
+  indigo: ['#6366f1', '#4338ca'],
+  emerald: ['#10b981', '#059669'],
+  amber: ['#f59e0b', '#d97706'],
+  blue: ['#3b82f6', '#1d4ed8'],
+  red: ['#ef4444', '#dc2626'],
+  violet: ['#8b5cf6', '#6d28d9'],
+  cyan: ['#06b6d4', '#0891b2'],
+  rose: ['#f43f5e', '#e11d48'],
+};
+
+const dhStyles = StyleSheet.create({
+  header: {
+    borderRadius: 16,
+    padding: 20,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  circle: {
+    position: 'absolute',
+    borderRadius: 999,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    zIndex: 1,
+  },
+  headerAvatar: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  headerTitle: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  headerSubtitle: {
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 2,
+  },
+
+  statCard: {
+    borderRadius: 14,
+    padding: 16,
+    position: 'relative',
+    overflow: 'hidden',
+    borderWidth: 0.5,
+  },
+  statAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+  },
+  statRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  statIcon: {
+    borderRadius: 12,
+  },
+  statLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  statValue: {
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  progressBg: {
+    height: 3,
+    borderRadius: 2,
+    marginTop: 12,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+
+  sectionCard: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    position: 'relative',
+    borderWidth: 0.5,
+  },
+  sectionAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 8,
+  },
+  sectionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sectionTitle: {
+    fontWeight: '800',
+    fontSize: 13,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+
+  pill: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+
+  empty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+  },
+});
+</file>
+
+<file path="src/utils/error-reporter.ts">
+import { Platform } from 'react-native';
+
+const API_BASE = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://10.31.94.35:80';
+
+interface ReportErrorParams {
+  title: string;
+  description?: string;
+  priority?: 'Highest' | 'High' | 'Medium' | 'Low';
+  labels?: string[];
+  service?: string;
+  endpoint?: string;
+  method?: string;
+  stacktrace?: string;
+  requestBody?: string;
+}
+
+export async function reportError(params: ReportErrorParams): Promise<void> {
+  try {
+    await fetch(`${API_BASE}/errors/report`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...params,
+        service: params.service || `mobile-${Platform.OS}`,
+        labels: [...(params.labels || []), `mobile-${Platform.OS}`],
+      }),
+    });
+  } catch {
+    // Silent fail — error reporting should never break the app
+  }
+}
+
+// Global error handler for unhandled errors
+export function setupGlobalErrorHandlers() {
+  const originalHandler = ErrorUtils.getGlobalHandler();
+
+  ErrorUtils.setGlobalHandler((error: Error, isFatal?: boolean) => {
+    reportError({
+      title: `[Mobile-${Platform.OS}] ${isFatal ? 'Fatal' : 'Non-fatal'} Error - ${error.message}`,
+      description: error.message,
+      priority: isFatal ? 'Highest' : 'High',
+      labels: [`mobile-${Platform.OS}`, isFatal ? 'fatal' : 'non-fatal'],
+      stacktrace: error.stack,
+    });
+
+    // Call original handler if it exists
+    if (originalHandler) {
+      originalHandler(error, isFatal);
+    }
+  });
+}
+</file>
+
 <file path="tsconfig.json">
 {
   "extends": "expo/tsconfig.base",
@@ -7650,8 +7657,13 @@ export const scheduleApi = {
     return response.data;
   },
 
-  checkIn: async (id: string): Promise<unknown> => {
-    const response = await api.post(`/schedules/assignments/${id}/check-in`, { method: 'mobile' });
+  checkIn: async (id: string, lat?: number, lng?: number): Promise<unknown> => {
+    const body: Record<string, unknown> = { method: 'mobile' };
+    if (lat != null && lng != null) {
+      body.lat = lat;
+      body.lng = lng;
+    }
+    const response = await api.post(`/schedules/assignments/${id}/check-in`, body);
     return response.data;
   },
 
@@ -12077,718 +12089,6 @@ function createStyles(theme: AppTheme) {
 }
 </file>
 
-<file path="src/screens/RegisterScreen.tsx">
-import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { ActivityIndicator, Button, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
-import api from '../api/client';
-import { authApi } from '../api/auth';
-import AutoFaceCapture from '../components/AutoFaceCapture';
-import StudentCardScanner, { ScannedCardData } from '../components/StudentCardScanner';
-import { AppTheme } from '../theme/DarkTheme';
-import { SectionCard, GRADIENTS } from '../theme/MobileDesignSystem';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-
-interface RegisterScreenProps {
-  navigation: any;
-}
-
-type StepKey = 'scan' | 'form' | 'choice' | 'consent' | 'face';
-
-const STEP_META: Record<StepKey, { label: string; icon: string }> = {
-  scan: { label: 'Quét thẻ', icon: 'card-account-details-outline' },
-  form: { label: 'Thông tin', icon: 'form-textbox' },
-  choice: { label: 'Hoàn tất', icon: 'check-circle-outline' },
-  consent: { label: 'Đồng ý', icon: 'file-document-check' },
-  face: { label: 'Khuôn mặt', icon: 'face-recognition' },
-};
-
-const FORM_STEPS: StepKey[] = ['form', 'choice', 'consent', 'face'];
-
-function StepIndicator({ currentStep }: { currentStep: StepKey }) {
-  const currentIdx = FORM_STEPS.indexOf(currentStep);
-  if (currentIdx < 0) return null;
-
-  const theme = useTheme() as AppTheme;
-
-  return (
-    <View style={stepStyles.container}>
-      {FORM_STEPS.map((key, idx) => {
-        const isActive = idx === currentIdx;
-        const isDone = idx < currentIdx;
-        return (
-          <React.Fragment key={key}>
-            <View style={stepStyles.stepItem}>
-              <View
-                style={[
-                  stepStyles.dot,
-                  {
-                    backgroundColor: isDone
-                      ? theme.colors.primary
-                      : isActive
-                        ? theme.colors.primary
-                        : theme.colors.outlineVariant,
-                  },
-                ]}
-              >
-                {isDone ? (
-                  <MaterialCommunityIcons name="check" size={12} color={theme.colors.onPrimary} />
-                ) : (
-                  <Text style={[stepStyles.dotText, { color: isActive ? theme.colors.onPrimary : theme.colors.onSurfaceVariant }]}>
-                    {idx + 1}
-                  </Text>
-                )}
-              </View>
-              <Text
-                style={[
-                  stepStyles.label,
-                  {
-                    color: isActive || isDone ? theme.colors.primary : theme.colors.onSurfaceVariant,
-                    fontWeight: isActive ? '700' : '500',
-                  },
-                ]}
-              >
-                {STEP_META[key].label}
-              </Text>
-            </View>
-            {idx < FORM_STEPS.length - 1 && (
-              <View
-                style={[
-                  stepStyles.connector,
-                  {
-                    backgroundColor: isDone ? theme.colors.primary : theme.colors.outlineVariant,
-                  },
-                ]}
-              />
-            )}
-          </React.Fragment>
-        );
-      })}
-    </View>
-  );
-}
-
-const stepStyles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    gap: 0,
-  },
-  stepItem: {
-    alignItems: 'center',
-    gap: 4,
-  },
-  dot: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dotText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  connector: {
-    flex: 1,
-    height: 2,
-    borderRadius: 1,
-    marginHorizontal: 6,
-    marginBottom: 18,
-  },
-  label: {
-    fontSize: 10,
-    letterSpacing: 0.3,
-  },
-});
-
-export default function RegisterScreen({ navigation }: RegisterScreenProps) {
-  const theme = useTheme() as AppTheme;
-  const styles = useMemo(() => createStyles(theme), [theme]);
-  const [step, setStep] = useState<StepKey>('scan');
-  const [studentCode, setStudentCode] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [className, setClassName] = useState('');
-  const [course, setCourse] = useState('');
-  const [permanentAddress, setPermanentAddress] = useState('');
-  const [registeredUser, setRegisteredUser] = useState<any>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [snackbar, setSnackbar] = useState('');
-  const [consentGiven, setConsentGiven] = useState(false);
-
-  const showError = (message: string) => setSnackbar(message);
-
-  const handleScanned = (data: ScannedCardData) => {
-    setStudentCode(data.studentCode || '');
-    setFullName(data.fullName || '');
-    setClassName(data.className || '');
-    setCourse(data.course || '');
-    setPermanentAddress(data.permanentAddress || '');
-    setStep('form');
-  };
-
-  const validateForm = () => {
-    if (!studentCode.trim()) {
-      showError('Vui lòng nhập mã sinh viên');
-      return false;
-    }
-    if (studentCode.length < 4) {
-      showError('Mã sinh viên phải có ít nhất 4 ký tự');
-      return false;
-    }
-    if (!fullName.trim()) {
-      showError('Vui lòng nhập họ tên');
-      return false;
-    }
-    if (!email.trim()) {
-      showError('Vui lòng nhập email');
-      return false;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      showError('Email không hợp lệ');
-      return false;
-    }
-    if (!password) {
-      showError('Vui lòng nhập mật khẩu');
-      return false;
-    }
-    if (password.length < 6) {
-      showError('Mật khẩu phải có ít nhất 6 ký tự');
-      return false;
-    }
-    if (password !== confirmPassword) {
-      showError('Mật khẩu xác nhận không khớp');
-      return false;
-    }
-    return true;
-  };
-
-  const handleRegisterClick = async () => {
-    if (!validateForm()) return;
-
-    setIsUploading(true);
-    try {
-      const response = await authApi.patronRegister({
-        student_code: studentCode.trim(),
-        password,
-        full_name: fullName.trim(),
-        email: email.trim(),
-        class_name: className.trim() || undefined,
-        course: course.trim() || undefined,
-        permanent_address: permanentAddress.trim() || undefined,
-      });
-      setRegisteredUser(response.user);
-      setStep('choice');
-    } catch (error: any) {
-      const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || 'Đăng ký thất bại';
-      showError(message);
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const handleFaceEnroll = async (images: string[]) => {
-    if (!registeredUser?.id || images.length !== 4) return;
-
-    setIsUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append('frontal', {
-        uri: `data:image/jpeg;base64,${images[0]}`,
-        type: 'image/jpeg',
-        name: 'face_frontal.jpg',
-      } as any);
-      formData.append('right', {
-        uri: `data:image/jpeg;base64,${images[1]}`,
-        type: 'image/jpeg',
-        name: 'face_right.jpg',
-      } as any);
-      formData.append('left', {
-        uri: `data:image/jpeg;base64,${images[2]}`,
-        type: 'image/jpeg',
-        name: 'face_left.jpg',
-      } as any);
-      formData.append('down', {
-        uri: `data:image/jpeg;base64,${images[3]}`,
-        type: 'image/jpeg',
-        name: 'face_down.jpg',
-      } as any);
-      formData.append('consent_given', consentGiven ? 'true' : 'false');
-
-      await api.post(`/patrons/${registeredUser.id}/enroll-batch`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 130000,
-      });
-
-      setSnackbar('Đăng ký tài khoản và khuôn mặt thành công');
-      navigation.replace('Login');
-    } catch (error: any) {
-      const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || 'Đăng ký khuôn mặt thất bại';
-      showError(message);
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  if (step === 'scan') {
-    return (
-      <SafeAreaView style={styles.container} edges={['bottom']}>
-        <StudentCardScanner
-          onScanned={handleScanned}
-          onError={showError}
-          onSkip={() => {
-            setStep('form');
-          }}
-        />
-        <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
-          {snackbar}
-        </Snackbar>
-      </SafeAreaView>
-    );
-  }
-
-  if (step === 'choice') {
-    return (
-      <SafeAreaView style={styles.container} edges={['bottom']}>
-        <View style={styles.centeredContent}>
-          <SectionCard accentColor={GRADIENTS.emerald[0]} style={styles.choiceCard}>
-            <View style={styles.choiceInner}>
-              <View style={styles.successCircle}>
-                <MaterialCommunityIcons name="check" size={40} color={GRADIENTS.emerald[0]} />
-              </View>
-              <Text variant="headlineSmall" style={styles.choiceTitle}>Đăng ký thành công</Text>
-              <Text style={styles.choiceSubtitle}>
-                Bạn có muốn đăng ký khuôn mặt để đăng nhập nhanh tại cổng thư viện không?
-              </Text>
-              <Button
-                mode="contained"
-                onPress={() => setStep('consent')}
-                contentStyle={styles.primaryBtn}
-                labelStyle={styles.primaryBtnLabel}
-                style={styles.primaryBtnWrapper}
-              >
-                Đăng ký khuôn mặt
-              </Button>
-              <Button mode="text" onPress={() => navigation.replace('Login')} labelStyle={styles.skipLabel}>
-                Bỏ qua
-              </Button>
-            </View>
-          </SectionCard>
-        </View>
-        <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
-          {snackbar}
-        </Snackbar>
-      </SafeAreaView>
-    );
-  }
-
-  if (step === 'consent') {
-    return (
-      <SafeAreaView style={styles.container} edges={['bottom']}>
-        <View style={styles.centeredContent}>
-          <SectionCard
-            title="Thu thập dữ liệu sinh học"
-            icon="file-document-check"
-            accentColor={GRADIENTS.amber[0]}
-            style={styles.choiceCard}
-          >
-            <View style={styles.consentInner}>
-              <Text style={styles.consentText}>
-                Ứng dụng sẽ thu thập hình ảnh khuôn mặt của bạn để xác thực danh tính. Dữ liệu được bảo mật và chỉ dùng cho mục đích xác thực.
-              </Text>
-              <Button
-                mode={consentGiven ? 'contained' : 'outlined'}
-                onPress={() => setConsentGiven(!consentGiven)}
-                icon={consentGiven ? 'check' : undefined}
-                contentStyle={styles.consentBtn}
-                style={consentGiven ? styles.consentActiveBtn : styles.consentInactiveBtn}
-              >
-                {consentGiven ? 'Đã đồng ý' : 'Tôi đồng ý'}
-              </Button>
-              <Button
-                mode="contained"
-                onPress={() => setStep('face')}
-                disabled={!consentGiven}
-                contentStyle={styles.primaryBtn}
-                labelStyle={styles.primaryBtnLabel}
-                style={styles.primaryBtnWrapper}
-              >
-                Tiếp tục
-              </Button>
-              <Button mode="text" onPress={() => setStep('choice')} labelStyle={styles.skipLabel}>
-                Từ chối
-              </Button>
-            </View>
-          </SectionCard>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (step === 'face') {
-    return (
-      <SafeAreaView style={styles.container} edges={['bottom']}>
-        <SectionCard
-          title="Đăng ký khuôn mặt"
-          icon="face-recognition"
-          accentColor={GRADIENTS.violet[0]}
-          style={styles.faceHeaderCard}
-        >
-          <View style={styles.faceHeaderInner}>
-            <Text style={styles.mutedText}>Chụp khuôn mặt từ 4 góc để đăng nhập nhanh sau này.</Text>
-          </View>
-        </SectionCard>
-
-        <View style={styles.captureContainer}>
-          <AutoFaceCapture onFilesReady={handleFaceEnroll} onError={showError} />
-        </View>
-
-        {!isUploading && (
-          <View style={styles.faceFooter}>
-            <Button mode="text" onPress={() => navigation.replace('Login')} labelStyle={styles.skipLabel}>
-              Bỏ qua
-            </Button>
-          </View>
-        )}
-
-        {isUploading && (
-          <View style={styles.loadingOverlay}>
-            <View style={styles.loadingCard}>
-              <ActivityIndicator size="large" color={theme.colors.primary} />
-              <Text style={styles.loadingText}>Đang đăng ký khuôn mặt...</Text>
-            </View>
-          </View>
-        )}
-
-        <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
-          {snackbar}
-        </Snackbar>
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.headerBar}>
-        <Button
-          mode="text"
-          onPress={() => navigation.goBack()}
-          icon="arrow-left"
-          compact
-          labelStyle={styles.backLabel}
-        >
-          Quay lại
-        </Button>
-        <Text variant="titleMedium" style={styles.headerTitle}>Đăng ký</Text>
-        <View style={{ width: 60 }} />
-      </View>
-
-      <StepIndicator currentStep={step} />
-
-      <ScrollView style={styles.flex} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <SectionCard
-          title="Thông tin tài khoản"
-          icon="form-textbox"
-          accentColor={GRADIENTS.indigo[0]}
-        >
-          <View style={styles.formInner}>
-            <Text style={styles.formSubtitle}>Nhập thông tin để tạo tài khoản độc giả mới.</Text>
-
-            {studentCode || fullName ? (
-              <View style={styles.prefillBanner}>
-                <MaterialCommunityIcons name="check-circle" size={16} color={GRADIENTS.emerald[0]} />
-                <Text style={styles.prefillText}>Đã điền thông tin từ thẻ sinh viên</Text>
-              </View>
-            ) : null}
-
-            <TextInput
-              label="Mã sinh viên"
-              value={studentCode}
-              onChangeText={setStudentCode}
-              mode="outlined"
-              autoCapitalize="none"
-              left={<TextInput.Icon icon="account" color={theme.colors.onSurfaceVariant} />}
-              outlineStyle={styles.inputOutline}
-              style={styles.input}
-            />
-
-            <TextInput
-              label="Họ và tên"
-              value={fullName}
-              onChangeText={setFullName}
-              mode="outlined"
-              left={<TextInput.Icon icon="account-outline" color={theme.colors.onSurfaceVariant} />}
-              outlineStyle={styles.inputOutline}
-              style={styles.input}
-            />
-
-            <TextInput
-              label="Lớp (không bắt buộc)"
-              value={className}
-              onChangeText={setClassName}
-              mode="outlined"
-              left={<TextInput.Icon icon="school" color={theme.colors.onSurfaceVariant} />}
-              outlineStyle={styles.inputOutline}
-              style={styles.input}
-            />
-
-            <TextInput
-              label="Khóa học (không bắt buộc)"
-              value={course}
-              onChangeText={setCourse}
-              mode="outlined"
-              left={<TextInput.Icon icon="bookmark-outline" color={theme.colors.onSurfaceVariant} />}
-              outlineStyle={styles.inputOutline}
-              style={styles.input}
-            />
-
-            <TextInput
-              label="HKTT (không bắt buộc)"
-              value={permanentAddress}
-              onChangeText={setPermanentAddress}
-              mode="outlined"
-              multiline
-              numberOfLines={2}
-              left={<TextInput.Icon icon="home-outline" color={theme.colors.onSurfaceVariant} />}
-              outlineStyle={styles.inputOutline}
-              style={styles.input}
-            />
-
-            <TextInput
-              label="Email"
-              value={email}
-              onChangeText={setEmail}
-              mode="outlined"
-              autoCapitalize="none"
-              keyboardType="email-address"
-              left={<TextInput.Icon icon="email" color={theme.colors.onSurfaceVariant} />}
-              outlineStyle={styles.inputOutline}
-              style={styles.input}
-            />
-
-            <TextInput
-              label="Mật khẩu"
-              value={password}
-              onChangeText={setPassword}
-              mode="outlined"
-              secureTextEntry
-              left={<TextInput.Icon icon="lock" color={theme.colors.onSurfaceVariant} />}
-              outlineStyle={styles.inputOutline}
-              style={styles.input}
-            />
-
-            <TextInput
-              label="Xác nhận mật khẩu"
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              mode="outlined"
-              secureTextEntry
-              left={<TextInput.Icon icon="lock-check" color={theme.colors.onSurfaceVariant} />}
-              outlineStyle={styles.inputOutline}
-              style={styles.input}
-            />
-
-            <Button
-              mode="contained"
-              onPress={handleRegisterClick}
-              loading={isUploading}
-              disabled={isUploading}
-              contentStyle={styles.primaryBtn}
-              labelStyle={styles.primaryBtnLabel}
-              style={styles.primaryBtnWrapper}
-            >
-              Đăng ký
-            </Button>
-
-            <Button mode="text" onPress={() => navigation.goBack()} labelStyle={styles.loginLink}>
-              Đã có tài khoản? Đăng nhập
-            </Button>
-          </View>
-        </SectionCard>
-      </ScrollView>
-
-      <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
-        {snackbar}
-      </Snackbar>
-    </SafeAreaView>
-  );
-}
-
-function createStyles(theme: AppTheme) {
-  return StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: theme.colors.background,
-    },
-    flex: {
-      flex: 1,
-    },
-    centeredContent: {
-      flex: 1,
-      justifyContent: 'center',
-      padding: 16,
-    },
-    scrollContent: {
-      flexGrow: 1,
-      padding: 16,
-      paddingBottom: 32,
-    },
-    headerBar: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 4,
-      paddingVertical: 8,
-    },
-    backLabel: {
-      fontSize: 14,
-      color: theme.colors.primary,
-    },
-    headerTitle: {
-      color: theme.colors.onSurface,
-      fontWeight: '800',
-    },
-    formInner: {
-      gap: 12,
-      padding: 16,
-    },
-    formSubtitle: {
-      color: theme.colors.onSurfaceVariant,
-      marginBottom: 4,
-    },
-    input: {
-      backgroundColor: 'transparent',
-    },
-    inputOutline: {
-      borderRadius: 6,
-    },
-    prefillBanner: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      backgroundColor: `${GRADIENTS.emerald[0]}18`,
-      paddingVertical: 8,
-      paddingHorizontal: 12,
-      borderRadius: 8,
-    },
-    prefillText: {
-      color: GRADIENTS.emerald[0],
-      fontSize: 13,
-      fontWeight: '600',
-    },
-    primaryBtn: {
-      minHeight: 50,
-      borderRadius: 8,
-    },
-    primaryBtnLabel: {
-      fontWeight: '700',
-      fontSize: 15,
-    },
-    primaryBtnWrapper: {
-      borderRadius: 8,
-      marginTop: 4,
-    },
-    loginLink: {
-      fontSize: 14,
-      fontWeight: '600',
-    },
-    skipLabel: {
-      fontSize: 14,
-      fontWeight: '600',
-    },
-    choiceCard: {
-      borderRadius: 14,
-    },
-    choiceInner: {
-      alignItems: 'center',
-      gap: 14,
-      padding: 24,
-    },
-    successCircle: {
-      width: 80,
-      height: 80,
-      borderRadius: 40,
-      backgroundColor: `${GRADIENTS.emerald[0]}20`,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    choiceTitle: {
-      color: theme.colors.onSurface,
-      textAlign: 'center',
-      fontWeight: '900',
-    },
-    choiceSubtitle: {
-      color: theme.colors.onSurfaceVariant,
-      textAlign: 'center',
-      lineHeight: 20,
-    },
-    consentInner: {
-      gap: 12,
-      padding: 16,
-    },
-    consentText: {
-      color: theme.colors.onSurfaceVariant,
-      lineHeight: 20,
-    },
-    consentBtn: {
-      minHeight: 44,
-      borderRadius: 8,
-    },
-    consentActiveBtn: {
-      borderRadius: 8,
-      backgroundColor: `${GRADIENTS.emerald[0]}20`,
-      borderColor: GRADIENTS.emerald[0],
-    },
-    consentInactiveBtn: {
-      borderRadius: 8,
-    },
-    faceHeaderCard: {
-      margin: 12,
-      marginBottom: 0,
-      borderRadius: 14,
-    },
-    faceHeaderInner: {
-      padding: 16,
-    },
-    mutedText: {
-      color: theme.colors.onSurfaceVariant,
-      lineHeight: 20,
-    },
-    captureContainer: {
-      flex: 1,
-    },
-    faceFooter: {
-      padding: 12,
-    },
-    loadingOverlay: {
-      ...StyleSheet.absoluteFill,
-      backgroundColor: 'rgba(0,0,0,0.65)',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    loadingCard: {
-      backgroundColor: theme.colors.surface,
-      borderRadius: 14,
-      padding: 28,
-      alignItems: 'center',
-      gap: 12,
-    },
-    loadingText: {
-      color: theme.colors.onSurface,
-      fontSize: 15,
-      fontWeight: '600',
-    },
-  });
-}
-</file>
-
 <file path="src/screens/StaffBorrowScreen.tsx">
 import React, { useState, useCallback, useMemo } from 'react';
 import { View, StyleSheet, Alert, FlatList } from 'react-native';
@@ -13362,6 +12662,7 @@ function createStyles(theme: AppTheme) {
     "expo-camera": "^56.0.8",
     "expo-dev-client": "~56.0.20",
     "expo-file-system": "~56.0.8",
+    "expo-location": "~18.0.5",
     "expo-status-bar": "~56.0.4",
     "react": "19.2.3",
     "react-native": "0.85.3",
@@ -13390,6 +12691,1005 @@ function createStyles(theme: AppTheme) {
     "test": "jest"
   },
   "private": true
+}
+</file>
+
+<file path="src/screens/RegisterScreen.tsx">
+import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityIndicator, Button, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
+import api from '../api/client';
+import { authApi } from '../api/auth';
+import AutoFaceCapture from '../components/AutoFaceCapture';
+import StudentCardScanner, { ScannedCardData } from '../components/StudentCardScanner';
+import CodeInput from '../components/CodeInput';
+import { AppTheme } from '../theme/DarkTheme';
+import { SectionCard, GRADIENTS } from '../theme/MobileDesignSystem';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+
+interface RegisterScreenProps {
+  navigation: any;
+}
+
+type StepKey = 'scan' | 'form' | 'otp' | 'choice' | 'consent' | 'face';
+
+const STEP_META: Record<StepKey, { label: string; icon: string }> = {
+  scan: { label: 'Quét thẻ', icon: 'card-account-details-outline' },
+  form: { label: 'Thông tin', icon: 'form-textbox' },
+  otp: { label: 'Xác thực', icon: 'email-check-outline' },
+  choice: { label: 'Hoàn tất', icon: 'check-circle-outline' },
+  consent: { label: 'Đồng ý', icon: 'file-document-check' },
+  face: { label: 'Khuôn mặt', icon: 'face-recognition' },
+};
+
+const FORM_STEPS: StepKey[] = ['form', 'otp', 'choice', 'consent', 'face'];
+
+function StepIndicator({ currentStep }: { currentStep: StepKey }) {
+  const currentIdx = FORM_STEPS.indexOf(currentStep);
+  if (currentIdx < 0) return null;
+
+  const theme = useTheme() as AppTheme;
+
+  return (
+    <View style={stepStyles.container}>
+      {FORM_STEPS.map((key, idx) => {
+        const isActive = idx === currentIdx;
+        const isDone = idx < currentIdx;
+        return (
+          <React.Fragment key={key}>
+            <View style={stepStyles.stepItem}>
+              <View
+                style={[
+                  stepStyles.dot,
+                  {
+                    backgroundColor: isDone
+                      ? theme.colors.primary
+                      : isActive
+                        ? theme.colors.primary
+                        : theme.colors.outlineVariant,
+                  },
+                ]}
+              >
+                {isDone ? (
+                  <MaterialCommunityIcons name="check" size={12} color={theme.colors.onPrimary} />
+                ) : (
+                  <Text style={[stepStyles.dotText, { color: isActive ? theme.colors.onPrimary : theme.colors.onSurfaceVariant }]}>
+                    {idx + 1}
+                  </Text>
+                )}
+              </View>
+              <Text
+                style={[
+                  stepStyles.label,
+                  {
+                    color: isActive || isDone ? theme.colors.primary : theme.colors.onSurfaceVariant,
+                    fontWeight: isActive ? '700' : '500',
+                  },
+                ]}
+              >
+                {STEP_META[key].label}
+              </Text>
+            </View>
+            {idx < FORM_STEPS.length - 1 && (
+              <View
+                style={[
+                  stepStyles.connector,
+                  {
+                    backgroundColor: isDone ? theme.colors.primary : theme.colors.outlineVariant,
+                  },
+                ]}
+              />
+            )}
+          </React.Fragment>
+        );
+      })}
+    </View>
+  );
+}
+
+const stepStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    gap: 0,
+  },
+  stepItem: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  dot: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dotText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  connector: {
+    flex: 1,
+    height: 2,
+    borderRadius: 1,
+    marginHorizontal: 6,
+    marginBottom: 18,
+  },
+  label: {
+    fontSize: 10,
+    letterSpacing: 0.3,
+  },
+});
+
+export default function RegisterScreen({ navigation }: RegisterScreenProps) {
+  const theme = useTheme() as AppTheme;
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const [step, setStep] = useState<StepKey>('scan');
+  const [studentCode, setStudentCode] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [className, setClassName] = useState('');
+  const [course, setCourse] = useState('');
+  const [permanentAddress, setPermanentAddress] = useState('');
+  const [registeredUser, setRegisteredUser] = useState<any>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [snackbar, setSnackbar] = useState('');
+  const [consentGiven, setConsentGiven] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [verificationToken, setVerificationToken] = useState('');
+  const [otpSending, setOtpSending] = useState(false);
+  const [otpCooldown, setOtpCooldown] = useState(0);
+  const [studentCodeCheck, setStudentCodeCheck] = useState<'idle' | 'checking' | 'exists' | 'available'>('idle');
+  const [emailCheck, setEmailCheck] = useState<'idle' | 'checking' | 'exists' | 'available'>('idle');
+  const otpTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const checkExistsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (otpTimerRef.current) clearInterval(otpTimerRef.current);
+      if (checkExistsDebounceRef.current) clearTimeout(checkExistsDebounceRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (step !== 'otp') {
+      if (otpTimerRef.current) {
+        clearInterval(otpTimerRef.current);
+        otpTimerRef.current = null;
+      }
+    }
+  }, [step]);
+
+  useEffect(() => {
+    let ignore = false;
+    if (checkExistsDebounceRef.current) clearTimeout(checkExistsDebounceRef.current);
+
+    const code = studentCode.trim();
+    const mail = email.trim();
+    const codeValid = code.length >= 4;
+    const mailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail);
+
+    if (!codeValid && !mailValid) {
+      setStudentCodeCheck('idle');
+      setEmailCheck('idle');
+      return;
+    }
+
+    if (codeValid) setStudentCodeCheck('checking');
+    if (mailValid) setEmailCheck('checking');
+
+    checkExistsDebounceRef.current = setTimeout(() => {
+      authApi.checkExists(codeValid ? code : '', mailValid ? mail : '').then(result => {
+        if (ignore) return;
+        setStudentCodeCheck(codeValid ? (result.student_code_exists ? 'exists' : 'available') : 'idle');
+        setEmailCheck(mailValid ? (result.email_exists ? 'exists' : 'available') : 'idle');
+      }).catch(() => {
+        if (!ignore) {
+          setStudentCodeCheck('idle');
+          setEmailCheck('idle');
+        }
+      });
+    }, 500);
+
+    return () => { ignore = true; };
+  }, [studentCode, email]);
+
+  const startOtpCooldown = () => {
+    setOtpCooldown(60);
+    if (otpTimerRef.current) clearInterval(otpTimerRef.current);
+    otpTimerRef.current = setInterval(() => {
+      setOtpCooldown((prev) => {
+        if (prev <= 1) {
+          if (otpTimerRef.current) clearInterval(otpTimerRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const showError = (message: string) => setSnackbar(message);
+
+  const handleSendOtp = async () => {
+    setOtpSending(true);
+    try {
+      await authApi.preRegisterOtp(email.trim());
+      startOtpCooldown();
+      setStep('otp');
+    } catch (error: any) {
+      const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || 'Gui ma OTP that bai';
+      showError(message);
+    } finally {
+      setOtpSending(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (otpCode.length < 6) {
+      showError('Vui long nhap day du ma OTP');
+      return;
+    }
+    setOtpSending(true);
+    try {
+      const result = await authApi.preRegisterVerify(email.trim(), otpCode);
+      setVerificationToken(result.verification_token);
+      await authApi.patronRegister({
+        student_code: studentCode.trim(),
+        password,
+        full_name: fullName.trim(),
+        email: email.trim(),
+        class_name: className.trim() || undefined,
+        course: course.trim() || undefined,
+        permanent_address: permanentAddress.trim() || undefined,
+        verification_token: result.verification_token,
+      }).then(response => {
+        setRegisteredUser(response.user);
+        setStep('choice');
+      }).catch(error => {
+        const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || 'Dang ky that bai';
+        showError(message);
+      });
+    } catch (error: any) {
+      const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || 'Ma OTP khong hop le';
+      showError(message);
+    } finally {
+      setOtpSending(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (otpCooldown > 0) return;
+    try {
+      await authApi.preRegisterOtp(email.trim());
+      startOtpCooldown();
+      setOtpCode('');
+      showError('Da gui lai ma OTP');
+    } catch (error: any) {
+      const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || 'Gui lai OTP that bai';
+      showError(message);
+    }
+  };
+
+  const handleScanned = (data: ScannedCardData) => {
+    setStudentCode(data.studentCode || '');
+    setFullName(data.fullName || '');
+    setClassName(data.className || '');
+    setCourse(data.course || '');
+    setPermanentAddress(data.permanentAddress || '');
+    setStep('form');
+  };
+
+  const validateForm = () => {
+    if (!studentCode.trim()) {
+      showError('Vui lòng nhập mã sinh viên');
+      return false;
+    }
+    if (studentCode.length < 4) {
+      showError('Mã sinh viên phải có ít nhất 4 ký tự');
+      return false;
+    }
+    if (!fullName.trim()) {
+      showError('Vui lòng nhập họ tên');
+      return false;
+    }
+    if (!email.trim()) {
+      showError('Vui lòng nhập email');
+      return false;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      showError('Email không hợp lệ');
+      return false;
+    }
+    if (!password) {
+      showError('Vui lòng nhập mật khẩu');
+      return false;
+    }
+    if (password.length < 6) {
+      showError('Mật khẩu phải có ít nhất 6 ký tự');
+      return false;
+    }
+    if (password !== confirmPassword) {
+      showError('Mật khẩu xác nhận không khớp');
+      return false;
+    }
+    return true;
+  };
+
+  const handleFaceEnroll = async (images: string[]) => {
+    if (!registeredUser?.id || images.length !== 4) return;
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('frontal', {
+        uri: `data:image/jpeg;base64,${images[0]}`,
+        type: 'image/jpeg',
+        name: 'face_frontal.jpg',
+      } as any);
+      formData.append('right', {
+        uri: `data:image/jpeg;base64,${images[1]}`,
+        type: 'image/jpeg',
+        name: 'face_right.jpg',
+      } as any);
+      formData.append('left', {
+        uri: `data:image/jpeg;base64,${images[2]}`,
+        type: 'image/jpeg',
+        name: 'face_left.jpg',
+      } as any);
+      formData.append('down', {
+        uri: `data:image/jpeg;base64,${images[3]}`,
+        type: 'image/jpeg',
+        name: 'face_down.jpg',
+      } as any);
+      formData.append('consent_given', consentGiven ? 'true' : 'false');
+
+      await api.post(`/patrons/${registeredUser.id}/enroll-batch`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 130000,
+      });
+
+      setSnackbar('Đăng ký tài khoản và khuôn mặt thành công');
+      navigation.replace('Login');
+    } catch (error: any) {
+      const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || 'Đăng ký khuôn mặt thất bại';
+      showError(message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  if (step === 'scan') {
+    return (
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <StudentCardScanner
+          onScanned={handleScanned}
+          onError={showError}
+          onSkip={() => {
+            setStep('form');
+          }}
+        />
+        <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
+          {snackbar}
+        </Snackbar>
+      </SafeAreaView>
+    );
+  }
+
+  if (step === 'otp') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.headerBar}>
+          <Button
+            mode="text"
+            onPress={() => setStep('form')}
+            icon="arrow-left"
+            compact
+            labelStyle={styles.backLabel}
+          >
+            Quay lại
+          </Button>
+          <Text variant="titleMedium" style={styles.headerTitle}>Xác thực email</Text>
+          <View style={{ width: 60 }} />
+        </View>
+
+        <StepIndicator currentStep={step} />
+
+        <View style={styles.centeredContent}>
+          <SectionCard
+            title="Mã xác thực"
+            icon="email-check-outline"
+            accentColor={GRADIENTS.blue[0]}
+            style={styles.choiceCard}
+          >
+            <View style={styles.otpInner}>
+              <View style={styles.otpIconWrap}>
+                <MaterialCommunityIcons name="email-check" size={48} color={GRADIENTS.blue[0]} />
+              </View>
+              <Text style={styles.otpTitle}>Nhập mã OTP</Text>
+              <Text style={styles.otpSubtitle}>
+                Mã xác thực gồm 6 chữ số đã được gửi đến email{'\n'}
+                <Text style={styles.otpEmail}>{email}</Text>
+              </Text>
+
+              <CodeInput value={otpCode} onChange={setOtpCode} length={6} theme={theme} />
+
+              <Button
+                mode="contained"
+                onPress={handleVerifyOtp}
+                loading={otpSending}
+                disabled={otpSending || otpCode.length < 6}
+                contentStyle={styles.primaryBtn}
+                labelStyle={styles.primaryBtnLabel}
+                style={styles.primaryBtnWrapper}
+              >
+                Xác thực
+              </Button>
+
+              <Button
+                mode="text"
+                onPress={handleResendOtp}
+                disabled={otpCooldown > 0}
+                labelStyle={[styles.resendLabel, otpCooldown > 0 && styles.resendLabelDisabled]}
+              >
+                {otpCooldown > 0 ? `Gửi lại sau ${otpCooldown}s` : 'Gửi lại mã'}
+              </Button>
+            </View>
+          </SectionCard>
+        </View>
+
+        <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
+          {snackbar}
+        </Snackbar>
+      </SafeAreaView>
+    );
+  }
+
+  if (step === 'choice') {
+    return (
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <View style={styles.centeredContent}>
+          <SectionCard accentColor={GRADIENTS.emerald[0]} style={styles.choiceCard}>
+            <View style={styles.choiceInner}>
+              <View style={styles.successCircle}>
+                <MaterialCommunityIcons name="check" size={40} color={GRADIENTS.emerald[0]} />
+              </View>
+              <Text variant="headlineSmall" style={styles.choiceTitle}>Đăng ký thành công</Text>
+              <Text style={styles.choiceSubtitle}>
+                Bạn có muốn đăng ký khuôn mặt để đăng nhập nhanh tại cổng thư viện không?
+              </Text>
+              <Button
+                mode="contained"
+                onPress={() => setStep('consent')}
+                contentStyle={styles.primaryBtn}
+                labelStyle={styles.primaryBtnLabel}
+                style={styles.primaryBtnWrapper}
+              >
+                Đăng ký khuôn mặt
+              </Button>
+              <Button mode="text" onPress={() => navigation.replace('Login')} labelStyle={styles.skipLabel}>
+                Bỏ qua
+              </Button>
+            </View>
+          </SectionCard>
+        </View>
+        <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
+          {snackbar}
+        </Snackbar>
+      </SafeAreaView>
+    );
+  }
+
+  if (step === 'consent') {
+    return (
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <View style={styles.centeredContent}>
+          <SectionCard
+            title="Thu thập dữ liệu sinh học"
+            icon="file-document-check"
+            accentColor={GRADIENTS.amber[0]}
+            style={styles.choiceCard}
+          >
+            <View style={styles.consentInner}>
+              <Text style={styles.consentText}>
+                Ứng dụng sẽ thu thập hình ảnh khuôn mặt của bạn để xác thực danh tính. Dữ liệu được bảo mật và chỉ dùng cho mục đích xác thực.
+              </Text>
+              <Button
+                mode={consentGiven ? 'contained' : 'outlined'}
+                onPress={() => setConsentGiven(!consentGiven)}
+                icon={consentGiven ? 'check' : undefined}
+                contentStyle={styles.consentBtn}
+                style={consentGiven ? styles.consentActiveBtn : styles.consentInactiveBtn}
+              >
+                {consentGiven ? 'Đã đồng ý' : 'Tôi đồng ý'}
+              </Button>
+              <Button
+                mode="contained"
+                onPress={() => setStep('face')}
+                disabled={!consentGiven}
+                contentStyle={styles.primaryBtn}
+                labelStyle={styles.primaryBtnLabel}
+                style={styles.primaryBtnWrapper}
+              >
+                Tiếp tục
+              </Button>
+              <Button mode="text" onPress={() => setStep('choice')} labelStyle={styles.skipLabel}>
+                Từ chối
+              </Button>
+            </View>
+          </SectionCard>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (step === 'face') {
+    return (
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <SectionCard
+          title="Đăng ký khuôn mặt"
+          icon="face-recognition"
+          accentColor={GRADIENTS.violet[0]}
+          style={styles.faceHeaderCard}
+        >
+          <View style={styles.faceHeaderInner}>
+            <Text style={styles.mutedText}>Chụp khuôn mặt từ 4 góc để đăng nhập nhanh sau này.</Text>
+          </View>
+        </SectionCard>
+
+        <View style={styles.captureContainer}>
+          <AutoFaceCapture onFilesReady={handleFaceEnroll} onError={showError} />
+        </View>
+
+        {!isUploading && (
+          <View style={styles.faceFooter}>
+            <Button mode="text" onPress={() => navigation.replace('Login')} labelStyle={styles.skipLabel}>
+              Bỏ qua
+            </Button>
+          </View>
+        )}
+
+        {isUploading && (
+          <View style={styles.loadingOverlay}>
+            <View style={styles.loadingCard}>
+              <ActivityIndicator size="large" color={theme.colors.primary} />
+              <Text style={styles.loadingText}>Đang đăng ký khuôn mặt...</Text>
+            </View>
+          </View>
+        )}
+
+        <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
+          {snackbar}
+        </Snackbar>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.headerBar}>
+        <Button
+          mode="text"
+          onPress={() => navigation.goBack()}
+          icon="arrow-left"
+          compact
+          labelStyle={styles.backLabel}
+        >
+          Quay lại
+        </Button>
+        <Text variant="titleMedium" style={styles.headerTitle}>Đăng ký</Text>
+        <View style={{ width: 60 }} />
+      </View>
+
+      <StepIndicator currentStep={step} />
+
+      <ScrollView style={styles.flex} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <SectionCard
+          title="Thông tin tài khoản"
+          icon="form-textbox"
+          accentColor={GRADIENTS.indigo[0]}
+        >
+          <View style={styles.formInner}>
+            <Text style={styles.formSubtitle}>Nhập thông tin để tạo tài khoản độc giả mới.</Text>
+
+            {studentCode || fullName ? (
+              <View style={styles.prefillBanner}>
+                <MaterialCommunityIcons name="check-circle" size={16} color={GRADIENTS.emerald[0]} />
+                <Text style={styles.prefillText}>Đã điền thông tin từ thẻ sinh viên</Text>
+              </View>
+            ) : null}
+
+            <TextInput
+              label="Mã sinh viên"
+              value={studentCode}
+              onChangeText={setStudentCode}
+              mode="outlined"
+              autoCapitalize="none"
+              left={<TextInput.Icon icon="account" color={theme.colors.onSurfaceVariant} />}
+              outlineStyle={styles.inputOutline}
+              style={styles.input}
+            />
+            {studentCodeCheck === 'checking' ? (
+              <View style={styles.codeCheckRow}>
+                <ActivityIndicator size={14} color={theme.colors.primary} />
+                <Text style={styles.codeCheckText}>Đang kiểm tra...</Text>
+              </View>
+            ) : studentCodeCheck === 'exists' ? (
+              <View style={[styles.codeCheckRow, styles.codeCheckRowError]}>
+                <MaterialCommunityIcons name="close-circle" size={16} color={theme.colors.error} />
+                <Text style={[styles.codeCheckText, { color: theme.colors.error }]}>Mã sinh viên đã tồn tại</Text>
+              </View>
+            ) : studentCodeCheck === 'available' ? (
+              <View style={[styles.codeCheckRow, styles.codeCheckRowSuccess]}>
+                <MaterialCommunityIcons name="check-circle" size={16} color={GRADIENTS.emerald[0]} />
+                <Text style={[styles.codeCheckText, { color: GRADIENTS.emerald[0] }]}>Mã sinh viên hợp lệ</Text>
+              </View>
+            ) : null}
+
+            <TextInput
+              label="Họ và tên"
+              value={fullName}
+              onChangeText={setFullName}
+              mode="outlined"
+              left={<TextInput.Icon icon="account-outline" color={theme.colors.onSurfaceVariant} />}
+              outlineStyle={styles.inputOutline}
+              style={styles.input}
+            />
+
+            <TextInput
+              label="Lớp (không bắt buộc)"
+              value={className}
+              onChangeText={setClassName}
+              mode="outlined"
+              left={<TextInput.Icon icon="school" color={theme.colors.onSurfaceVariant} />}
+              outlineStyle={styles.inputOutline}
+              style={styles.input}
+            />
+
+            <TextInput
+              label="Khóa học (không bắt buộc)"
+              value={course}
+              onChangeText={setCourse}
+              mode="outlined"
+              left={<TextInput.Icon icon="bookmark-outline" color={theme.colors.onSurfaceVariant} />}
+              outlineStyle={styles.inputOutline}
+              style={styles.input}
+            />
+
+            <TextInput
+              label="HKTT (không bắt buộc)"
+              value={permanentAddress}
+              onChangeText={setPermanentAddress}
+              mode="outlined"
+              multiline
+              numberOfLines={2}
+              left={<TextInput.Icon icon="home-outline" color={theme.colors.onSurfaceVariant} />}
+              outlineStyle={styles.inputOutline}
+              style={styles.input}
+            />
+
+            <TextInput
+              label="Email"
+              value={email}
+              onChangeText={setEmail}
+              mode="outlined"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              left={<TextInput.Icon icon="email" color={theme.colors.onSurfaceVariant} />}
+              outlineStyle={styles.inputOutline}
+              style={styles.input}
+            />
+            {emailCheck === 'checking' ? (
+              <View style={styles.codeCheckRow}>
+                <ActivityIndicator size={14} color={theme.colors.primary} />
+                <Text style={styles.codeCheckText}>Đang kiểm tra email...</Text>
+              </View>
+            ) : emailCheck === 'exists' ? (
+              <View style={[styles.codeCheckRow, styles.codeCheckRowError]}>
+                <MaterialCommunityIcons name="close-circle" size={16} color={theme.colors.error} />
+                <Text style={[styles.codeCheckText, { color: theme.colors.error }]}>Email đã được đăng ký</Text>
+              </View>
+            ) : emailCheck === 'available' ? (
+              <View style={[styles.codeCheckRow, styles.codeCheckRowSuccess]}>
+                <MaterialCommunityIcons name="check-circle" size={16} color={GRADIENTS.emerald[0]} />
+                <Text style={[styles.codeCheckText, { color: GRADIENTS.emerald[0] }]}>Email hợp lệ</Text>
+              </View>
+            ) : null}
+
+            <TextInput
+              label="Mật khẩu"
+              value={password}
+              onChangeText={setPassword}
+              mode="outlined"
+              secureTextEntry
+              left={<TextInput.Icon icon="lock" color={theme.colors.onSurfaceVariant} />}
+              outlineStyle={styles.inputOutline}
+              style={styles.input}
+            />
+
+            <TextInput
+              label="Xác nhận mật khẩu"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              mode="outlined"
+              secureTextEntry
+              left={<TextInput.Icon icon="lock-check" color={theme.colors.onSurfaceVariant} />}
+              outlineStyle={styles.inputOutline}
+              style={styles.input}
+            />
+
+            <Button
+              mode="contained"
+              onPress={async () => {
+                if (!validateForm()) return;
+                if (otpSending) return;
+                try {
+                  const result = await authApi.checkExists(studentCode.trim(), email.trim());
+                  if (result.student_code_exists) {
+                    showError('Mã sinh viên đã tồn tại');
+                    return;
+                  }
+                  if (result.email_exists) {
+                    showError('Email đã được đăng ký');
+                    return;
+                  }
+                } catch {
+                  showError('Không thể kiểm tra thông tin');
+                  return;
+                }
+                handleSendOtp();
+              }}
+              loading={otpSending}
+              disabled={otpSending || studentCodeCheck === 'checking' || emailCheck === 'checking' || studentCodeCheck === 'exists' || emailCheck === 'exists'}
+              contentStyle={styles.primaryBtn}
+              labelStyle={styles.primaryBtnLabel}
+              style={styles.primaryBtnWrapper}
+            >
+              Đăng ký
+            </Button>
+
+            <Button mode="text" onPress={() => navigation.goBack()} labelStyle={styles.loginLink}>
+              Đã có tài khoản? Đăng nhập
+            </Button>
+          </View>
+        </SectionCard>
+      </ScrollView>
+
+      <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
+        {snackbar}
+      </Snackbar>
+    </SafeAreaView>
+  );
+}
+
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    flex: {
+      flex: 1,
+    },
+    centeredContent: {
+      flex: 1,
+      justifyContent: 'center',
+      padding: 16,
+    },
+    scrollContent: {
+      flexGrow: 1,
+      padding: 16,
+      paddingBottom: 32,
+    },
+    headerBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 4,
+      paddingVertical: 8,
+    },
+    backLabel: {
+      fontSize: 14,
+      color: theme.colors.primary,
+    },
+    headerTitle: {
+      color: theme.colors.onSurface,
+      fontWeight: '800',
+    },
+    formInner: {
+      gap: 12,
+      padding: 16,
+    },
+    formSubtitle: {
+      color: theme.colors.onSurfaceVariant,
+      marginBottom: 4,
+    },
+    input: {
+      backgroundColor: 'transparent',
+    },
+    inputOutline: {
+      borderRadius: 6,
+    },
+    prefillBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      backgroundColor: `${GRADIENTS.emerald[0]}18`,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 8,
+    },
+    prefillText: {
+      color: GRADIENTS.emerald[0],
+      fontSize: 13,
+      fontWeight: '600',
+    },
+    primaryBtn: {
+      minHeight: 50,
+      borderRadius: 8,
+    },
+    primaryBtnLabel: {
+      fontWeight: '700',
+      fontSize: 15,
+    },
+    primaryBtnWrapper: {
+      borderRadius: 8,
+      marginTop: 4,
+    },
+    loginLink: {
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    skipLabel: {
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    codeCheckRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 4,
+      paddingVertical: 4,
+    },
+    codeCheckRowError: {
+      backgroundColor: `${theme.colors.error}15`,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 6,
+    },
+    codeCheckRowSuccess: {
+      backgroundColor: `${GRADIENTS.emerald[0]}15`,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 6,
+    },
+    codeCheckText: {
+      fontSize: 12,
+      color: theme.colors.onSurfaceVariant,
+    },
+    choiceCard: {
+      borderRadius: 14,
+    },
+    choiceInner: {
+      alignItems: 'center',
+      gap: 14,
+      padding: 24,
+    },
+    successCircle: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: `${GRADIENTS.emerald[0]}20`,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    choiceTitle: {
+      color: theme.colors.onSurface,
+      textAlign: 'center',
+      fontWeight: '900',
+    },
+    choiceSubtitle: {
+      color: theme.colors.onSurfaceVariant,
+      textAlign: 'center',
+      lineHeight: 20,
+    },
+    consentInner: {
+      gap: 12,
+      padding: 16,
+    },
+    consentText: {
+      color: theme.colors.onSurfaceVariant,
+      lineHeight: 20,
+    },
+    consentBtn: {
+      minHeight: 44,
+      borderRadius: 8,
+    },
+    consentActiveBtn: {
+      borderRadius: 8,
+      backgroundColor: `${GRADIENTS.emerald[0]}20`,
+      borderColor: GRADIENTS.emerald[0],
+    },
+    consentInactiveBtn: {
+      borderRadius: 8,
+    },
+    faceHeaderCard: {
+      margin: 12,
+      marginBottom: 0,
+      borderRadius: 14,
+    },
+    faceHeaderInner: {
+      padding: 16,
+    },
+    mutedText: {
+      color: theme.colors.onSurfaceVariant,
+      lineHeight: 20,
+    },
+    captureContainer: {
+      flex: 1,
+    },
+    faceFooter: {
+      padding: 12,
+    },
+    loadingOverlay: {
+      ...StyleSheet.absoluteFill,
+      backgroundColor: 'rgba(0,0,0,0.65)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    loadingCard: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: 14,
+      padding: 28,
+      alignItems: 'center',
+      gap: 12,
+    },
+    loadingText: {
+      color: theme.colors.onSurface,
+      fontSize: 15,
+      fontWeight: '600',
+    },
+    otpInner: {
+      alignItems: 'center',
+      gap: 14,
+      padding: 24,
+    },
+    otpIconWrap: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: `${GRADIENTS.blue[0]}20`,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    otpTitle: {
+      color: theme.colors.onSurface,
+      fontSize: 18,
+      fontWeight: '900',
+      textAlign: 'center',
+    },
+    otpSubtitle: {
+      color: theme.colors.onSurfaceVariant,
+      textAlign: 'center',
+      lineHeight: 20,
+    },
+    otpEmail: {
+      color: theme.colors.primary,
+      fontWeight: '700',
+    },
+    resendLabel: {
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    resendLabelDisabled: {
+      opacity: 0.5,
+    },
+  });
 }
 </file>
 
@@ -13592,6 +13892,7 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Animated, Dimensions, FlatList, Modal, PanResponder, RefreshControl, ScrollView, SectionList, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ActivityIndicator, Text, useTheme } from 'react-native-paper';
+import * as Location from 'expo-location';
 import { scheduleApi } from '../api/schedule';
 import AssignmentCard from '../components/AssignmentCard';
 import { StaffScheduleAssignment } from '../types';
@@ -13962,8 +14263,25 @@ export default function ScheduleScreen() {
     setActionLoadingId(`${id}:${action}`);
     setError(null);
     try {
-      if (action === 'check-in') { await scheduleApi.checkIn(id); setSnackbar('Đã check-in thành công'); }
-      else { await scheduleApi.checkOut(id); setSnackbar('Đã check-out thành công'); }
+      if (action === 'check-in') {
+        let lat: number | undefined;
+        let lng: number | undefined;
+        try {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status === 'granted') {
+            const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+            lat = pos.coords.latitude;
+            lng = pos.coords.longitude;
+          }
+        } catch (locErr) {
+          devError('[ScheduleScreen] Location error:', locErr);
+        }
+        await scheduleApi.checkIn(id, lat, lng);
+        setSnackbar('Đã check-in thành công');
+      } else {
+        await scheduleApi.checkOut(id);
+        setSnackbar('Đã check-out thành công');
+      }
       await loadSchedules();
     } catch (err: any) {
       setError(getErrorMessage(err, action === 'check-in' ? 'Check-in thất bại' : 'Check-out thất bại'));
@@ -15368,6 +15686,7 @@ export interface PatronRegisterRequest {
   class_name?: string;
   course?: string;
   permanent_address?: string;
+  verification_token?: string;
 }
 
 export interface LoginResponse {
@@ -15418,12 +15737,42 @@ export const authApi = {
   },
 
   patronRegister: async (data: PatronRegisterRequest): Promise<PatronLoginResponse> => {
-    const response = await api.post<PatronLoginResponse>('/patrons/register', data);
+    const params: any = {
+      student_code: data.student_code,
+      password: data.password,
+      full_name: data.full_name,
+      email: data.email,
+    };
+    if (data.class_name) params.class_name = data.class_name;
+    if (data.course) params.course = data.course;
+    if (data.permanent_address) params.permanent_address = data.permanent_address;
+    if (data.verification_token) params.verification_token = data.verification_token;
+    const response = await api.post<PatronLoginResponse>('/patrons/register', params);
     if (!response.data.user) {
       throw new Error('Invalid response: missing user data');
     }
-    await AsyncStorage.setItem('accessToken', response.data.access_token);
-    await AsyncStorage.setItem('patronData', JSON.stringify(response.data.user));
+    return response.data;
+  },
+
+  preRegisterOtp: async (email: string): Promise<void> => {
+    await api.post('/auth/pre-register-otp', { email });
+  },
+
+  preRegisterVerify: async (email: string, code: string): Promise<{ verification_token: string }> => {
+    const response = await api.post<{ verification_token: string }>('/auth/pre-register-verify', { email, code });
+    return response.data;
+  },
+
+  checkExists: async (studentCode: string, email: string): Promise<{ student_code_exists: boolean; email_exists: boolean }> => {
+    const response = await api.post<{ student_code_exists: boolean; email_exists: boolean }>('/patrons/check-exists', {
+      student_code: studentCode,
+      email,
+    });
+    return response.data;
+  },
+
+  checkStudentCode: async (code: string): Promise<{ exists: boolean }> => {
+    const response = await api.get<{ exists: boolean }>(`/patrons/check-code/${code}`);
     return response.data;
   },
 
