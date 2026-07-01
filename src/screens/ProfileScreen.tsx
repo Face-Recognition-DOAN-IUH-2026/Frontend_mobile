@@ -11,7 +11,6 @@ import {
   Switch,
   Text,
   ActivityIndicator,
-  Surface,
   useTheme,
 } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -22,6 +21,7 @@ import { useMobileTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme/DarkTheme';
 import { authApi } from '../api/auth';
 import { GradientHeader, SectionCard } from '../theme/MobileDesignSystem';
+import { LoadingOverlay } from '../components/LoadingOverlay';
 
 interface ProfileScreenProps {
   navigation: any;
@@ -115,8 +115,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       try {
         const { avatarUrl } = await authApi.uploadAvatar(result.assets[0].uri);
         if (user) {
-          const updatedUser = { ...user, avatar_url: avatarUrl };
-          await updateUser(updatedUser);
+          await updateUser({ avatar_url: avatarUrl });
         }
         Alert.alert('Thành công', 'Đổi ảnh đại diện thành công!');
       } catch (error) {
@@ -146,248 +145,230 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
-        {/* Hero Card */}
-        <Surface style={styles.heroCard} elevation={0}>
-          <View style={styles.heroCircle1} />
-          <View style={styles.heroCircle2} />
-
-          <TouchableOpacity onPress={handlePickAvatar} disabled={uploading} activeOpacity={0.7}>
-            <View style={styles.avatarWrapper}>
-              {user?.avatar_url ? (
-                <Avatar.Image
-                  size={80}
-                  source={{ uri: user.avatar_url }}
-                  style={styles.avatar}
-                />
-              ) : (
-                <Avatar.Text
-                  size={80}
-                  label={(displayName || user?.email || 'U').slice(0, 1).toUpperCase()}
-                  color="#FFFFFF"
-                  style={styles.avatar}
-                />
-              )}
-              {uploading ? (
-                <View style={styles.avatarOverlay}>
-                  <ActivityIndicator size="small" color="#fff" />
+      <LoadingOverlay loading={!user} message="Đang tải hồ sơ...">
+        <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
+          <GradientHeader
+            title={displayName}
+            subtitle={user?.email}
+            icon="account-circle"
+            right={
+              <TouchableOpacity onPress={handlePickAvatar} disabled={uploading} activeOpacity={0.7}>
+                <View style={styles.avatarWrapper}>
+                  {user?.avatar_url ? (
+                    <Avatar.Image size={48} source={{ uri: user.avatar_url }} style={styles.avatar} />
+                  ) : (
+                    <Avatar.Text size={48} label={(displayName || user?.email || 'U').slice(0, 1).toUpperCase()} color="#FFFFFF" style={styles.avatar} />
+                  )}
+                  {uploading ? (
+                    <View style={styles.avatarOverlay}>
+                      <ActivityIndicator size="small" color="#fff" />
+                    </View>
+                  ) : (
+                    <View style={styles.avatarOverlay}>
+                      <MaterialCommunityIcons name="camera" size={18} color="#fff" />
+                    </View>
+                  )}
                 </View>
-              ) : (
-                <View style={styles.avatarOverlay}>
-                  <MaterialCommunityIcons name="camera" size={18} color="#fff" />
-                </View>
-              )}
-            </View>
-          </TouchableOpacity>
-
-          <Text variant="titleLarge" style={styles.heroName} numberOfLines={2}>
-            {displayName}
-          </Text>
-          <Text variant="bodyMedium" style={styles.heroEmail} selectable>
-            {user?.email}
-          </Text>
-          {studentCode ? (
-            <View style={styles.heroPill}>
-              <MaterialCommunityIcons name="card-account-details" size={14} color="#FFFFFF" />
-              <Text style={styles.heroPillText}>MSSV: {studentCode}</Text>
-            </View>
-          ) : null}
-        </Surface>
-
-        <Button
-          mode="contained"
-          icon="pencil"
-          onPress={() => navigation.navigate('EditProfile')}
-          style={styles.editButton}
-          contentStyle={styles.editButtonContent}
-          labelStyle={styles.editButtonLabel}
-        >
-          Chỉnh sửa hồ sơ
-        </Button>
-
-        {/* Student Info */}
-        {isStudent && (
-          <SectionCard
-            title="Thông tin sinh viên"
-            icon="school"
-            accentColor={theme.colors.primary}
+              </TouchableOpacity>
+            }
           >
-            <View style={styles.infoGrid}>
-              {studentFields.map((field, i) => (
-                <View key={i} style={styles.infoGridItem}>
-                  <InfoField theme={theme} icon={field.icon} label={field.label} value={field.value} />
-                </View>
-              ))}
-            </View>
-          </SectionCard>
-        )}
-
-        {/* Account Info */}
-        <SectionCard
-          title="Tài khoản"
-          icon="account-circle"
-          accentColor={theme.colors.primary}
-        >
-          <List.Item
-            title="Mã người dùng"
-            description={user?.id || '—'}
-            titleStyle={styles.itemTitle}
-            descriptionStyle={styles.itemDescription}
-            left={(props) => <List.Icon {...props} icon="barcode" color={theme.colors.primary} />}
-          />
-          <Divider style={styles.divider} />
-          <List.Item
-            title="Họ và tên"
-            description={user?.full_name || 'Chưa cập nhật'}
-            titleStyle={styles.itemTitle}
-            descriptionStyle={styles.itemDescription}
-            left={(props) => <List.Icon {...props} icon="account" color={theme.colors.primary} />}
-          />
-          <Divider style={styles.divider} />
-          <List.Item
-            title="Email"
-            description={user?.email || 'Chưa cập nhật'}
-            titleStyle={styles.itemTitle}
-            descriptionStyle={styles.itemDescription}
-            left={(props) => <List.Icon {...props} icon="email" color={theme.colors.primary} />}
-          />
-          <Divider style={styles.divider} />
-          {studentCode ? (
-            <>
-              <List.Item
-                title="MSSV"
-                description={studentCode}
-                titleStyle={styles.itemTitle}
-                descriptionStyle={styles.itemDescription}
-                left={(props) => <List.Icon {...props} icon="card-account-details" color={theme.colors.primary} />}
-              />
-              <Divider style={styles.divider} />
-            </>
-          ) : null}
-          {patron?.status ? (
-            <>
-              <List.Item
-                title="Trạng thái thẻ"
-                description={patron.status === 'active' ? 'Đang hoạt động' : patron.status === 'inactive' ? 'Ngừng hoạt động' : patron.status === 'expired' ? 'Đã hết hạn' : patron.status}
-                titleStyle={styles.itemTitle}
-                descriptionStyle={[styles.itemDescription, { color: patron.status === 'active' ? theme.colors.custom.success : theme.colors.error }]}
-                left={(props) => <List.Icon {...props} icon={patron.status === 'active' ? 'check-circle' : 'alert-circle'} color={patron.status === 'active' ? theme.colors.custom.success : theme.colors.error} />}
-              />
-              <Divider style={styles.divider} />
-            </>
-          ) : null}
-          <List.Item
-            title="Vai trò"
-            titleStyle={styles.itemTitle}
-            left={(props) => <List.Icon {...props} icon="shield-account" color={theme.colors.primary} />}
-            right={() => (
-              <View style={[styles.rolePill, { backgroundColor: theme.colors.primaryContainer }]}>
-                <Text style={[styles.rolePillText, { color: theme.colors.primary }]}>{roleLabel}</Text>
+            {studentCode ? (
+              <View style={styles.heroPill}>
+                <MaterialCommunityIcons name="card-account-details" size={14} color="#FFFFFF" />
+                <Text style={styles.heroPillText}>MSSV: {studentCode}</Text>
               </View>
-            )}
-          />
-          <List.Item
-            title=""
-            description={user?.role === 'admin' ? 'Toàn quyền quản lý hệ thống' : user?.role === 'staff' ? 'Quản lý mượn/trả sách, xem báo cáo' : 'Mượn/trả sách, quản lý hồ sơ cá nhân'}
-            descriptionStyle={[styles.itemDescription, { fontStyle: 'italic', marginTop: -8 }]}
-            left={() => null}
-          />
-        </SectionCard>
+            ) : null}
+          </GradientHeader>
 
-        {/* Settings */}
-        <SectionCard
-          title="Giao diện"
-          icon="palette"
-          accentColor={theme.colors.primary}
-        >
-          <List.Item
-            title="Chế độ sáng/tối"
-            description={mode === 'dark' ? 'Đang dùng giao diện tối' : 'Đang dùng giao diện sáng'}
-            titleStyle={styles.itemTitle}
-            descriptionStyle={styles.itemDescription}
-            left={(props) => <List.Icon {...props} icon={mode === 'dark' ? 'weather-night' : 'white-balance-sunny'} color={theme.colors.primary} />}
-            right={() => <Switch value={mode === 'dark'} onValueChange={toggleTheme} />}
-          />
-        </SectionCard>
+          <Button
+            mode="contained"
+            icon="pencil"
+            onPress={() => navigation.navigate('EditProfile')}
+            style={styles.editButton}
+            contentStyle={styles.editButtonContent}
+            labelStyle={styles.editButtonLabel}
+          >
+            Chỉnh sửa hồ sơ
+          </Button>
 
-        {/* Books */}
-        {!isStaffScanner && (
+          {isStudent ? (
+            <SectionCard
+              title="Thông tin sinh viên"
+              icon="school"
+              accentColor={theme.colors.primary}
+            >
+              <View style={styles.infoGrid}>
+                {studentFields.map((field, i) => (
+                  <View key={i} style={styles.infoGridItem}>
+                    <InfoField theme={theme} icon={field.icon} label={field.label} value={field.value} />
+                  </View>
+                ))}
+              </View>
+            </SectionCard>
+          ) : null}
+
           <SectionCard
-            title="Sách"
-            icon="book-open-variant"
+            title="Tài khoản"
+            icon="account-circle"
             accentColor={theme.colors.primary}
           >
             <List.Item
-              title="Đặt chỗ của tôi"
-              description="Xem và quản lý đặt chỗ sách"
+              title="Mã người dùng"
+              description={user?.id || '—'}
               titleStyle={styles.itemTitle}
               descriptionStyle={styles.itemDescription}
-              left={(props) => <List.Icon {...props} icon="book-check" color={theme.colors.primary} />}
-              right={(props) => <List.Icon {...props} icon="chevron-right" color={theme.colors.onSurfaceVariant} />}
-              onPress={() => navigation.navigate('MyReservations')}
+              left={(props) => <List.Icon {...props} icon="barcode" color={theme.colors.primary} />}
             />
             <Divider style={styles.divider} />
             <List.Item
-              title="Lịch sử mượn sách"
-              description="Xem lịch sử sách đã mượn và đã trả"
+              title="Họ và tên"
+              description={user?.full_name || 'Chưa cập nhật'}
               titleStyle={styles.itemTitle}
               descriptionStyle={styles.itemDescription}
-              left={(props) => <List.Icon {...props} icon="history" color={theme.colors.primary} />}
-              right={(props) => <List.Icon {...props} icon="chevron-right" color={theme.colors.onSurfaceVariant} />}
-              onPress={() => navigation.navigate('History')}
+              left={(props) => <List.Icon {...props} icon="account" color={theme.colors.primary} />}
+            />
+            <Divider style={styles.divider} />
+            <List.Item
+              title="Email"
+              description={user?.email || 'Chưa cập nhật'}
+              titleStyle={styles.itemTitle}
+              descriptionStyle={styles.itemDescription}
+              left={(props) => <List.Icon {...props} icon="email" color={theme.colors.primary} />}
+            />
+            <Divider style={styles.divider} />
+            {studentCode ? (
+              <>
+                <List.Item
+                  title="MSSV"
+                  description={studentCode}
+                  titleStyle={styles.itemTitle}
+                  descriptionStyle={styles.itemDescription}
+                  left={(props) => <List.Icon {...props} icon="card-account-details" color={theme.colors.primary} />}
+                />
+                <Divider style={styles.divider} />
+              </>
+            ) : null}
+            {patron?.status ? (
+              <>
+                <List.Item
+                  title="Trạng thái thẻ"
+                  description={patron.status === 'active' ? 'Đang hoạt động' : patron.status === 'inactive' ? 'Ngừng hoạt động' : patron.status === 'expired' ? 'Đã hết hạn' : patron.status}
+                  titleStyle={styles.itemTitle}
+                  descriptionStyle={[styles.itemDescription, { color: patron.status === 'active' ? theme.colors.custom.success : theme.colors.error }]}
+                  left={(props) => <List.Icon {...props} icon={patron.status === 'active' ? 'check-circle' : 'alert-circle'} color={patron.status === 'active' ? theme.colors.custom.success : theme.colors.error} />}
+                />
+                <Divider style={styles.divider} />
+              </>
+            ) : null}
+            <List.Item
+              title="Vai trò"
+              titleStyle={styles.itemTitle}
+              left={(props) => <List.Icon {...props} icon="shield-account" color={theme.colors.primary} />}
+              right={() => (
+                <View style={[styles.rolePill, { backgroundColor: theme.colors.primaryContainer }]}>
+                  <Text style={[styles.rolePillText, { color: theme.colors.primary }]}>{roleLabel}</Text>
+                </View>
+              )}
+            />
+            <List.Item
+              title=""
+              description={user?.role === 'admin' ? 'Toàn quyền quản lý hệ thống' : user?.role === 'staff' ? 'Quản lý mượn/trả sách, xem báo cáo' : 'Mượn/trả sách, quản lý hồ sơ cá nhân'}
+              descriptionStyle={[styles.itemDescription, { fontStyle: 'italic', marginTop: -8 }]}
+              left={() => null}
             />
           </SectionCard>
-        )}
 
-        {/* Security */}
-        <SectionCard
-          title="Bảo mật"
-          icon="shield-lock"
-          accentColor={theme.colors.primary}
-        >
-          <List.Item
-            title="Đổi mật khẩu"
-            description="Thay đổi mật khẩu đăng nhập"
-            titleStyle={styles.itemTitle}
-            descriptionStyle={styles.itemDescription}
-            left={(props) => <List.Icon {...props} icon="lock-reset" color={theme.colors.primary} />}
-            right={(props) => <List.Icon {...props} icon="chevron-right" color={theme.colors.onSurfaceVariant} />}
-            onPress={() => navigation.navigate('ChangePassword')}
-          />
-        </SectionCard>
+          <SectionCard
+            title="Giao diện"
+            icon="palette"
+            accentColor={theme.colors.primary}
+          >
+            <List.Item
+              title="Chế độ sáng/tối"
+              description={mode === 'dark' ? 'Đang dùng giao diện tối' : 'Đang dùng giao diện sáng'}
+              titleStyle={styles.itemTitle}
+              descriptionStyle={styles.itemDescription}
+              left={(props) => <List.Icon {...props} icon={mode === 'dark' ? 'weather-night' : 'white-balance-sunny'} color={theme.colors.primary} />}
+              right={() => <Switch value={mode === 'dark'} onValueChange={toggleTheme} />}
+            />
+          </SectionCard>
 
-        {/* Face */}
-        <SectionCard
-          title="Khuôn mặt"
-          icon="face-recognition"
-          accentColor={theme.colors.primary}
-        >
-          <List.Item
-            title="Cập nhật khuôn mặt"
-            description="Chụp lại khuôn mặt để đăng nhập nhanh"
-            titleStyle={styles.itemTitle}
-            descriptionStyle={styles.itemDescription}
-            left={(props) => <List.Icon {...props} icon="face-recognition" color={theme.colors.primary} />}
-            right={(props) => <List.Icon {...props} icon="chevron-right" color={theme.colors.onSurfaceVariant} />}
-            onPress={() => navigation.navigate('FaceCamera')}
-          />
-        </SectionCard>
+          {!isStaffScanner ? (
+            <SectionCard
+              title="Sách"
+              icon="book-open-variant"
+              accentColor={theme.colors.primary}
+            >
+              <List.Item
+                title="Đặt chỗ của tôi"
+                description="Xem và quản lý đặt chỗ sách"
+                titleStyle={styles.itemTitle}
+                descriptionStyle={styles.itemDescription}
+                left={(props) => <List.Icon {...props} icon="book-check" color={theme.colors.primary} />}
+                right={(props) => <List.Icon {...props} icon="chevron-right" color={theme.colors.onSurfaceVariant} />}
+                onPress={() => navigation.navigate('MyReservations')}
+              />
+              <Divider style={styles.divider} />
+              <List.Item
+                title="Lịch sử mượn sách"
+                description="Xem lịch sử sách đã mượn và đã trả"
+                titleStyle={styles.itemTitle}
+                descriptionStyle={styles.itemDescription}
+                left={(props) => <List.Icon {...props} icon="history" color={theme.colors.primary} />}
+                right={(props) => <List.Icon {...props} icon="chevron-right" color={theme.colors.onSurfaceVariant} />}
+                onPress={() => navigation.navigate('History')}
+              />
+            </SectionCard>
+          ) : null}
 
-        <Button
-          mode="outlined"
-          onPress={() => setLogoutVisible(true)}
-          style={styles.logoutButton}
-          textColor={theme.colors.error}
-          icon="logout"
-        >
-          Đăng xuất
-        </Button>
+          <SectionCard
+            title="Bảo mật"
+            icon="shield-lock"
+            accentColor={theme.colors.primary}
+          >
+            <List.Item
+              title="Đổi mật khẩu"
+              description="Thay đổi mật khẩu đăng nhập"
+              titleStyle={styles.itemTitle}
+              descriptionStyle={styles.itemDescription}
+              left={(props) => <List.Icon {...props} icon="lock-reset" color={theme.colors.primary} />}
+              right={(props) => <List.Icon {...props} icon="chevron-right" color={theme.colors.onSurfaceVariant} />}
+              onPress={() => navigation.navigate('ChangePassword')}
+            />
+          </SectionCard>
 
-        <View style={styles.versionRow}>
-          <Text variant="bodySmall" style={styles.version}>Thư Viện App</Text>
-          <Text variant="bodySmall" style={styles.version}>v1.0.0</Text>
-        </View>
-      </ScrollView>
+          <SectionCard
+            title="Khuôn mặt"
+            icon="face-recognition"
+            accentColor={theme.colors.primary}
+          >
+            <List.Item
+              title="Cập nhật khuôn mặt"
+              description="Chụp lại khuôn mặt để đăng nhập nhanh"
+              titleStyle={styles.itemTitle}
+              descriptionStyle={styles.itemDescription}
+              left={(props) => <List.Icon {...props} icon="face-recognition" color={theme.colors.primary} />}
+              right={(props) => <List.Icon {...props} icon="chevron-right" color={theme.colors.onSurfaceVariant} />}
+              onPress={() => navigation.navigate('FaceCamera')}
+            />
+          </SectionCard>
+
+          <Button
+            mode="outlined"
+            onPress={() => setLogoutVisible(true)}
+            style={styles.logoutButton}
+            textColor={theme.colors.error}
+            icon="logout"
+          >
+            Đăng xuất
+          </Button>
+
+          <View style={styles.versionRow}>
+            <Text variant="bodySmall" style={styles.version}>Thư Viện App</Text>
+            <Text variant="bodySmall" style={styles.version}>v1.0.0</Text>
+          </View>
+        </ScrollView>
+      </LoadingOverlay>
 
       <Portal>
         <Dialog visible={logoutVisible} onDismiss={() => setLogoutVisible(false)}>
@@ -420,35 +401,8 @@ function createStyles(theme: AppTheme) {
       paddingBottom: 28,
       gap: 12,
     },
-    heroCard: {
-      borderRadius: 18,
-      backgroundColor: c.primary,
-      padding: 24,
-      alignItems: 'center',
-      position: 'relative',
-      overflow: 'hidden',
-    },
-    heroCircle1: {
-      position: 'absolute',
-      top: -30,
-      right: -30,
-      width: 120,
-      height: 120,
-      borderRadius: 60,
-      backgroundColor: 'rgba(255,255,255,0.08)',
-    },
-    heroCircle2: {
-      position: 'absolute',
-      bottom: -40,
-      left: 60,
-      width: 160,
-      height: 160,
-      borderRadius: 80,
-      backgroundColor: 'rgba(255,255,255,0.05)',
-    },
     avatarWrapper: {
       position: 'relative',
-      marginBottom: 12,
       zIndex: 1,
     },
     avatar: {
@@ -464,18 +418,6 @@ function createStyles(theme: AppTheme) {
       height: 30,
       alignItems: 'center',
       justifyContent: 'center',
-    },
-    heroName: {
-      color: '#FFFFFF',
-      fontWeight: '800',
-      textAlign: 'center',
-      zIndex: 1,
-    },
-    heroEmail: {
-      color: 'rgba(255,255,255,0.75)',
-      textAlign: 'center',
-      zIndex: 1,
-      marginTop: 4,
     },
     heroPill: {
       flexDirection: 'row',

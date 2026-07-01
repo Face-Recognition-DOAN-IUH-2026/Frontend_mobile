@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ActivityIndicator, Button, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
+import { Button, Text, TextInput, useTheme } from 'react-native-paper';
 import api from '../api/client';
 import { authApi } from '../api/auth';
 import AutoFaceCapture from '../components/AutoFaceCapture';
@@ -9,6 +9,8 @@ import StudentCardScanner, { ScannedCardData } from '../components/StudentCardSc
 import CodeInput from '../components/CodeInput';
 import { AppTheme } from '../theme/DarkTheme';
 import { SectionCard, GRADIENTS } from '../theme/MobileDesignSystem';
+import { LoadingOverlay } from '../components/LoadingOverlay';
+import { NoticeSnackbar } from '../components/NoticeSnackbar';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
 interface RegisterScreenProps {
@@ -74,7 +76,7 @@ function StepIndicator({ currentStep }: { currentStep: StepKey }) {
                 {STEP_META[key].label}
               </Text>
             </View>
-            {idx < FORM_STEPS.length - 1 && (
+            {idx < FORM_STEPS.length - 1 ? (
               <View
                 style={[
                   stepStyles.connector,
@@ -83,7 +85,7 @@ function StepIndicator({ currentStep }: { currentStep: StepKey }) {
                   },
                 ]}
               />
-            )}
+            ) : null}
           </React.Fragment>
         );
       })}
@@ -377,9 +379,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
             setStep('form');
           }}
         />
-        <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
-          {snackbar}
-        </Snackbar>
+        <NoticeSnackbar visible={!!snackbar} message={snackbar} severity="error" onDismiss={() => setSnackbar('')} />
       </SafeAreaView>
     );
   }
@@ -446,9 +446,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
           </SectionCard>
         </View>
 
-        <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
-          {snackbar}
-        </Snackbar>
+        <NoticeSnackbar visible={!!snackbar} message={snackbar} severity="error" onDismiss={() => setSnackbar('')} />
       </SafeAreaView>
     );
   }
@@ -481,9 +479,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
             </View>
           </SectionCard>
         </View>
-        <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
-          {snackbar}
-        </Snackbar>
+        <NoticeSnackbar visible={!!snackbar} message={snackbar} severity="error" onDismiss={() => setSnackbar('')} />
       </SafeAreaView>
     );
   }
@@ -549,26 +545,19 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
           <AutoFaceCapture onFilesReady={handleFaceEnroll} onError={showError} />
         </View>
 
-        {!isUploading && (
+        {!isUploading ? (
           <View style={styles.faceFooter}>
             <Button mode="text" onPress={() => navigation.replace('Login')} labelStyle={styles.skipLabel}>
               Bỏ qua
             </Button>
           </View>
-        )}
+        ) : null}
 
-        {isUploading && (
-          <View style={styles.loadingOverlay}>
-            <View style={styles.loadingCard}>
-              <ActivityIndicator size="large" color={theme.colors.primary} />
-              <Text style={styles.loadingText}>Đang đăng ký khuôn mặt...</Text>
-            </View>
-          </View>
-        )}
+        {isUploading ? (
+          <LoadingOverlay loading message="Đang đăng ký khuôn mặt..." />
+        ) : null}
 
-        <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
-          {snackbar}
-        </Snackbar>
+        <NoticeSnackbar visible={!!snackbar} message={snackbar} severity="error" onDismiss={() => setSnackbar('')} />
       </SafeAreaView>
     );
   }
@@ -763,9 +752,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
         </SectionCard>
       </ScrollView>
 
-      <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={4000}>
-        {snackbar}
-      </Snackbar>
+      <NoticeSnackbar visible={!!snackbar} message={snackbar} severity="error" onDismiss={() => setSnackbar('')} />
     </SafeAreaView>
   );
 }
@@ -938,24 +925,6 @@ function createStyles(theme: AppTheme) {
     },
     faceFooter: {
       padding: 12,
-    },
-    loadingOverlay: {
-      ...StyleSheet.absoluteFill,
-      backgroundColor: 'rgba(0,0,0,0.65)',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    loadingCard: {
-      backgroundColor: theme.colors.surface,
-      borderRadius: 14,
-      padding: 28,
-      alignItems: 'center',
-      gap: 12,
-    },
-    loadingText: {
-      color: theme.colors.onSurface,
-      fontSize: 15,
-      fontWeight: '600',
     },
     otpInner: {
       alignItems: 'center',

@@ -4,18 +4,16 @@ import React, { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
-  ActivityIndicator,
   Button,
-  Card,
   Chip,
   Menu,
-  Portal,
-  Snackbar,
   Surface,
   Text,
   TextInput,
   useTheme,
 } from 'react-native-paper';
+import { LoadingOverlay } from '../components/LoadingOverlay';
+import { NoticeSnackbar } from '../components/NoticeSnackbar';
 import { borrowApi } from '../api/borrow';
 import { AppTheme } from '../theme/DarkTheme';
 import { BorrowRecord, StaffPatronActiveBorrowsResponse } from '../types';
@@ -217,7 +215,7 @@ export default function ReturnScreen() {
     if (!staffLookup) return null;
 
     if (!permission) {
-      return <ActivityIndicator color={c.primary} style={styles.loader} />;
+      return <LoadingOverlay loading message="..." />;
     }
 
     const hasScanned = scannedReturns.length > 0;
@@ -331,13 +329,13 @@ export default function ReturnScreen() {
           <Text style={styles.scannedEmpty}>Chưa có sách nào được quét</Text>
         )}
 
-        {!hasActiveRecords && !hasScanned && (
+        {!hasActiveRecords && !hasScanned ? (
           <View style={styles.emptyCameraOverlay}>
             <MaterialCommunityIcons name="book-check-outline" size={36} color={c.onSurfaceVariant} />
             <Text style={styles.mutedCenterText}>Không có sách đang mượn</Text>
             <Text style={styles.mutedCenterText}>Có thể đổi patron để tiếp tục</Text>
           </View>
-        )}
+        ) : null}
 
         <Button
           mode="contained"
@@ -428,7 +426,7 @@ export default function ReturnScreen() {
           ) : null}
         </SectionCard>
 
-        {isLoadingPatron ? <ActivityIndicator color={c.primary} style={styles.loader} /> : null}
+        {isLoadingPatron ? <LoadingOverlay loading message="Đang tải..." /> : null}
 
         {staffLookup ? (
           <SectionCard
@@ -492,27 +490,12 @@ export default function ReturnScreen() {
         {renderScanner()}
       </ScrollView>
 
-      <Portal>
-        <View style={styles.topSnackbarContainer}>
-          <Snackbar
-            visible={!!scanToast}
-            onDismiss={() => setScanToast('')}
-            duration={2000}
-            style={styles.topSnackbar}
-          >
-            {scanToast}
-          </Snackbar>
-
-          <Snackbar
-            visible={!!snackbar}
-            onDismiss={() => setSnackbar('')}
-            duration={4000}
-            style={[styles.topSnackbar, snackbar?.includes('\n') ? styles.multiLineSnackbar : undefined]}
-          >
-            {snackbar}
-          </Snackbar>
-        </View>
-      </Portal>
+      <NoticeSnackbar
+        visible={!!snackbar || !!scanToast}
+        message={snackbar || scanToast}
+        severity={(snackbar || scanToast).includes('✓') || (snackbar || scanToast).includes('Đã thêm') ? 'success' : ((snackbar || scanToast).includes('✗') ? 'error' : 'info')}
+        onDismiss={() => { setSnackbar(''); setScanToast(''); }}
+      />
     </SafeAreaView>
   );
 }
@@ -586,9 +569,6 @@ function createStyles(theme: AppTheme) {
       color: c.error,
       flex: 1,
       fontSize: 13,
-    },
-    loader: {
-      marginVertical: 12,
     },
     patronHeader: {
       flexDirection: 'row',
@@ -867,21 +847,6 @@ function createStyles(theme: AppTheme) {
       textAlign: 'center',
       paddingHorizontal: 16,
       paddingBottom: 12,
-    },
-    multiLineSnackbar: {
-      flexWrap: 'wrap',
-    },
-    topSnackbarContainer: {
-      position: 'absolute',
-      top: 50,
-      left: 0,
-      right: 0,
-      zIndex: 1000,
-      paddingHorizontal: 16,
-      gap: 8,
-    },
-    topSnackbar: {
-      width: '100%',
     },
   });
 }

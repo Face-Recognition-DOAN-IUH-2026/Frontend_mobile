@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getAccessToken } from '../api/secureStorage';
 import { User } from '../types';
 import { authApi } from '../api/auth';
 import { devError } from '../utils/logger';
@@ -41,23 +42,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const checkAuth = async () => {
     try {
-      const token = await AsyncStorage.getItem('accessToken');
+      const token = await getAccessToken();
       const patronDataStr = await AsyncStorage.getItem('patronData');
       const userDataStr = await AsyncStorage.getItem('userData');
       if (token && patronDataStr) {
         const patronData = JSON.parse(patronDataStr);
         setPatron(patronData);
-setUser({ id: patronData.id, email: patronData.email || '', full_name: getFullName(patronData), role: 'patron', avatar_url: patronData.avatar_url });
+        setUser({ id: patronData.id, email: patronData.email || '', full_name: getFullName(patronData), role: 'patron', avatar_url: patronData.avatar_url || patronData.avatarUrl });
       } else if (token && userDataStr) {
         const userData = JSON.parse(userDataStr);
         setPatron(null);
-setUser({
+        setUser({
     id: userData.id,
     email: userData.email || '',
     full_name: getFullName(userData),
     role: userData.role,
-    avatar_url: userData.avatar_url,
+    avatar_url: userData.avatar_url || userData.avatarUrl,
   });
+      }
+
+      if (token) {
+        try {
+          const role = user?.role;
+          if (role === 'admin' || role === 'staff') {
+            const freshData: any = await authApi.getCurrentUser();
+            await AsyncStorage.setItem('userData', JSON.stringify(freshData));
+            setUser((prev) => prev ? { ...prev, avatar_url: freshData.avatar_url || freshData.avatarUrl, full_name: getFullName(freshData) } : prev);
+          } else if (role === 'patron') {
+            const freshData: any = await authApi.getCurrentPatron();
+            await AsyncStorage.setItem('patronData', JSON.stringify(freshData));
+            setPatron(freshData);
+            setUser((prev) => prev ? { ...prev, avatar_url: freshData.avatar_url || freshData.avatarUrl, full_name: getFullName(freshData) } : prev);
+          }
+        } catch {
+          devError('Background refresh failed, using cached data');
+        }
       }
     } catch (error) {
       devError('Auth check failed:', error);
@@ -76,7 +95,7 @@ setUser({
     try {
       const response = await authApi.patronLogin({ student_code: studentCode, password });
       setPatron(response.user);
-      setUser({ id: response.user.id, email: response.user.email || '', full_name: getFullName(response.user), role: 'patron', avatar_url: response.user.avatar_url });
+      setUser({ id: response.user.id, email: response.user.email || '', full_name: getFullName(response.user), role: 'patron', avatar_url: response.user.avatar_url || response.user.avatarUrl });
     } finally {
       setIsLoading(false);
     }
@@ -121,7 +140,7 @@ setUser({
         const patronData = await authApi.getCurrentPatron();
         await AsyncStorage.setItem('patronData', JSON.stringify(patronData));
         setPatron(patronData);
-        setUser({ id: patronData.id, email: patronData.email || '', full_name: getFullName(patronData), role: 'patron', avatar_url: patronData.avatar_url });
+        setUser({ id: patronData.id, email: patronData.email || '', full_name: getFullName(patronData), role: 'patron', avatar_url: patronData.avatar_url || patronData.avatarUrl });
       }
     } catch (error) {
       await authApi.logout();

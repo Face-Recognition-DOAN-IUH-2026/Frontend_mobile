@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,8 +7,13 @@ import {
   TouchableOpacity,
   Alert,
   RefreshControl,
-  ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTheme } from 'react-native-paper';
+import { AppTheme } from '../theme/DarkTheme';
+import { GradientHeader, SectionCard, EmptyState, GRADIENTS } from '../theme/MobileDesignSystem';
+import { LoadingOverlay } from '../components/LoadingOverlay';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Ionicons } from '@expo/vector-icons';
 import { scheduleApi, ShiftSwap } from '../api/schedule';
 
@@ -19,12 +24,15 @@ interface OpenShift {
 }
 
 export default function OpenShiftsScreen() {
+  const theme = useTheme() as AppTheme;
   const [shifts, setShifts] = useState<OpenShift[]>([]);
   const [openSwaps, setOpenSwaps] = useState<ShiftSwap[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [biddingId, setBiddingId] = useState<string | null>(null);
   const [claimingId, setClaimingId] = useState<string | null>(null);
+
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   const loadData = useCallback(async () => {
     try {
@@ -90,29 +98,29 @@ export default function OpenShiftsScreen() {
   };
 
   if (loading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
-      </View>
-    );
+    return <LoadingOverlay loading message="Đang tải ca trống..." />;
   }
 
   return (
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
     <ScrollView
-      style={styles.container}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
-      <View style={styles.header}>
-        <Text style={styles.title}>Ca trống sắp tới</Text>
-      </View>
+      <GradientHeader
+        title="Ca trống sắp tới"
+        subtitle={`${shifts.length + openSwaps.length} ca`}
+        icon="clock-outline"
+      />
 
       {shifts.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="checkmark-circle-outline" size={48} color="#666" />
-          <Text style={styles.emptyText}>Không có ca trống trong 2 tuần tới</Text>
-        </View>
+        <EmptyState
+          icon="check-circle-outline"
+          title="Không có ca trống"
+          description="Không có ca trống trong 2 tuần tới"
+        />
       ) : (
-        shifts.map((s, idx) => {
+        <SectionCard title="Ca trống" icon="clock-outline" accentColor={GRADIENTS.indigo[0]}>
+        {shifts.map((s, idx) => {
           const key = `${s.shift?.id}-${s.zone?.id}-${s.workDate}-${idx}`;
           const isBidding = biddingId === key;
           return (
@@ -140,7 +148,8 @@ export default function OpenShiftsScreen() {
               </TouchableOpacity>
             </View>
           );
-        })
+        })}
+        </SectionCard>
       )}
 
       {openSwaps.length > 0 ? (
@@ -174,35 +183,33 @@ export default function OpenShiftsScreen() {
         </View>
       ) : null}
     </ScrollView>
+    </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a' },
-  header: { padding: 16, paddingBottom: 8 },
-  title: { fontSize: 18, fontWeight: '700', color: '#e2e8f0' },
-  emptyContainer: { alignItems: 'center', paddingVertical: 48 },
-  emptyText: { color: '#666', fontSize: 14, marginTop: 12 },
+function createStyles(theme: AppTheme) {
+  const c = theme.colors;
+  return StyleSheet.create({
+  container: { flex: 1, backgroundColor: c.background },
   shiftCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: c.surface,
     marginHorizontal: 16,
     marginBottom: 8,
     padding: 14,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: c.outline,
   },
   shiftInfo: { flex: 1 },
-  shiftName: { fontSize: 14, fontWeight: '700', color: '#e2e8f0' },
-  shiftZone: { fontSize: 12, color: '#94a3b8', marginTop: 2 },
-  shiftTime: { fontSize: 11, color: '#64748b', marginTop: 4 },
+  shiftName: { fontSize: 14, fontWeight: '700', color: c.onSurface },
+  shiftZone: { fontSize: 12, color: c.onSurfaceVariant, marginTop: 2 },
+  shiftTime: { fontSize: 11, color: c.outline, marginTop: 4 },
   bidButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#6366f1',
+    backgroundColor: c.primary,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
@@ -211,8 +218,8 @@ const styles = StyleSheet.create({
   disabledButton: { opacity: 0.5 },
   bidButtonText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   section: { paddingHorizontal: 16, paddingTop: 16 },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: '#e2e8f0', marginBottom: 4 },
-  sectionHint: { fontSize: 11, color: '#64748b', marginBottom: 8 },
+  sectionTitle: { fontSize: 14, fontWeight: '700', color: c.onSurface, marginBottom: 4 },
+  sectionHint: { fontSize: 11, color: c.outline, marginBottom: 8 },
   claimButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -223,3 +230,4 @@ const styles = StyleSheet.create({
     gap: 4,
   },
 });
+}

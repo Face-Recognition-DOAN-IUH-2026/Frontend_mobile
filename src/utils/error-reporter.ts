@@ -1,6 +1,5 @@
 import { Platform } from 'react-native';
-
-const API_BASE = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://10.31.94.35:80';
+import { API_BASE_NO_PATH } from '../config/api';
 
 interface ReportErrorParams {
   title: string;
@@ -16,7 +15,7 @@ interface ReportErrorParams {
 
 export async function reportError(params: ReportErrorParams): Promise<void> {
   try {
-    await fetch(`${API_BASE}/errors/report`, {
+    await fetch(`${API_BASE_NO_PATH}/errors/report`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

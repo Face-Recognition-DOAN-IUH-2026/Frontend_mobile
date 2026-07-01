@@ -150,14 +150,34 @@ export function FilterPill({
 }
 
 /* ─── Empty State ─── */
-export function EmptyState({ icon, message }: { icon: string; message: string }) {
+export function EmptyState({
+  icon,
+  message,
+  title,
+  description,
+  action,
+}: {
+  icon: string;
+  message?: string;
+  title?: string;
+  description?: string;
+  action?: React.ReactNode;
+}) {
   const theme = useTheme() as AppTheme;
   const c = theme.colors;
+
+  const headline = title ?? message;
 
   return (
     <View style={dhStyles.empty}>
       <MaterialCommunityIcons name={icon as any} size={56} color={c.outline} />
-      <Text variant="bodyMedium" style={{ color: c.onSurfaceVariant, marginTop: 12 }}>{message}</Text>
+      {headline ? (
+        <Text variant="titleMedium" style={{ color: c.onSurface, marginTop: 12, fontWeight: '700', textAlign: 'center' }}>{headline}</Text>
+      ) : null}
+      {description ? (
+        <Text variant="bodyMedium" style={{ color: c.onSurfaceVariant, marginTop: 4, textAlign: 'center' }}>{description}</Text>
+      ) : null}
+      {action ? <View style={{ marginTop: 16 }}>{action}</View> : null}
     </View>
   );
 }

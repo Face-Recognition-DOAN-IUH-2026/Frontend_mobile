@@ -2,8 +2,9 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import React, { useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, Card, Snackbar, Text, useTheme } from 'react-native-paper';
+import { Button, Card, Text, useTheme } from 'react-native-paper';
 import { useAuth } from '../context/AuthContext';
+import { NoticeSnackbar } from '../components/NoticeSnackbar';
 import { AppTheme } from '../theme/DarkTheme';
 
 interface FaceLoginScreenProps {
@@ -94,9 +95,12 @@ export default function FaceLoginScreen({ navigation }: FaceLoginScreenProps) {
         </Card.Content>
       </Card>
 
-      <Snackbar visible={!!error} onDismiss={() => setError('')} duration={4000}>
-        {error}
-      </Snackbar>
+      <NoticeSnackbar
+        visible={!!error}
+        message={error}
+        severity="error"
+        onDismiss={() => setError('')}
+      />
     </SafeAreaView>
   );
 }

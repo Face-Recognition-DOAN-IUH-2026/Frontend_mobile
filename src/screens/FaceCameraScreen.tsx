@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { Alert, ActivityIndicator, View, Text } from 'react-native';
+import { Alert, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AutoFaceCapture from '../components/AutoFaceCapture';
+import { LoadingOverlay } from '../components/LoadingOverlay';
+import { GradientHeader } from '../theme/MobileDesignSystem';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from 'react-native-paper';
@@ -69,22 +71,21 @@ export default function FaceCameraScreen({ navigation }: FaceCameraScreenProps) 
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.background }} edges={['bottom']}>
-      <AutoFaceCapture
-        onFilesReady={handleFilesReady}
-        onError={(msg) => Alert.alert('Lỗi', msg)}
-      />
-      {isUploading && (
-        <View style={{
-          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.6)',
-          justifyContent: 'center', alignItems: 'center',
-        }}>
-          <ActivityIndicator size="large" color={c.primary} />
-          <Text style={{ color: c.onSurface, fontSize: 15, marginTop: 12 }}>
-            Đang đăng ký khuôn mặt...
-          </Text>
-        </View>
-      )}
+      <GradientHeader title="Đăng ký khuôn mặt" icon="face-recognition" />
+      <View style={{ flex: 1 }}>
+        <AutoFaceCapture
+          onFilesReady={handleFilesReady}
+          onError={(msg) => Alert.alert('Lỗi', msg)}
+        />
+        {isUploading ? (
+          <View style={{
+            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+          }}>
+            <LoadingOverlay loading message="Đang đăng ký khuôn mặt..." />
+          </View>
+        ) : null}
+      </View>
     </SafeAreaView>
   );
 }

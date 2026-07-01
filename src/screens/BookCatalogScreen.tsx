@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { View, Image, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, Surface, Button, useTheme, TextInput, Snackbar, Portal, Modal } from 'react-native-paper';
+import { Text, Button, useTheme, Portal, Modal } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useFocusEffect } from '@react-navigation/native';
 import { borrowApi, reserveBook } from '../api/borrow';
@@ -17,6 +17,9 @@ import {
   EmptyState,
   GRADIENTS,
 } from '../theme/MobileDesignSystem';
+import { NoticeSnackbar } from '../components/NoticeSnackbar';
+import { SearchField } from '../components/SearchField';
+import { LoadingOverlay } from '../components/LoadingOverlay';
 
 interface BookCatalogScreenProps {
   navigation: any;
@@ -157,31 +160,12 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
         />
 
         <View style={styles.searchWrap}>
-          <SectionCard
-            title="Tìm kiếm"
-            icon="magnify"
-            accentColor={GRADIENTS.indigo[0]}
-            style={styles.searchCard}
-          >
-            <View style={styles.searchBar}>
-              <MaterialCommunityIcons name="magnify" size={20} color={c.onSurfaceVariant} />
-              <TextInput
-                placeholder="Tên, tác giả, ISBN..."
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                style={styles.searchInput}
-                underlineColor="transparent"
-                activeUnderlineColor="transparent"
-                mode="flat"
-                contentStyle={styles.searchContent}
-              />
-              {searchQuery.length > 0 && (
-                <Button compact onPress={() => setSearchQuery('')} textColor={c.onSurfaceVariant} mode="text">
-                  Xóa
-                </Button>
-              )}
-            </View>
-          </SectionCard>
+          <SearchField
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Tên, tác giả, ISBN..."
+            onClear={() => setSearchQuery('')}
+          />
         </View>
 
         {loadError ? (
@@ -213,14 +197,14 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
                     <Text style={[styles.bookTitle, { color: c.onSurface }]} numberOfLines={2}>
                       {book.title}
                     </Text>
-                    {book.author && (
+                    {book.author ? (
                       <Text style={[styles.bookAuthor, { color: c.onSurfaceVariant }]} numberOfLines={1}>
                         {book.author}
                       </Text>
-                    )}
-                    {book.isbn && (
+                    ) : null}
+                    {book.isbn ? (
                       <Text style={[styles.isbnText, { color: c.custom.textDisabled }]}>ISBN: {book.isbn}</Text>
-                    )}
+                    ) : null}
                   </View>
                   <Button
                     mode={(book.available_copies ?? 0) > 0 ? 'contained' : 'outlined'}
@@ -247,10 +231,7 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
           contentContainerStyle={[styles.detailModal, { backgroundColor: c.surface }]}
         >
           {detailLoading ? (
-            <View style={styles.detailLoading}>
-              <MaterialCommunityIcons name="loading" size={36} color={c.primary} />
-              <Text style={{ color: c.onSurfaceVariant, marginTop: 8 }}>Đang tải...</Text>
-            </View>
+            <LoadingOverlay loading message="Đang tải..." />
           ) : detailBook ? (
             <ScrollView>
               <View style={styles.detailHeader}>
@@ -263,12 +244,12 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
                 )}
                 <View style={styles.detailInfo}>
                   <Text style={[styles.detailTitle, { color: c.onSurface }]}>{detailBook.title}</Text>
-                  {detailBook.author && (
+                  {detailBook.author ? (
                     <Text style={[styles.detailAuthor, { color: c.onSurfaceVariant }]}>{detailBook.author}</Text>
-                  )}
-                  {detailBook.publisher && (
+                  ) : null}
+                  {detailBook.publisher ? (
                     <Text style={[styles.detailMeta, { color: c.custom.textDisabled }]}>{detailBook.publisher}</Text>
-                  )}
+                  ) : null}
                   <View style={styles.detailAvailability}>
                     <MaterialCommunityIcons
                       name={detailBook.available_copies > 0 ? 'check-circle' : 'close-circle'}
@@ -289,13 +270,13 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
                 </View>
               </View>
 
-              {detailBook.description && (
+              {detailBook.description ? (
                 <SectionCard title="Mô tả" icon="text-box-outline" accentColor={GRADIENTS.indigo[0]} style={styles.detailDescCard}>
                   <Text style={[styles.detailDescription, { color: c.onSurfaceVariant }]} numberOfLines={6}>
                     {detailBook.description}
                   </Text>
                 </SectionCard>
-              )}
+              ) : null}
 
               <View style={styles.detailActions}>
                 {detailBook.available_copies > 0 ? (
@@ -316,22 +297,19 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
               </View>
             </ScrollView>
           ) : (
-            <View style={styles.detailLoading}>
+            <View style={{ padding: 32, alignItems: 'center' }}>
               <Text style={{ color: c.onSurfaceVariant }}>Không thể tải thông tin sách</Text>
             </View>
           )}
         </Modal>
       </Portal>
 
-      <Snackbar
+      <NoticeSnackbar
         visible={snackVisible}
+        message={snackMsg}
+        severity={snackMsg.includes('thành công') ? 'success' : 'error'}
         onDismiss={() => setSnackVisible(false)}
-        duration={3000}
-        style={{ backgroundColor: c.inverseSurface }}
-        action={{ label: 'OK', onPress: () => setSnackVisible(false) }}
-      >
-        <Text style={{ color: c.inverseOnSurface }}>{snackMsg}</Text>
-      </Snackbar>
+      />
     </SafeAreaView>
   );
 }
@@ -342,17 +320,6 @@ function createStyles(theme: AppTheme) {
     container: { flex: 1 },
     flex: { flex: 1 },
     searchWrap: { marginTop: 12, paddingHorizontal: 16 },
-    searchCard: { backgroundColor: c.surface },
-    searchBar: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: c.surfaceVariant,
-      borderRadius: 10,
-      paddingHorizontal: 12,
-      gap: 6,
-    },
-    searchInput: { flex: 1, backgroundColor: 'transparent', height: 44 },
-    searchContent: { height: 44, paddingHorizontal: 0 },
     stateWrap: { alignItems: 'center', marginTop: 32 },
     stateButton: { borderRadius: 8, marginTop: 12 },
     stateButtonLabel: { fontSize: 14 },
@@ -391,7 +358,6 @@ function createStyles(theme: AppTheme) {
     reserveButton: { borderRadius: 8, borderColor: c.primary },
     buttonLabel: { fontSize: 12 },
     detailModal: { margin: 16, borderRadius: 14, padding: 16, maxHeight: '80%' },
-    detailLoading: { padding: 32, alignItems: 'center' },
     detailHeader: { flexDirection: 'row', gap: 12, marginBottom: 12 },
     detailCover: { width: 80, height: 110, borderRadius: 8 },
     detailCoverPlaceholder: {
