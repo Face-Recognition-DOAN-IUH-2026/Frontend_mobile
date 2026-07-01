@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useRef, useMemo } from 'react';
 import { View, StyleSheet, ScrollView, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, Button, Surface, TextInput, ActivityIndicator, Card, IconButton, Chip, Dialog, Portal, Snackbar, Divider, useTheme } from 'react-native-paper';
+import { Text, Button, Surface, TextInput, ActivityIndicator, Card, IconButton, Chip, Dialog, Portal, Divider, useTheme } from 'react-native-paper';
+import { NoticeSnackbar } from '../components/NoticeSnackbar';
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { borrowApi } from '../api/borrow';
@@ -574,7 +575,7 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
                       <Text variant="titleSmall" style={styles.itemTitle} numberOfLines={2}>
                         {item.lookup?.title || 'Đang tải...'}
                       </Text>
-                      {item.lookup && (
+                      {item.lookup ? (
                         <Chip
                           compact
                           style={item.lookup.total_copies > 0 ? styles.existsChip : styles.newChip}
@@ -582,33 +583,33 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
                         >
                           {item.lookup.total_copies > 0 ? 'Đã có' : 'Mới'}
                         </Chip>
-                      )}
+                      ) : null}
                     </>
                   )}
                 </View>
 
-                {!item.loading && !item.error && item.lookup && (
+                {!item.loading && !item.error && item.lookup ? (
                   <>
-                    {item.lookup.author && (
+                    {item.lookup.author ? (
                       <Text variant="bodySmall" style={styles.itemAuthor} numberOfLines={1}>
                         {item.lookup.author}
                       </Text>
-                    )}
+                    ) : null}
                     <Text variant="bodySmall" style={styles.itemIsbn}>{item.isbn}</Text>
-                    {item.lookup.total_copies > 0 && (
+                    {item.lookup.total_copies > 0 ? (
                       <Text variant="bodySmall" style={styles.itemStock}>
                         Kho: {item.lookup.total_copies} / Sẵn: {item.lookup.available_copies}
-                        {item.quantity > 0 && (
+                        {item.quantity > 0 ? (
                           <Text variant="bodySmall" style={styles.itemProjected}>
                             {' '}→ Sau nhập: {item.lookup.total_copies + item.quantity}
                           </Text>
-                        )}
+                        ) : null}
                       </Text>
-                    )}
+                    ) : null}
                   </>
-                )}
+                ) : null}
 
-                {!item.loading && !item.error && (
+                {!item.loading && !item.error ? (
                   <View style={styles.quantityRow}>
                     <IconButton
                       icon="minus"
@@ -633,7 +634,7 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
                       iconColor={c.error}
                     />
                   </View>
-                )}
+                ) : null}
               </View>
             </Card.Content>
           </Card>
@@ -679,14 +680,14 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
             />
           }
         />
-        {scannedIsbns.length > 0 && (
+        {scannedIsbns.length > 0 ? (
           <View style={styles.offlineListContainer}>
             <Text variant="titleSmall" style={styles.offlineListTitle}>
               Đã quét ({scannedIsbns.length} cuốn)
             </Text>
             {renderScannedList()}
           </View>
-        )}
+        ) : null}
       </SafeAreaView>
     );
   }
@@ -700,11 +701,11 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
           <Text variant="titleSmall" style={styles.listSectionTitle}>
             Đã quét ({scannedIsbns.length} cuốn)
           </Text>
-          {scannedIsbns.length > 0 && (
+          {scannedIsbns.length > 0 ? (
             <Button compact onPress={() => setScannedIsbns([])} textColor={c.error}>
               Xoá tất cả
             </Button>
-          )}
+          ) : null}
         </View>
         {renderScannedList()}
       </View>
@@ -715,11 +716,11 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
             <Text variant="bodySmall" style={styles.bottomBarCount}>
               {scannedIsbns.length} cuốn đã quét
             </Text>
-            {validCount > 0 && (
+            {validCount > 0 ? (
               <Text variant="bodySmall" style={styles.bottomBarValid}>
                 {validCount} cuốn hợp lệ
               </Text>
-            )}
+            ) : null}
           </View>
           <Button
             mode="contained"
@@ -740,7 +741,7 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
             Kết quả nhập kho
           </Dialog.Title>
           <Dialog.Content>
-            {importResult && (
+            {importResult ? (
               <>
                 <View style={styles.resultStats}>
                   <View style={styles.resultStat}>
@@ -773,7 +774,7 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
                   ))}
                 </ScrollView>
               </>
-            )}
+            ) : null}
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setShowResult(false)}>Đóng</Button>
@@ -781,14 +782,12 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
         </Dialog>
       </Portal>
 
-      <Snackbar
+      <NoticeSnackbar
         visible={!!snackbarMsg}
+        message={snackbarMsg || ''}
+        severity={snackbarMsg?.includes('Không tìm thấy') ? 'error' : 'info'}
         onDismiss={() => setSnackbarMsg(null)}
-        duration={2000}
-        action={{ label: 'Đóng', onPress: () => setSnackbarMsg(null) }}
-      >
-        {snackbarMsg}
-      </Snackbar>
+      />
     </SafeAreaView>
   );
 }

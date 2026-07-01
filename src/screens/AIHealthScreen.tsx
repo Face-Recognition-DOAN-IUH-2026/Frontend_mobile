@@ -1,13 +1,15 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ActivityIndicator, Text, TextInput, IconButton, useTheme } from 'react-native-paper';
+import { Text, TextInput, IconButton, useTheme } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 import { AIHealthSummary, AIInsight } from '../types/ai';
 import { aiApi } from '../api/ai';
 import { AppTheme } from '../theme/DarkTheme';
 import HealthSummaryCard from '../components/ai/HealthSummaryCard';
 import InsightCard from '../components/ai/InsightCard';
+import { LoadingOverlay } from '../components/LoadingOverlay';
+import { EmptyState } from '../theme/MobileDesignSystem';
 
 interface AIHealthScreenProps {
   navigation: any;
@@ -68,32 +70,27 @@ export default function AIHealthScreen({ navigation }: AIHealthScreenProps) {
 
   const listHeader = (
     <View>
-      {summary && <HealthSummaryCard summary={summary} />}
+      {summary ? <HealthSummaryCard summary={summary} /> : null}
 
-      {chatAnswer && (
+      {chatAnswer ? (
         <View style={styles.chatAnswer}>
           <Text variant="bodyMedium">{chatAnswer}</Text>
         </View>
-      )}
+      ) : null}
 
-      {insights.length > 0 && (
+      {insights.length > 0 ? (
         <Text variant="titleSmall" style={styles.sectionTitle}>AI Insights ({insights.length})</Text>
-      )}
+      ) : null}
     </View>
   );
 
   if (loading) {
-    return (
-      <SafeAreaView style={styles.centered}>
-        <ActivityIndicator size="large" />
-        <Text style={styles.loadingText}>Đang tải dữ liệu...</Text>
-      </SafeAreaView>
-    );
+    return <LoadingOverlay loading message="Đang tải dữ liệu..." />;
   }
 
   if (error) {
     return (
-      <SafeAreaView style={styles.centered}>
+      <SafeAreaView style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.background }}>
         <Text style={styles.errorText}>{error}</Text>
         <IconButton icon="refresh" onPress={loadSummary} />
       </SafeAreaView>
@@ -110,9 +107,7 @@ export default function AIHealthScreen({ navigation }: AIHealthScreenProps) {
         contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text variant="bodyMedium" style={styles.emptyText}>Không có insight nào</Text>
-          </View>
+          <EmptyState icon="lightbulb-outline" title="Không có insight nào" />
         }
       />
 
@@ -146,16 +141,6 @@ function createStyles(theme: AppTheme) {
       flex: 1,
       backgroundColor: theme.colors.background,
     },
-    centered: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: theme.colors.background,
-    },
-    loadingText: {
-      marginTop: 12,
-      opacity: 0.6,
-    },
     errorText: {
       color: theme.colors.error,
       textAlign: 'center',
@@ -176,13 +161,6 @@ function createStyles(theme: AppTheme) {
       padding: 12,
       backgroundColor: theme.colors.surfaceVariant,
       borderRadius: 8,
-    },
-    emptyContainer: {
-      padding: 32,
-      alignItems: 'center',
-    },
-    emptyText: {
-      opacity: 0.5,
     },
     chatRow: {
       flexDirection: 'row',

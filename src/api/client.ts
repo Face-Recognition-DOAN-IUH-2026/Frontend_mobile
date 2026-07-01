@@ -1,8 +1,8 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getAccessToken, getRefreshToken, setAccessToken, setRefreshToken, clearTokens } from './secureStorage';
 import { devError } from '../utils/logger';
-
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:80/api';
+import { API_BASE_URL } from '../config/api';
 
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -12,7 +12,7 @@ const api: AxiosInstance = axios.create({
 api.interceptors.request.use(
   async (config) => {
     try {
-      const token = await AsyncStorage.getItem('accessToken');
+      const token = await getAccessToken();
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
@@ -28,16 +28,16 @@ api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     if (error.response?.status === 401 && !(error.config as any).__isRetry) {
-      const refreshToken = await AsyncStorage.getItem('refreshToken');
+      const refreshToken = await getRefreshToken();
       if (refreshToken) {
         try {
           const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
             refresh_token: refreshToken,
           });
           const { access_token, refresh_token: newRefreshToken } = response.data;
-          await AsyncStorage.setItem('accessToken', access_token);
+          await setAccessToken(access_token);
           if (newRefreshToken) {
-            await AsyncStorage.setItem('refreshToken', newRefreshToken);
+            await setRefreshToken(newRefreshToken);
           }
           if (error.config) {
             error.config.headers.Authorization = `Bearer ${access_token}`;
@@ -45,7 +45,8 @@ api.interceptors.response.use(
             return api.request(error.config);
           }
         } catch (refreshError) {
-          await AsyncStorage.multiRemove(['accessToken', 'refreshToken']);
+          await clearTokens();
+          await AsyncStorage.multiRemove(['patronData', 'userData']);
         }
       }
     }

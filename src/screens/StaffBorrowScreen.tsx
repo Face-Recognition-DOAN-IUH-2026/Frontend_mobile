@@ -1,20 +1,16 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { View, StyleSheet, Alert, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, Button, Surface, TextInput, ActivityIndicator, Divider, Snackbar, Portal, useTheme } from 'react-native-paper';
+import { Text, Button, Surface, TextInput, Divider, useTheme } from 'react-native-paper';
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { borrowApi } from '../api/borrow';
 import { Book, BorrowRecord } from '../types';
 import { AppTheme } from '../theme/DarkTheme';
 import { devError } from '../utils/logger';
-import {
-  GradientHeader,
-  SectionCard,
-  StatCard,
-  EmptyState,
-  GRADIENTS,
-} from '../theme/MobileDesignSystem';
+import { GradientHeader, SectionCard, StatCard, EmptyState, GRADIENTS } from '../theme/MobileDesignSystem';
+import { NoticeSnackbar } from '../components/NoticeSnackbar';
+import { LoadingOverlay } from '../components/LoadingOverlay';
 
 interface ScannedBorrowItem {
   barcode: string;
@@ -244,7 +240,7 @@ export default function StaffBorrowScreen() {
   if (!permission) {
     return (
       <SafeAreaView style={styles.container}>
-        <ActivityIndicator color={c.primary} />
+        <LoadingOverlay loading message="Loading..." />
       </SafeAreaView>
     );
   }
@@ -430,18 +426,18 @@ export default function StaffBorrowScreen() {
                   <View style={styles.itemInfo}>
                     <View style={styles.itemTitleRow}>
                       <Text style={styles.itemTitle} numberOfLines={2}>{item.book.title}</Text>
-                      {item.alreadyBorrowed && (
+                      {item.alreadyBorrowed ? (
                         <View style={styles.alreadyBorrowedBadge}>
                           <MaterialCommunityIcons name="book-lock" size={12} color={c.error} />
                           <Text style={styles.alreadyBorrowedText}>Đã mượn</Text>
                         </View>
-                      )}
+                      ) : null}
                     </View>
-                    {item.book.author && <Text style={styles.itemAuthor} numberOfLines={1}>{item.book.author}</Text>}
+                    {item.book.author ? <Text style={styles.itemAuthor} numberOfLines={1}>{item.book.author}</Text> : null}
                     <Text style={styles.itemIsbn}>{item.barcode}</Text>
-                    {item.alreadyBorrowed && (
+                    {item.alreadyBorrowed ? (
                       <Text style={styles.alreadyBorrowedNote}>Sách này đang được mượn — sẽ không thêm vào phiếu</Text>
-                    )}
+                    ) : null}
                   </View>
                   <Button mode="text" compact onPress={() => removeItem(index)} textColor={c.error} style={styles.removeButton}>
                     Xoá
@@ -462,18 +458,12 @@ export default function StaffBorrowScreen() {
         </Button>
       </View>
 
-      <Portal>
-        <View style={styles.topSnackbarWrapper}>
-          <Snackbar
-            visible={!!scanToast}
-            onDismiss={() => setScanToast('')}
-            duration={2000}
-            style={styles.topSnackbar}
-          >
-            {scanToast}
-          </Snackbar>
-        </View>
-      </Portal>
+      <NoticeSnackbar
+        visible={!!scanToast}
+        message={scanToast}
+        severity={scanToast.startsWith('⚠️') || scanToast.includes('Không') ? 'warning' : 'success'}
+        onDismiss={() => setScanToast('')}
+      />
     </SafeAreaView>
   );
 }
@@ -547,7 +537,5 @@ function createStyles(theme: AppTheme) {
     removeButton: { marginLeft: 4 },
     actionRow: { flexDirection: 'row', padding: 16, gap: 8, paddingBottom: 20 },
     actionButton: { flex: 1, borderRadius: 10 },
-    topSnackbarWrapper: { position: 'absolute', top: 8, left: 0, right: 0, zIndex: 9999, paddingHorizontal: 16 },
-    topSnackbar: { width: '100%' },
   });
 }

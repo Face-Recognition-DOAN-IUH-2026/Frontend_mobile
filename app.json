@@ -21,7 +21,6 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "package": "com.library.app",
-      "usesCleartextTraffic": false,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
@@ -42,7 +41,9 @@
         {
           "photosPermission": "Ứng dụng cần quyền truy cập thư viện ảnh để bạn có thể đổi ảnh đại diện."
         }
-      ]
+      ],
+      "expo-font",
+      "expo-secure-store"
     ],
     "extra": {
       "eas": {

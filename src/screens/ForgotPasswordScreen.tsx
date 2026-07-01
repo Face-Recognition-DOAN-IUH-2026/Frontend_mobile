@@ -16,6 +16,7 @@ import {
   useTheme,
 } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { GradientHeader } from '../theme/MobileDesignSystem';
 import { AppTheme } from '../theme/DarkTheme';
 import { authApi } from '../api/auth';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -53,7 +54,7 @@ function StepIndicator({ current, total, theme }: { current: number; total: numb
                 },
               ]}
             />
-            {i < total - 1 && (
+            {i < total - 1 ? (
               <View
                 style={[
                   stepStyles.line,
@@ -62,7 +63,7 @@ function StepIndicator({ current, total, theme }: { current: number; total: numb
                   },
                 ]}
               />
-            )}
+            ) : null}
           </React.Fragment>
         );
       })}
@@ -215,22 +216,11 @@ export default function ForgotPasswordScreen({ navigation }: ForgotPasswordScree
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={styles.header}>
-          <Button
-            mode="text"
-            icon="arrow-left"
-            onPress={() => {
-              if (step === 1) navigation.goBack();
-              else if (step === 2) animateStep(1);
-              else if (step === 3) animateStep(2);
-              else navigation.goBack();
-            }}
-            compact
-            style={styles.backBtn}
-          >
-            {step === 1 ? 'Quay lại' : 'Bước trước'}
-          </Button>
-        </View>
+        <GradientHeader
+          title={stepTitle}
+          subtitle={stepDescription}
+          icon={step === 1 ? 'email-outline' : step === 2 ? 'shield-key-outline' : step === 3 ? 'lock-reset' : 'check-circle'}
+        />
 
         <ScrollView
           contentContainerStyle={styles.content}
@@ -301,7 +291,7 @@ export default function ForgotPasswordScreen({ navigation }: ForgotPasswordScree
                 ) : null}
 
                 <View style={styles.stepForm}>
-                {step === 1 && (
+                {step === 1 ? (
                   <>
                     <TextInput
                       label="Email"
@@ -325,9 +315,9 @@ export default function ForgotPasswordScreen({ navigation }: ForgotPasswordScree
                       Gửi mã xác minh
                     </Button>
                   </>
-                )}
+                ) : null}
 
-                {step === 2 && (
+                {step === 2 ? (
                   <>
                     <CodeInput value={code} onChange={setCode} length={6} theme={theme} />
                     <Button
@@ -349,9 +339,9 @@ export default function ForgotPasswordScreen({ navigation }: ForgotPasswordScree
                       {resendCooldown > 0 ? `Gửi lại mã (${resendCooldown}s)` : 'Gửi lại mã'}
                     </Button>
                   </>
-                )}
+                ) : null}
 
-                {step === 3 && (
+                {step === 3 ? (
                   <>
                     <TextInput
                       label="Mật khẩu mới"
@@ -389,7 +379,7 @@ export default function ForgotPasswordScreen({ navigation }: ForgotPasswordScree
                       Đặt lại mật khẩu
                     </Button>
                   </>
-                )}
+                ) : null}
                 </View>
               </View>
             )}
@@ -408,12 +398,6 @@ function createStyles(theme: AppTheme) {
     },
     flex: {
       flex: 1,
-    },
-    header: {
-      paddingHorizontal: 8,
-    },
-    backBtn: {
-      alignSelf: 'flex-start',
     },
     content: {
       flexGrow: 1,

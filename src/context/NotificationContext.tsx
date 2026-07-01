@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { notificationApi } from '../api/notification';
+import { getAccessToken } from '../api/secureStorage';
 import { useAuth } from './AuthContext';
 import { Notification } from '../types';
 import { devError } from '../utils/logger';
@@ -20,7 +20,7 @@ interface NotificationContextValue {
 const NotificationContext = createContext<NotificationContextValue | null>(null);
 
 async function hasToken(): Promise<boolean> {
-  const token = await AsyncStorage.getItem('accessToken');
+  const token = await getAccessToken();
   return !!token;
 }
 

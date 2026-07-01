@@ -1,8 +1,9 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
+import { FlatList, RefreshControl, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ActivityIndicator, Text, useTheme } from 'react-native-paper';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { Text, useTheme } from 'react-native-paper';
+import { LoadingOverlay } from '../components/LoadingOverlay';
+import { EmptyState, GradientHeader } from '../theme/MobileDesignSystem';
 import { useFocusEffect } from '@react-navigation/native';
 import { AIBookRecommendation } from '../types/ai';
 import { aiApi } from '../api/ai';
@@ -54,21 +55,11 @@ export default function BookRecommendationsScreen({ navigation }: BookRecommenda
   };
 
   if (loading) {
-    return (
-      <SafeAreaView style={styles.centered}>
-        <ActivityIndicator size="large" />
-        <Text style={styles.loadingText}>Đang tải gợi ý sách...</Text>
-      </SafeAreaView>
-    );
+    return <LoadingOverlay loading message="Đang tải gợi ý sách..." />;
   }
 
   if (error) {
-    return (
-      <SafeAreaView style={styles.centered}>
-        <MaterialCommunityIcons name="alert-circle" size={48} color={theme.colors.error} />
-        <Text style={styles.errorText}>{error}</Text>
-      </SafeAreaView>
-    );
+    return <EmptyState icon="alert-circle" title="Lỗi" description={error} />;
   }
 
   const renderItem = ({ item }: { item: AIBookRecommendation }) => (
@@ -84,22 +75,13 @@ export default function BookRecommendationsScreen({ navigation }: BookRecommenda
         contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
         ListHeaderComponent={
-          <View style={styles.header}>
-            <View style={styles.headerIcon}>
-              <MaterialCommunityIcons name="lightbulb" size={24} color={theme.colors.primary} />
-            </View>
-            <Text variant="titleMedium" style={styles.headerTitle}>Gợi ý sách AI</Text>
-            <Text variant="bodySmall" style={styles.headerSubtitle}>
-              Được cải thiện dựa trên lịch sử mượn và sở thích của bạn
-            </Text>
-          </View>
+          <GradientHeader
+            title="Gợi ý sách AI"
+            subtitle="Được cải thiện dựa trên lịch sử mượn và sở thích của bạn"
+            icon="lightbulb"
+          />
         }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <MaterialCommunityIcons name="book-off" size={48} color={theme.colors.onSurfaceVariant} />
-            <Text variant="bodyMedium" style={styles.emptyText}>Chưa có gợi ý nào</Text>
-          </View>
-        }
+        ListEmptyComponent={<EmptyState icon="book-off" title="Chưa có gợi ý nào" />}
       />
     </SafeAreaView>
   );
@@ -111,59 +93,9 @@ function createStyles(theme: AppTheme) {
       flex: 1,
       backgroundColor: theme.colors.background,
     },
-    centered: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: theme.colors.background,
-    },
-    loadingText: {
-      marginTop: 12,
-      opacity: 0.6,
-    },
-    errorText: {
-      color: theme.colors.error,
-      textAlign: 'center',
-      paddingHorizontal: 32,
-      marginTop: 8,
-    },
     listContent: {
       paddingBottom: 16,
       paddingHorizontal: 12,
     },
-    header: {
-      padding: 16,
-      paddingBottom: 12,
-      flexDirection: 'row',
-      alignItems: 'center',
-      flexWrap: 'wrap',
-    },
-    headerIcon: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: theme.colors.primaryContainer,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginRight: 12,
-    },
-    headerTitle: {
-      fontWeight: '700',
-      flex: 1,
-    },
-    headerSubtitle: {
-      width: '100%',
-      opacity: 0.6,
-      marginTop: 4,
-      paddingLeft: 52,
-    },
-    emptyContainer: {
-      padding: 48,
-      alignItems: 'center',
-    },
-    emptyText: {
-      opacity: 0.5,
-      marginTop: 12,
-    },
-  });
+    });
 }

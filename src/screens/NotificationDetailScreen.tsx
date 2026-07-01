@@ -87,7 +87,7 @@ export default function NotificationDetailScreen({ route, navigation }: Notifica
           </Text>
         </Surface>
 
-        {deepLink && (
+        {deepLink ? (
           <Button
             mode="contained"
             onPress={handleDeepLink}
@@ -97,7 +97,7 @@ export default function NotificationDetailScreen({ route, navigation }: Notifica
           >
             Xem chi tiết
           </Button>
-        )}
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

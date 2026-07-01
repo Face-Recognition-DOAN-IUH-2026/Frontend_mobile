@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, SegmentedButtons, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
+import { Button, SegmentedButtons, Text, TextInput, useTheme } from 'react-native-paper';
+import { NoticeSnackbar } from '../components/NoticeSnackbar';
 import { useAuth } from '../context/AuthContext';
 import { AppTheme } from '../theme/DarkTheme';
 
@@ -209,9 +210,12 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <Snackbar visible={!!error} onDismiss={() => setError('')} duration={4000}>
-        {error}
-      </Snackbar>
+      <NoticeSnackbar
+        visible={!!error}
+        message={error}
+        severity="error"
+        onDismiss={() => setError('')}
+      />
     </SafeAreaView>
   );
 }

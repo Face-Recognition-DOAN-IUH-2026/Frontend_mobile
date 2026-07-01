@@ -1,15 +1,19 @@
 import React, { useState, useMemo } from 'react';
-import { StyleSheet, View, ActivityIndicator } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Text, Button, useTheme } from 'react-native-paper';
 import { AppTheme } from '../theme/DarkTheme';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { LoadingOverlay } from '../components/LoadingOverlay';
+import { API_BASE_NO_PATH } from '../config/api';
 
 export default function LibraryTourScreen() {
   const theme = useTheme() as AppTheme;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [key, setKey] = useState(0); // Used to reload WebView
+  const [key, setKey] = useState(0);
+
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   // Calculate WebVR URL dynamically based on current API URL to support local development on physical devices
   const tourUrl = useMemo(() => {
@@ -17,17 +21,17 @@ export default function LibraryTourScreen() {
       return `${process.env.EXPO_PUBLIC_WEB_URL}/library/vr-tour`;
     }
 
-    const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:80/api';
+    const apiUrl = API_BASE_NO_PATH;
     try {
-      const match = apiUrl.match(/^(https?:\/\/[^\/:]+)/);
-      if (match) {
-        // e.g. http://10.68.153.35:80/api -> http://10.68.153.35:3000/library/vr-tour
-        return `${match[1]}:3000/library/vr-tour`;
-      }
+      const url = new URL(apiUrl);
+      url.port = '3000';
+      url.pathname = '/library/vr-tour';
+      return url.toString();
     } catch (e) {
-      console.error('Error parsing EXPO_PUBLIC_API_URL:', e);
+      console.error('Error building VR tour URL:', e);
     }
-    return 'http://10.0.2.2:3000/library/vr-tour'; // Android emulator fallback
+    if (__DEV__) return 'http://10.0.2.2:3000/library/vr-tour';
+    return '';
   }, []);
 
   const handleReload = () => {
@@ -77,41 +81,22 @@ export default function LibraryTourScreen() {
             }}
           />
 
-          {loading && (
-            <View style={[styles.loadingOverlay, { backgroundColor: theme.colors.background }]}>
-              <ActivityIndicator size="large" color={theme.colors.primary} />
-              <Text style={[styles.loadingText, { color: theme.colors.onBackground }]}>
-                Đang mở không gian 3D...
-              </Text>
-            </View>
-          )}
+          {loading ? (
+            <LoadingOverlay loading message="Đang mở không gian 3D..." />
+          ) : null}
         </View>
       )}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
   container: {
     flex: 1,
   },
   flex: {
     flex: 1,
-  },
-  loadingOverlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 999,
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 14,
-    fontWeight: '500',
   },
   errorContainer: {
     flex: 1,
@@ -128,7 +113,7 @@ const styles = StyleSheet.create({
   errorDesc: {
     textAlign: 'center',
     fontSize: 14,
-    color: '#888',
+    color: theme.colors.onSurfaceVariant,
     marginBottom: 24,
     lineHeight: 20,
   },
@@ -137,3 +122,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
 });
+}

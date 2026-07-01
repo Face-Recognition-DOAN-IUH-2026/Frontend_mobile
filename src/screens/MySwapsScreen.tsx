@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,13 +7,21 @@ import {
   TouchableOpacity,
   Alert,
   RefreshControl,
-  ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTheme } from 'react-native-paper';
+import { AppTheme } from '../theme/DarkTheme';
+import { GradientHeader, SectionCard, EmptyState, GRADIENTS } from '../theme/MobileDesignSystem';
+import { LoadingOverlay } from '../components/LoadingOverlay';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { scheduleApi, ShiftSwap } from '../api/schedule';
 
 export default function MySwapsScreen() {
+  const theme = useTheme() as AppTheme;
+  const c = theme.colors;
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const navigation = useNavigation<any>();
   const [swaps, setSwaps] = useState<ShiftSwap[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,33 +60,32 @@ export default function MySwapsScreen() {
   };
 
   if (loading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
-      </View>
-    );
+    return <LoadingOverlay loading message="Đang tải yêu cầu đổi ca..." />;
   }
 
   return (
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
     <ScrollView
       style={styles.container}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
-      <View style={styles.header}>
-        <Text style={styles.title}>Yêu cầu đổi ca</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => navigation.navigate('CreateSwap')}
-        >
-          <Ionicons name="add" size={22} color="#fff" />
-        </TouchableOpacity>
-      </View>
+      <GradientHeader
+        title="Yêu cầu đổi ca"
+        subtitle={`${swaps.length} yêu cầu`}
+        icon="swap-horizontal"
+        right={
+          <TouchableOpacity activeOpacity={0.7} onPress={() => navigation.navigate('CreateSwap')} style={styles.addButton}>
+            <MaterialCommunityIcons name="plus" size={22} color="#fff" />
+          </TouchableOpacity>
+        }
+      />
 
       {swaps.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="swap-horizontal-outline" size={48} color="#666" />
-          <Text style={styles.emptyText}>Không có yêu cầu đổi ca nào</Text>
-        </View>
+        <EmptyState
+          icon="swap-horizontal"
+          title="Không có yêu cầu đổi ca"
+          description="Bạn chưa có yêu cầu đổi ca nào"
+        />
       ) : (
         swaps.map((swap) => {
           const statusColors: Record<string, string> = {
@@ -101,7 +108,7 @@ export default function MySwapsScreen() {
           return (
             <View key={swap.id} style={styles.swapCard}>
               <View style={styles.swapHeader}>
-                <Ionicons name="swap-horizontal" size={20} color="#6366f1" />
+                <Ionicons name="swap-horizontal" size={20} color={c.primary} />
                 <View style={styles.swapInfo}>
                   <Text style={styles.swapLabel}>Yêu cầu từ</Text>
                   <Text style={styles.swapStaff}>{swap.requesterStaffId.slice(0, 8)}...</Text>
@@ -168,66 +175,65 @@ export default function MySwapsScreen() {
         })
       )}
     </ScrollView>
+    </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a' },
-  header: { padding: 16, paddingBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  title: { fontSize: 18, fontWeight: '700', color: '#e2e8f0' },
-  addButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#6366f1',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  emptyContainer: { alignItems: 'center', paddingVertical: 48 },
-  emptyText: { color: '#666', fontSize: 14, marginTop: 12 },
-  swapCard: {
-    backgroundColor: '#1e293b',
-    marginHorizontal: 16,
-    marginBottom: 8,
-    padding: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  swapHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  swapInfo: { flex: 1 },
-  swapLabel: { fontSize: 11, color: '#64748b' },
-  swapStaff: { fontSize: 14, fontWeight: '600', color: '#e2e8f0' },
-  swapReason: { fontSize: 12, color: '#94a3b8', marginTop: 8 },
-  swapMeta: { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#334155' },
-  swapMetaText: { fontSize: 11, color: '#64748b' },
-  swapStatus: { alignItems: 'flex-end' },
-  swapStatusText: { fontSize: 11, fontWeight: '700' },
-  actionRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
-  acceptButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#10b981',
-    padding: 10,
-    borderRadius: 8,
-    gap: 4,
-  },
-  rejectButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#ef4444',
-    padding: 10,
-    borderRadius: 8,
-    gap: 4,
-  },
-  disabledButton: { opacity: 0.5 },
-  acceptButtonText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  rejectButtonText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  timeline: { marginTop: 6, gap: 2 },
-  timelineText: { fontSize: 10, color: '#475569' },
-});
+function createStyles(theme: AppTheme) {
+  const c = theme.colors;
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: c.background },
+    addButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: c.primary,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    swapCard: {
+      backgroundColor: c.surface,
+      marginHorizontal: 16,
+      marginBottom: 8,
+      padding: 14,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: c.outline,
+    },
+    swapHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    swapInfo: { flex: 1 },
+    swapLabel: { fontSize: 11, color: c.onSurfaceVariant },
+    swapStaff: { fontSize: 14, fontWeight: '600', color: c.onSurface },
+    swapReason: { fontSize: 12, color: c.onSurfaceVariant, marginTop: 8 },
+    swapMeta: { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: c.outline },
+    swapMetaText: { fontSize: 11, color: c.onSurfaceVariant },
+    swapStatus: { alignItems: 'flex-end' },
+    swapStatusText: { fontSize: 11, fontWeight: '700' },
+    actionRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
+    acceptButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: '#10b981',
+      padding: 10,
+      borderRadius: 8,
+      gap: 4,
+    },
+    rejectButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: '#ef4444',
+      padding: 10,
+      borderRadius: 8,
+      gap: 4,
+    },
+    disabledButton: { opacity: 0.5 },
+    acceptButtonText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+    rejectButtonText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+    timeline: { marginTop: 6, gap: 2 },
+    timelineText: { fontSize: 10, color: c.outline },
+  });
+}

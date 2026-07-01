@@ -1,11 +1,13 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { View, Image, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, Surface, Button, useTheme, Snackbar } from 'react-native-paper';
+import { Text, Surface, Button, useTheme } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useFocusEffect } from '@react-navigation/native';
 import { getMyReservations, cancelReservation, BookReservation } from '../api/borrow';
 import { AppTheme } from '../theme/DarkTheme';
+import { GradientHeader, SectionCard, EmptyState, GRADIENTS } from '../theme/MobileDesignSystem';
+import { NoticeSnackbar } from '../components/NoticeSnackbar';
 import { devError } from '../utils/logger';
 import CacheManager from '../utils/cache/CacheManager';
 import { CACHE_KEYS, CACHE_TTL } from '../utils/cache/CacheKeys';
@@ -121,39 +123,23 @@ export default function MyReservationsScreen({ navigation }: MyReservationsScree
           <RefreshControl refreshing={refreshing} onRefresh={() => loadReservations(true)} tintColor={c.primary} />
         }
       >
-        <View style={styles.header}>
-          <View style={[styles.headerSpine, { backgroundColor: c.primary }]} />
-          <Text style={[styles.headerTitle, { color: c.onSurface }]}>Danh sách đặt chỗ</Text>
-          {reservations.length > 0 && (
-            <Text style={[styles.countBadge, { color: c.onSurfaceVariant }]}>
-              {reservations.length} đặt chỗ
-            </Text>
-          )}
-        </View>
+        <GradientHeader
+          title="Danh sách đặt chỗ"
+          subtitle={reservations.length > 0 ? `${reservations.length} đặt chỗ` : 'Chưa có đặt chỗ'}
+          icon="book-check"
+        />
 
         {loadError ? (
-          <Surface style={[styles.stateCard, { backgroundColor: c.surface, borderColor: c.outline }]} elevation={0}>
-            <MaterialCommunityIcons name="cloud-off-outline" size={36} color={c.onSurfaceVariant} />
-            <Text variant="bodyMedium" style={[styles.stateText, { color: c.onSurface }]}>{loadError}</Text>
-            <Button
-              mode="outlined"
-              onPress={() => loadReservations()}
-              style={styles.stateButton}
-              labelStyle={styles.stateButtonLabel}
-              icon="refresh"
-            >
-              Thử lại
-            </Button>
-          </Surface>
+          <EmptyState
+            icon="cloud-off-outline"
+            title={loadError}
+            action={<Button mode="outlined" onPress={() => loadReservations()} icon="refresh">Thử lại</Button>}
+          />
         ) : reservations.length === 0 ? (
-          <Surface style={[styles.stateCard, { backgroundColor: c.surface, borderColor: c.outline }]} elevation={0}>
-            <MaterialCommunityIcons name="bookshelf" size={36} color={c.onSurfaceVariant} />
-            <Text variant="bodyMedium" style={[styles.stateText, { color: c.onSurface }]}>
-              Bạn chưa đặt chỗ sách nào
-            </Text>
-          </Surface>
+          <EmptyState icon="bookshelf" title="Bạn chưa đặt chỗ sách nào" />
         ) : (
-          reservations.map((reservation) => {
+          <SectionCard title="Sách đã đặt chỗ" icon="book-clock-outline" accentColor={GRADIENTS.indigo[0]}>
+            {reservations.map((reservation) => {
             const expiryHours = getExpiryHours(reservation.expires_at);
             const isUrgent = expiryHours < 2 && expiryHours >= 0;
             const isExpired = expiryHours < 0;
@@ -175,11 +161,11 @@ export default function MyReservationsScreen({ navigation }: MyReservationsScree
                   <Text style={[styles.bookTitle, { color: c.onSurface }]} numberOfLines={2}>
                     {reservation.book?.title || reservation.book_id}
                   </Text>
-                  {reservation.book?.author && (
+                  {reservation.book?.author ? (
                     <Text style={[styles.bookAuthor, { color: c.onSurfaceVariant }]} numberOfLines={1}>
                       {reservation.book.author}
                     </Text>
-                  )}
+                  ) : null}
                   <View style={styles.resMeta}>
                     <Surface style={[styles.statusBadge, { backgroundColor: c.custom.success }]} elevation={0}>
                       <Text style={[styles.statusBadgeText, { color: '#FFFFFF' }]}>Đang chờ</Text>
@@ -218,19 +204,17 @@ export default function MyReservationsScreen({ navigation }: MyReservationsScree
                 </View>
               </Surface>
             );
-          })
+            })}
+          </SectionCard>
         )}
       </ScrollView>
 
-      <Snackbar
+      <NoticeSnackbar
         visible={snackVisible}
+        message={snackMsg}
+        severity={snackMsg.includes('hủy') ? 'success' : 'error'}
         onDismiss={() => setSnackVisible(false)}
-        duration={2500}
-        style={{ backgroundColor: c.inverseSurface }}
-        action={{ label: 'OK', onPress: () => setSnackVisible(false) }}
-      >
-        <Text style={{ color: c.inverseOnSurface }}>{snackMsg}</Text>
-      </Snackbar>
+      />
     </SafeAreaView>
   );
 }
@@ -240,28 +224,6 @@ function createStyles(theme: AppTheme) {
   return StyleSheet.create({
     container: { flex: 1 },
     flex: { flex: 1 },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 16,
-      paddingTop: 20,
-      paddingBottom: 4,
-      gap: 10,
-    },
-    headerSpine: { width: 3, height: 20, borderRadius: 2 },
-    headerTitle: { fontSize: 20, fontWeight: '700', flex: 1 },
-    countBadge: { fontSize: 12 },
-    stateCard: {
-      marginHorizontal: 16,
-      marginTop: 24,
-      padding: 32,
-      borderRadius: 10,
-      alignItems: 'center',
-      borderWidth: 0.5,
-    },
-    stateText: { marginTop: 12, marginBottom: 16, textAlign: 'center' },
-    stateButton: { borderRadius: 6 },
-    stateButtonLabel: { fontSize: 14 },
     resCard: {
       marginHorizontal: 16,
       marginTop: 10,

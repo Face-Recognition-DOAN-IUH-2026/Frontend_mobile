@@ -9,6 +9,7 @@ import { aiApi } from '../api/ai';
 import { reserveBook } from '../api/borrow';
 import { useAuth } from '../context/AuthContext';
 import { AppTheme } from '../theme/DarkTheme';
+import { GradientHeader } from '../theme/MobileDesignSystem';
 import { GRADIENTS } from '../theme/MobileDesignSystem';
 import ChatBubble from '../components/ai/ChatBubble';
 import ToolResultCard from '../components/ai/ToolResultCard';
@@ -261,25 +262,11 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <Surface style={styles.header} elevation={0}>
-        <View style={styles.headerCircle1} />
-        <View style={styles.headerCircle2} />
-        <View style={styles.headerLeft}>
-          <View style={styles.headerAvatar}>
-            <MaterialCommunityIcons name="robot" size={18} color="#FFFFFF" />
-          </View>
-          <View>
-            <Text variant="titleMedium" style={styles.headerTitle}>TVTL AI</Text>
-            <Text variant="bodySmall" style={styles.headerSubtitle}>Trợ lý thông minh</Text>
-          </View>
-        </View>
-        <IconButton
-          icon="dots-vertical"
-          size={20}
-          iconColor="rgba(255,255,255,0.7)"
-          onPress={() => {}}
-        />
-      </Surface>
+      <GradientHeader
+        title="TVTL AI"
+        subtitle="Trợ lý thông minh"
+        icon="robot"
+      />
 
       <KeyboardAvoidingView
         style={styles.keyboardView}
@@ -290,9 +277,9 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
           renderEmpty()
         ) : (
           <View style={styles.chatArea}>
-            {messages.length > 0 && (
+            {messages.length > 0 ? (
               <QuickActions onSelect={sendMessage} isStaff={isStaff} />
-            )}
+            ) : null}
             <FlatList
               ref={flatListRef}
               data={messages}
@@ -306,7 +293,7 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
           </View>
         )}
 
-        {loading && !showWelcome && (
+        {loading && !showWelcome ? (
           <View style={styles.typingRow}>
             <View style={styles.typingAvatar}>
               <MaterialCommunityIcons name="robot" size={12} color="#FFFFFF" />
@@ -315,7 +302,7 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
               <TypingIndicator />
             </View>
           </View>
-        )}
+        ) : null}
 
         <View style={styles.inputContainer}>
           <View style={styles.inputWrapper}>
@@ -365,59 +352,6 @@ function createStyles(theme: AppTheme) {
     container: {
       flex: 1,
       backgroundColor: c.background,
-    },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      backgroundColor: c.primary,
-      borderBottomLeftRadius: 20,
-      borderBottomRightRadius: 20,
-      position: 'relative',
-      overflow: 'hidden',
-    },
-    headerCircle1: {
-      position: 'absolute',
-      top: -30,
-      right: -30,
-      width: 120,
-      height: 120,
-      borderRadius: 60,
-      backgroundColor: 'rgba(255,255,255,0.08)',
-    },
-    headerCircle2: {
-      position: 'absolute',
-      bottom: -40,
-      left: 80,
-      width: 160,
-      height: 160,
-      borderRadius: 80,
-      backgroundColor: 'rgba(255,255,255,0.05)',
-    },
-    headerLeft: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      zIndex: 1,
-    },
-    headerAvatar: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: 'rgba(255,255,255,0.2)',
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    headerTitle: {
-      color: '#FFFFFF',
-      fontWeight: '800',
-      fontSize: 16,
-    },
-    headerSubtitle: {
-      color: 'rgba(255,255,255,0.7)',
-      fontSize: 11,
     },
     keyboardView: {
       flex: 1,

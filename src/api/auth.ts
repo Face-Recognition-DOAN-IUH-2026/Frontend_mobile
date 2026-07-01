@@ -1,5 +1,6 @@
 import api from './client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { setAccessToken, setRefreshToken, clearTokens } from './secureStorage';
 import { AuthTokens, User } from '../types';
 
 export interface LoginRequest {
@@ -51,8 +52,8 @@ export const authApi = {
       refresh_token: response.data.refresh_token,
       token_type: response.data.token_type,
     };
-    await AsyncStorage.setItem('accessToken', tokens.access_token);
-    await AsyncStorage.setItem('refreshToken', tokens.refresh_token);
+    await setAccessToken(tokens.access_token);
+    await setRefreshToken(tokens.refresh_token);
     if (response.data.user) {
       await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
       await AsyncStorage.removeItem('patronData');
@@ -62,9 +63,9 @@ export const authApi = {
 
   patronLogin: async (data: PatronLoginRequest): Promise<PatronLoginResponse> => {
     const response = await api.post<PatronLoginResponse>('/patrons/login', data);
-    await AsyncStorage.setItem('accessToken', response.data.access_token);
+    await setAccessToken(response.data.access_token);
     if (response.data.refresh_token) {
-      await AsyncStorage.setItem('refreshToken', response.data.refresh_token);
+      await setRefreshToken(response.data.refresh_token);
     }
     await AsyncStorage.setItem('patronData', JSON.stringify(response.data.user));
     return response.data;
@@ -119,10 +120,10 @@ export const authApi = {
     } as any);
     const response = await api.post<FaceLoginResponse>('/auth/face-login', formData);
     if (response.data.access_token) {
-      await AsyncStorage.setItem('accessToken', response.data.access_token);
+      await setAccessToken(response.data.access_token);
     }
     if (response.data.refresh_token) {
-      await AsyncStorage.setItem('refreshToken', response.data.refresh_token);
+      await setRefreshToken(response.data.refresh_token);
     }
     return response.data;
   },
@@ -133,7 +134,8 @@ export const authApi = {
   },
 
   logout: async (): Promise<void> => {
-    await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'patronData', 'userData']);
+    await clearTokens();
+    await AsyncStorage.multiRemove(['patronData', 'userData']);
   },
 
   getCurrentUser: async (): Promise<User> => {

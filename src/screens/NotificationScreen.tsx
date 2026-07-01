@@ -3,11 +3,13 @@ import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useMemo, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ActivityIndicator, Surface, Text, useTheme } from 'react-native-paper';
+import { Surface, Text, useTheme } from 'react-native-paper';
+import { GradientHeader, EmptyState, FilterPill } from '../theme/MobileDesignSystem';
 import { useNotification } from '../context/NotificationContext';
 import { AppTheme } from '../theme/DarkTheme';
 import { Notification } from '../types';
 import { formatRelativeTime } from '../utils/dateUtils';
+import { LoadingOverlay } from '../components/LoadingOverlay';
 
 interface NotificationScreenProps {
   navigation: any;
@@ -110,13 +112,13 @@ export default function NotificationScreen({ navigation }: NotificationScreenPro
             <Text style={[styles.body, { color: c.onSurfaceVariant }]} numberOfLines={expanded[item.id] ? undefined : 2}>
               {item.body}
             </Text>
-            {item.body && item.body.length > 100 && (
+            {item.body && item.body.length > 100 ? (
               <TouchableOpacity onPress={() => toggleExpand(item.id)} style={styles.expandBtn}>
                 <Text style={[styles.expandText, { color: c.primary }]}>
                   {expanded[item.id] ? 'Thu gọn' : 'Xem thêm'}
                 </Text>
               </TouchableOpacity>
-            )}
+            ) : null}
             <Text style={[styles.time, { color: c.custom.textDisabled }]}>
               {formatRelativeTime(item.createdAt)}
             </Text>
@@ -128,41 +130,27 @@ export default function NotificationScreen({ navigation }: NotificationScreenPro
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: c.background }]} edges={['bottom']}>
-      <View style={styles.header}>
-        <View style={[styles.headerSpine, { backgroundColor: c.primary }]} />
-        <Text style={[styles.headerTitle, { color: c.onSurface }]}>Thông báo</Text>
-        {unreadCount > 0 && (
-          <TouchableOpacity activeOpacity={0.7} onPress={markAllAsRead} style={styles.markAllBtn}>
-            <MaterialCommunityIcons name="check-all" size={18} color={c.primary} />
-            <Text style={[styles.markAllText, { color: c.primary }]}>Đọc tất cả</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      <GradientHeader
+        title="Thông báo"
+        subtitle={unreadCount > 0 ? `${unreadCount} chưa đọc` : 'Không có thông báo mới'}
+        icon="bell"
+        right={
+          unreadCount > 0 ? (
+            <TouchableOpacity activeOpacity={0.7} onPress={markAllAsRead} style={styles.markAllBtn}>
+              <MaterialCommunityIcons name="check-all" size={18} color={c.primary} />
+              <Text style={[styles.markAllText, { color: c.primary }]}>Đọc tất cả</Text>
+            </TouchableOpacity>
+          ) : null
+        }
+      />
 
       <View style={styles.filterRow}>
         {FILTERS.map((f) => (
-          <TouchableOpacity key={f.key} activeOpacity={0.7} onPress={() => setActiveFilter(f.key)}>
-            <Surface
-              style={[
-                styles.filterChip,
-                { backgroundColor: c.surface, borderColor: c.outline },
-                activeFilter === f.key && { backgroundColor: c.primary, borderColor: c.primary },
-              ]}
-              elevation={0}
-            >
-              <Text style={[styles.filterText, { color: c.onSurfaceVariant }, activeFilter === f.key && { color: c.background }]}>
-                {f.label}
-              </Text>
-            </Surface>
-          </TouchableOpacity>
+          <FilterPill key={f.key} label={f.label} active={activeFilter === f.key} onPress={() => setActiveFilter(f.key)} />
         ))}
       </View>
 
-      {isLoading && !refreshing ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={c.primary} />
-        </View>
-      ) : (
+      {isLoading && !refreshing ? <LoadingOverlay loading message="Đang tải..." /> : (
         <FlatList
           data={filtered}
           keyExtractor={(item) => item.id}
@@ -170,12 +158,10 @@ export default function NotificationScreen({ navigation }: NotificationScreenPro
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <MaterialCommunityIcons name="bell-outline" size={48} color={c.onSurfaceVariant} />
-              <Text style={[styles.emptyText, { color: c.onSurfaceVariant }]}>
-                {activeFilter === 'unread' ? 'Không có thông báo chưa đọc' : 'Không có thông báo mới'}
-              </Text>
-            </View>
+            <EmptyState
+              icon="bell-outline"
+              title={activeFilter === 'unread' ? 'Không có thông báo chưa đọc' : 'Không có thông báo mới'}
+            />
           }
         />
       )}
@@ -186,16 +172,6 @@ export default function NotificationScreen({ navigation }: NotificationScreenPro
 function createStyles(theme: AppTheme) {
   return StyleSheet.create({
     container: { flex: 1 },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 16,
-      paddingTop: 20,
-      paddingBottom: 4,
-      gap: 10,
-    },
-    headerSpine: { width: 3, height: 20, borderRadius: 2 },
-    headerTitle: { fontSize: 20, fontWeight: '700', flex: 1 },
     markAllBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -212,18 +188,6 @@ function createStyles(theme: AppTheme) {
       paddingTop: 14,
       paddingBottom: 6,
       gap: 8,
-    },
-    filterChip: {
-      paddingHorizontal: 14,
-      paddingVertical: 6,
-      borderRadius: 16,
-      borderWidth: 0.5,
-    },
-    filterText: { fontSize: 13, fontWeight: '600' },
-    loadingContainer: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
     },
     listContent: {
       paddingBottom: 20,
@@ -252,11 +216,5 @@ function createStyles(theme: AppTheme) {
     expandBtn: { marginTop: 4 },
     expandText: { fontSize: 12, fontWeight: '600' },
     time: { fontSize: 11, marginTop: 4 },
-    emptyContainer: {
-      alignItems: 'center',
-      paddingTop: 60,
-      gap: 12,
-    },
-    emptyText: { fontSize: 14, textAlign: 'center' },
   });
 }

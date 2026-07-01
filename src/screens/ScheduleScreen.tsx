@@ -3,7 +3,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Animated, Dimensions, FlatList, Modal, PanResponder, RefreshControl, ScrollView, SectionList, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ActivityIndicator, Text, useTheme } from 'react-native-paper';
+import { Text, useTheme } from 'react-native-paper';
 import * as Location from 'expo-location';
 import { scheduleApi } from '../api/schedule';
 import AssignmentCard from '../components/AssignmentCard';
@@ -14,6 +14,9 @@ import { devError } from '../utils/logger';
 import CacheManager from '../utils/cache/CacheManager';
 import { CACHE_KEYS, CACHE_TTL } from '../utils/cache/CacheKeys';
 import { getAssignmentTimeState, AssignmentTimeState } from '../utils/assignmentUtils';
+import { GradientHeader, EmptyState, GRADIENTS } from '../theme/MobileDesignSystem';
+import { NoticeSnackbar } from '../components/NoticeSnackbar';
+import { LoadingOverlay } from '../components/LoadingOverlay';
 
 function getErrorMessage(err: any, fallback: string) {
   return err?.response?.data?.detail || err?.response?.data?.error || err?.message || fallback;
@@ -80,9 +83,6 @@ export default function ScheduleScreen() {
     contentFlex: { flex: 1 },
     scrollFlex: { flexGrow: 1 },
     emptyContentStyle: { flexGrow: 1, justifyContent: 'center', padding: 16 },
-    appBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 10 },
-    appBarBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20 },
-    appBarTitle: { flex: 1, fontSize: 18, fontWeight: '700', textAlign: 'center' },
     segmentedWrap: { paddingHorizontal: 16, paddingVertical: 10 },
     segmentedBg: { flexDirection: 'row', borderRadius: 10, padding: 3 },
     segmentedBtn: { flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center' },
@@ -90,20 +90,14 @@ export default function ScheduleScreen() {
     dateRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1 },
     dateDropdown: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     dateText: { fontSize: 16, fontWeight: '700' },
-    loadingBox: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     errorBox: { flex: 1, flexDirection: 'row', gap: 10, alignItems: 'flex-start', padding: 16 },
     errorText: { flex: 1, fontSize: 14 },
-    emptyContainer: { alignItems: 'center', justifyContent: 'center', gap: 12, padding: 40 },
-    emptyTitle: { fontSize: 18, fontWeight: '700', marginTop: 8 },
-    emptySub: { fontSize: 14, textAlign: 'center' },
     listContent: { padding: 16, paddingBottom: 80 },
     sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, paddingHorizontal: 4, marginBottom: 4 },
     sectionTitle: { fontSize: 15, fontWeight: '900', flex: 1 },
     sectionStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     sectionDot: { width: 8, height: 8, borderRadius: 4 },
     sectionStatusText: { fontSize: 12, fontWeight: '700' },
-    snackbar: { position: 'absolute', bottom: 16, left: 16, right: 16, padding: 14, borderRadius: 10, alignItems: 'center' },
-    snackbarText: { fontSize: 14, fontWeight: '600' },
     pillStrip: { borderBottomWidth: 1, paddingVertical: 10 },
     pillContent: { flexDirection: 'row', gap: 8, paddingHorizontal: 12 },
     pill: { alignItems: 'center', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, minWidth: 52, gap: 2 },
@@ -481,11 +475,11 @@ export default function ScheduleScreen() {
   // Helpers
   function renderEmptyState(message?: string) {
     return (
-      <View style={s.emptyContainer}>
-        <MaterialCommunityIcons name="folder-open-outline" size={80} color={c.outline} />
-        <Text style={[s.emptyTitle, { color: c.onSurfaceVariant }]}>Không có dữ liệu</Text>
-        <Text style={[s.emptySub, { color: c.outline }]}>{message || 'Ngày này không có lịch trực'}</Text>
-      </View>
+      <EmptyState
+        icon="folder-open-outline"
+        title="Không có dữ liệu"
+        description={message || 'Ngày này không có lịch trực'}
+      />
     );
   }
 
@@ -607,11 +601,11 @@ export default function ScheduleScreen() {
                   >
                     <Text style={[s.pillLabel, { color: isSelected ? c.onPrimary : c.primary }]}>{DAY_LABELS[idx]}</Text>
                     <Text style={[s.pillDate, { color: isSelected ? c.onPrimary : c.primary }, isTodayDate && !isSelected && { fontWeight: '900' }]}>{date.slice(8, 10)}</Text>
-                    {count > 0 && (
+                    {count > 0 ? (
                       <View style={[s.pillBadge, { backgroundColor: isSelected ? c.onPrimary : c.primary }]}>
                         <Text style={[s.pillBadgeText, { color: isSelected ? c.primary : c.onPrimary }]}>{count}</Text>
                       </View>
-                    )}
+                    ) : null}
                   </TouchableOpacity>
                 );
               })}
@@ -731,11 +725,11 @@ export default function ScheduleScreen() {
                 <Text style={[s.pillDate, { color: isSelected ? c.onPrimary : c.onSurface }, isTodayDate && !isSelected && { color: c.primary, fontWeight: '900' }]}>
                   {date.slice(8, 10)}
                 </Text>
-                {count > 0 && (
+                {count > 0 ? (
                   <View style={[s.pillBadge, { backgroundColor: isSelected ? c.onPrimary : c.primary }]}>
                     <Text style={[s.pillBadgeText, { color: isSelected ? c.primary : c.onPrimary }]}>{count}</Text>
                   </View>
-                )}
+                ) : null}
               </TouchableOpacity>
             );
           })}
@@ -746,16 +740,11 @@ export default function ScheduleScreen() {
 
   return (
     <SafeAreaView style={[s.container, { backgroundColor: c.background }]} edges={['bottom']}>
-      {/* App Bar
-      <View style={[s.appBar, { backgroundColor: c.primary }]}>
-        <TouchableOpacity style={s.appBarBtn}>
-          <MaterialCommunityIcons name="arrow-left" size={24} color={c.onPrimary} />
-        </TouchableOpacity>
-        <Text style={[s.appBarTitle, { color: c.onPrimary }]}>Lịch trực</Text>
-        <TouchableOpacity style={s.appBarBtn}>
-          <MaterialCommunityIcons name="dots-vertical" size={24} color={c.onPrimary} />
-        </TouchableOpacity>
-      </View> */}
+      <GradientHeader
+        title="Lịch trực"
+        subtitle={assignments.length > 0 ? `${assignments.length} ca trực` : 'Không có ca trực'}
+        icon="calendar-clock"
+      />
 
       {/* Segmented Control */}
       <View style={[s.segmentedWrap, { backgroundColor: c.surface }]}>
@@ -772,14 +761,14 @@ export default function ScheduleScreen() {
       </View>
 
       {/* Date Dropdown */}
-      {viewMode !== 'Tháng' && (
+      {viewMode !== 'Tháng' ? (
         <View style={[s.dateRow, { backgroundColor: c.surface, borderBottomColor: c.divider }]}>
           <TouchableOpacity style={s.dateDropdown} onPress={() => { setShowDatePicker(true); const d = new Date(currentDate + 'T00:00:00'); setPickerMonth(d.getMonth()); setPickerYear(d.getFullYear()); }}>
             <Text style={[s.dateText, { color: c.onSurface }]}>{currentDateFormatted}</Text>
             <MaterialCommunityIcons name="chevron-down" size={20} color={c.onSurfaceVariant} />
           </TouchableOpacity>
         </View>
-      )}
+      ) : null}
 
       {/* Action Buttons */}
       <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: c.surface }}>
@@ -808,7 +797,7 @@ export default function ScheduleScreen() {
 
       {/* Content */}
       {loading ? (
-        <View style={s.loadingBox}><ActivityIndicator color={c.primary} /></View>
+        <LoadingOverlay loading message="Đang tải lịch trực..." />
       ) : error ? (
         <View style={s.errorBox}><MaterialCommunityIcons name="alert-circle-outline" size={22} color={c.error} /><Text style={[s.errorText, { color: c.error }]} selectable>{error}</Text></View>
       ) : viewMode === 'Ngày' ? (
@@ -873,12 +862,12 @@ export default function ScheduleScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Snackbar */}
-      {!!snackbar && (
-        <View style={[s.snackbar, { backgroundColor: c.onSurface }]}>
-          <Text style={[s.snackbarText, { color: c.surface }]}>{snackbar}</Text>
-        </View>
-      )}
+      <NoticeSnackbar
+        visible={!!snackbar}
+        message={snackbar}
+        severity="success"
+        onDismiss={() => setSnackbar('')}
+      />
     </SafeAreaView>
   );
 }

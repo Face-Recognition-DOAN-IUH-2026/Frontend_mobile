@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,8 +8,13 @@ import {
   TextInput,
   Alert,
   RefreshControl,
-  ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTheme } from 'react-native-paper';
+import { AppTheme } from '../theme/DarkTheme';
+import { GradientHeader, EmptyState, GRADIENTS } from '../theme/MobileDesignSystem';
+import { LoadingOverlay } from '../components/LoadingOverlay';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { scheduleApi, ShiftSwap } from '../api/schedule';
@@ -17,6 +22,9 @@ import { StaffScheduleAssignment } from '../types';
 import { toDateInput } from '../utils/dateUtils';
 
 export default function CreateSwapScreen() {
+  const theme = useTheme() as AppTheme;
+  const c = theme.colors;
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const navigation = useNavigation();
   const [myAssignments, setMyAssignments] = useState<StaffScheduleAssignment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -97,41 +105,39 @@ export default function CreateSwapScreen() {
   };
 
   if (loading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
-      </View>
-    );
+    return <LoadingOverlay loading message="Đang tải ca trực..." />;
   }
 
   return (
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
     <ScrollView
-      style={styles.container}
+      style={styles.scrollView}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color="#e2e8f0" />
-        </TouchableOpacity>
-        <Text style={styles.title}>Yêu cầu đổi ca</Text>
-      </View>
+      <GradientHeader
+        title="Yêu cầu đổi ca"
+        subtitle="Chọn ca muốn đổi"
+        icon="swap-horizontal"
+      />
 
-      {errors.general && (
+      {errors.general ? (
         <View style={styles.errorBanner}>
           <Ionicons name="warning" size={16} color="#ef4444" />
           <Text style={styles.errorBannerText}>{errors.general}</Text>
         </View>
-      )}
+      ) : null}
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>1. Chọn ca muốn đổi *</Text>
-        {errors.assignment && (
+        {errors.assignment ? (
           <Text style={styles.fieldErrorText}>{errors.assignment}</Text>
-        )}
+        ) : null}
         {myAssignments.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>Không có ca sắp tới để đổi</Text>
-          </View>
+          <EmptyState
+            icon="calendar-remove"
+            title="Không có ca để đổi"
+            description="Bạn không có ca sắp tới"
+          />
         ) : (
           myAssignments.slice(0, 20).map((a) => {
             const { dateStr, time, zone, shiftName } = formatAssignment(a);
@@ -147,8 +153,8 @@ export default function CreateSwapScreen() {
               >
                 <View style={styles.shiftRadio}>
                   {isSelected
-                    ? <Ionicons name="radio-button-on" size={22} color="#6366f1" />
-                    : <Ionicons name="radio-button-off" size={22} color="#64748b" />}
+                    ? <Ionicons name="radio-button-on" size={22} color={c.primary} />
+                    : <Ionicons name="radio-button-off" size={22} color={c.outline} />}
                 </View>
                 <View style={styles.shiftInfo}>
                   <Text style={styles.shiftName}>{shiftName}</Text>
@@ -169,7 +175,7 @@ export default function CreateSwapScreen() {
           value={targetStaffId}
           onChangeText={setTargetStaffId}
           placeholder="Staff ID hoặc để trống (mở)"
-          placeholderTextColor="#666"
+          placeholderTextColor={c.outline}
         />
         {!targetStaffId.trim() ? (
           <View style={styles.openSwapBadge}>
@@ -186,7 +192,7 @@ export default function CreateSwapScreen() {
           value={reason}
           onChangeText={setReason}
           placeholder="VD: Trùng lịch học, việc gia đình..."
-          placeholderTextColor="#666"
+          placeholderTextColor={c.outline}
           multiline
           numberOfLines={3}
         />
@@ -204,21 +210,15 @@ export default function CreateSwapScreen() {
 
       <View style={{ height: 40 }} />
     </ScrollView>
+    </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a' },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    paddingBottom: 8,
-    gap: 12,
-  },
-  backBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
-  title: { fontSize: 18, fontWeight: '700', color: '#e2e8f0' },
+function createStyles(theme: AppTheme) {
+  const c = theme.colors;
+  return StyleSheet.create({
+  container: { flex: 1, backgroundColor: c.background },
+  scrollView: { flex: 1 },
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -231,40 +231,33 @@ const styles = StyleSheet.create({
   },
   errorBannerText: { fontSize: 13, color: '#ef4444', flex: 1 },
   section: { paddingHorizontal: 16, paddingTop: 16 },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: '#e2e8f0', marginBottom: 8 },
-  sectionHint: { fontSize: 12, color: '#64748b', marginBottom: 8, marginTop: -4 },
+  sectionTitle: { fontSize: 14, fontWeight: '700', color: c.onSurface, marginBottom: 8 },
+  sectionHint: { fontSize: 12, color: c.onSurfaceVariant, marginBottom: 8, marginTop: -4 },
   fieldErrorText: { fontSize: 11, color: '#ef4444', marginBottom: 8 },
-  emptyCard: {
-    backgroundColor: '#1e293b',
-    padding: 16,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  emptyText: { color: '#64748b', fontSize: 14 },
   shiftCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: c.surface,
     padding: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: c.outline,
     marginBottom: 8,
   },
-  shiftCardSelected: { borderColor: '#6366f1', backgroundColor: '#6366f115' },
+  shiftCardSelected: { borderColor: c.primary, backgroundColor: '#6366f115' },
   shiftRadio: { marginRight: 12 },
   shiftInfo: { flex: 1 },
-  shiftName: { fontSize: 14, fontWeight: '700', color: '#e2e8f0' },
-  shiftZone: { fontSize: 12, color: '#94a3b8', marginTop: 2 },
-  shiftTime: { fontSize: 11, color: '#64748b', marginTop: 4 },
+  shiftName: { fontSize: 14, fontWeight: '700', color: c.onSurface },
+  shiftZone: { fontSize: 12, color: c.onSurfaceVariant, marginTop: 2 },
+  shiftTime: { fontSize: 11, color: c.outline, marginTop: 4 },
   input: {
-    backgroundColor: '#1e293b',
+    backgroundColor: c.surface,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: c.outline,
     borderRadius: 8,
     padding: 10,
     fontSize: 14,
-    color: '#e2e8f0',
+    color: c.onSurface,
     marginBottom: 12,
   },
   textArea: { height: 80, textAlignVertical: 'top' },
@@ -280,7 +273,7 @@ const styles = StyleSheet.create({
   },
   openSwapText: { fontSize: 12, color: '#8b5cf6', fontWeight: '600' },
   submitButton: {
-    backgroundColor: '#6366f1',
+    backgroundColor: c.primary,
     marginHorizontal: 16,
     marginTop: 8,
     padding: 14,
@@ -290,3 +283,4 @@ const styles = StyleSheet.create({
   disabledButton: { opacity: 0.5 },
   submitButtonText: { color: '#fff', fontWeight: '700', fontSize: 15 },
 });
+}
