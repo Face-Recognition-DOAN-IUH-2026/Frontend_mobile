@@ -184,16 +184,6 @@ export interface DayCounts {
   [date: string]: number;
 }
 
-export interface StaffAvailabilityRequest {
-  id: string;
-  staffId: string;
-  dateFrom: string;
-  dateTo: string;
-  type: string;
-  reason?: string | null;
-  status: string;
-}
-
 export interface BookWithStats {
   id: string;
   isbn: string;
