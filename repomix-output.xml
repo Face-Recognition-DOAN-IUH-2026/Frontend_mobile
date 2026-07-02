@@ -106,11 +106,9 @@ src/navigation/AppNavigator.tsx
 src/navigation/types.ts
 src/screens/AIChatScreen.tsx
 src/screens/AIHealthScreen.tsx
-src/screens/AvailabilityScreen.tsx
 src/screens/BookCatalogScreen.tsx
 src/screens/BookRecommendationsScreen.tsx
 src/screens/ChangePasswordScreen.tsx
-src/screens/CreateSwapScreen.tsx
 src/screens/EditProfileScreen.tsx
 src/screens/FaceCameraScreen.tsx
 src/screens/FaceLoginScreen.tsx
@@ -121,10 +119,8 @@ src/screens/ImportBooksScreen.tsx
 src/screens/LibraryTourScreen.tsx
 src/screens/LoginScreen.tsx
 src/screens/MyReservationsScreen.tsx
-src/screens/MySwapsScreen.tsx
 src/screens/NotificationDetailScreen.tsx
 src/screens/NotificationScreen.tsx
-src/screens/OpenShiftsScreen.tsx
 src/screens/ProfileScreen.tsx
 src/screens/RegisterScreen.tsx
 src/screens/ReturnScreen.tsx
@@ -6274,585 +6270,6 @@ function createStyles(theme: AppTheme) {
 }
 </file>
 
-<file path="src/screens/AvailabilityScreen.tsx">
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Alert,
-  RefreshControl,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useTheme } from 'react-native-paper';
-import { Ionicons } from '@expo/vector-icons';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { AppTheme } from '../theme/DarkTheme';
-import { GradientHeader, SectionCard, EmptyState, GRADIENTS } from '../theme/MobileDesignSystem';
-import { LoadingOverlay } from '../components/LoadingOverlay';
-import { scheduleApi } from '../api/schedule';
-import { StaffAvailabilityRequest } from '../types';
-
-export default function AvailabilityScreen() {
-  const theme = useTheme() as AppTheme;
-  const c = theme.colors;
-  const styles = useMemo(() => createStyles(theme), [theme]);
-  const [requests, setRequests] = useState<StaffAvailabilityRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [showForm, setShowForm] = useState(false);
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [reason, setReason] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [errors, setErrors] = useState<{ dateFrom?: string; dateTo?: string; general?: string }>({});
-
-  const loadData = useCallback(async () => {
-    try {
-      const result = await scheduleApi.getMyAvailability();
-      setRequests(Array.isArray(result) ? result : []);
-    } catch (err) {
-      console.error('Failed to load availability:', err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => { loadData(); }, [loadData]);
-
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    loadData();
-  }, [loadData]);
-
-  const validateDate = (dateStr: string): boolean => {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
-    const d = new Date(dateStr);
-    return !isNaN(d.getTime());
-  };
-
-  const handleSubmit = async () => {
-    const newErrors: { dateFrom?: string; dateTo?: string } = {};
-    setErrors({});
-
-    if (!dateFrom) {
-      newErrors.dateFrom = 'Vui lòng nhập ngày bắt đầu';
-    } else if (!validateDate(dateFrom)) {
-      newErrors.dateFrom = 'Định dạng ngày không hợp lệ (YYYY-MM-DD)';
-    }
-
-    if (!dateTo) {
-      newErrors.dateTo = 'Vui lòng nhập ngày kết thúc';
-    } else if (!validateDate(dateTo)) {
-      newErrors.dateTo = 'Định dạng ngày không hợp lệ (YYYY-MM-DD)';
-    } else if (dateFrom && dateTo && dateTo < dateFrom) {
-      newErrors.dateTo = 'Ngày kết thúc phải >= ngày bắt đầu';
-    }
-
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      await scheduleApi.requestAvailability(dateFrom, dateTo, reason || undefined);
-      setShowForm(false);
-      setDateFrom('');
-      setDateTo('');
-      setReason('');
-      setErrors({});
-      loadData();
-      Alert.alert('Thành công', 'Đã gửi yêu cầu xin nghỉ');
-    } catch (err: any) {
-      setErrors({ general: err?.response?.data?.error || 'Không thể gửi yêu cầu' });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'approved': return '#10b981';
-      case 'rejected': return '#ef4444';
-      default: return '#f59e0b';
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'approved': return 'Đã duyệt';
-      case 'rejected': return 'Từ chối';
-      default: return 'Chờ duyệt';
-    }
-  };
-
-  if (loading) {
-    return <LoadingOverlay loading message="Đang tải..." />;
-  }
-
-  return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-    <ScrollView
-      style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-    >
-      <GradientHeader
-        title="Xin nghỉ"
-        subtitle="Không khả dụng"
-        icon="calendar-remove"
-        right={
-          <TouchableOpacity activeOpacity={0.7} onPress={() => setShowForm(!showForm)} style={styles.addButton}>
-            <MaterialCommunityIcons name={showForm ? 'close' : 'plus'} size={20} color="#fff" />
-          </TouchableOpacity>
-        }
-      />
-
-      {showForm ? (
-        <View style={styles.formCard}>
-          {errors.general ? (
-            <View style={styles.errorBanner}>
-              <Ionicons name="warning" size={16} color="#ef4444" />
-              <Text style={styles.errorBannerText}>{errors.general}</Text>
-            </View>
-          ) : null}
-          <Text style={styles.formLabel}>Từ ngày (YYYY-MM-DD)</Text>
-          <TextInput
-            style={[styles.input, errors.dateFrom && styles.inputError]}
-            value={dateFrom}
-            onChangeText={(t) => { setDateFrom(t); setErrors(e => ({ ...e, dateFrom: undefined })); }}
-            placeholder="2026-07-01"
-            placeholderTextColor="#666"
-          />
-          {errors.dateFrom ? (
-            <Text style={styles.fieldErrorText}>{errors.dateFrom}</Text>
-          ) : null}
-          <Text style={styles.formLabel}>Đến ngày (YYYY-MM-DD)</Text>
-          <TextInput
-            style={[styles.input, errors.dateTo && styles.inputError]}
-            value={dateTo}
-            onChangeText={(t) => { setDateTo(t); setErrors(e => ({ ...e, dateTo: undefined })); }}
-            placeholder="2026-07-05"
-            placeholderTextColor="#666"
-          />
-          {errors.dateTo ? (
-            <Text style={styles.fieldErrorText}>{errors.dateTo}</Text>
-          ) : null}
-          <Text style={styles.formLabel}>Lý do (không bắt buộc)</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            value={reason}
-            onChangeText={setReason}
-            placeholder="Nhập lý do..."
-            placeholderTextColor="#666"
-            multiline
-            numberOfLines={3}
-          />
-          <TouchableOpacity
-            style={[styles.submitButton, submitting && styles.disabledButton]}
-            onPress={handleSubmit}
-            disabled={submitting}
-          >
-            <Text style={styles.submitButtonText}>
-              {submitting ? 'Đang gửi...' : 'Gửi yêu cầu'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
-
-      {requests.length === 0 ? (
-        <EmptyState
-          icon="calendar-remove-outline"
-          title="Chưa có yêu cầu"
-          description="Bạn chưa gửi yêu cầu xin nghỉ nào"
-        />
-      ) : (
-        requests.map((req) => (
-          <View key={req.id} style={styles.requestCard}>
-            <View style={styles.requestHeader}>
-              <Text style={styles.requestDate}>
-                {req.dateFrom} — {req.dateTo}
-              </Text>
-              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(req.status) + '20' }]}>
-                <Text style={[styles.statusText, { color: getStatusColor(req.status) }]}>
-                  {getStatusLabel(req.status)}
-                </Text>
-              </View>
-            </View>
-            {req.reason ? (
-              <Text style={styles.requestReason}>Lý do: {req.reason}</Text>
-            ) : null}
-          </View>
-        ))
-      )}
-    </ScrollView>
-    </SafeAreaView>
-  );
-}
-
-function createStyles(theme: AppTheme) {
-  const c = theme.colors;
-  return StyleSheet.create({
-  container: { flex: 1, backgroundColor: c.background },
-  addButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: c.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  formCard: {
-    backgroundColor: c.surface,
-    margin: 16,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: c.outline,
-  },
-  formLabel: { fontSize: 12, color: c.onSurfaceVariant, marginBottom: 4, fontWeight: '600' },
-  input: {
-    backgroundColor: c.background,
-    borderWidth: 1,
-    borderColor: c.outline,
-    borderRadius: 8,
-    padding: 10,
-    fontSize: 14,
-    color: c.onSurface,
-    marginBottom: 12,
-  },
-  inputError: { borderColor: '#ef4444' },
-  fieldErrorText: { fontSize: 11, color: '#ef4444', marginTop: -8, marginBottom: 8 },
-  errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#fef2f2',
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  errorBannerText: { fontSize: 13, color: '#ef4444', flex: 1 },
-  textArea: { height: 80, textAlignVertical: 'top' },
-  submitButton: {
-    backgroundColor: c.primary,
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  disabledButton: { opacity: 0.5 },
-  submitButtonText: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  requestCard: {
-    backgroundColor: c.surface,
-    marginHorizontal: 16,
-    marginBottom: 8,
-    padding: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: c.outline,
-  },
-  requestHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  requestDate: { fontSize: 14, fontWeight: '600', color: c.onSurface },
-  statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 },
-  statusText: { fontSize: 11, fontWeight: '700' },
-  requestReason: { fontSize: 12, color: c.onSurfaceVariant, marginTop: 6 },
-  });
-}
-</file>
-
-<file path="src/screens/CreateSwapScreen.tsx">
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Alert,
-  RefreshControl,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useTheme } from 'react-native-paper';
-import { AppTheme } from '../theme/DarkTheme';
-import { GradientHeader, EmptyState, GRADIENTS } from '../theme/MobileDesignSystem';
-import { LoadingOverlay } from '../components/LoadingOverlay';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import { scheduleApi, ShiftSwap } from '../api/schedule';
-import { StaffScheduleAssignment } from '../types';
-import { toDateInput } from '../utils/dateUtils';
-
-export default function CreateSwapScreen() {
-  const theme = useTheme() as AppTheme;
-  const c = theme.colors;
-  const styles = useMemo(() => createStyles(theme), [theme]);
-  const navigation = useNavigation();
-  const [myAssignments, setMyAssignments] = useState<StaffScheduleAssignment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [selectedAssignment, setSelectedAssignment] = useState<StaffScheduleAssignment | null>(null);
-  const [targetStaffId, setTargetStaffId] = useState('');
-  const [reason, setReason] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [errors, setErrors] = useState<{ assignment?: string; general?: string }>({});
-
-  const todayStr = toDateInput(new Date());
-
-  const loadData = useCallback(async () => {
-    try {
-      const result = await scheduleApi.getMySchedules();
-      const upcoming = (result.items || []).filter(
-        (a: StaffScheduleAssignment) => a.workDate >= todayStr
-      );
-      upcoming.sort((a: StaffScheduleAssignment, b: StaffScheduleAssignment) =>
-        a.workDate.localeCompare(b.workDate) ||
-        ((a.shift?.startTime || '').localeCompare(b.shift?.startTime || ''))
-      );
-      setMyAssignments(upcoming);
-    } catch (err) {
-      console.error('Failed to load assignments:', err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [todayStr]);
-
-  useEffect(() => { loadData(); }, [loadData]);
-
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    loadData();
-  }, [loadData]);
-
-  const formatAssignment = (a: StaffScheduleAssignment) => {
-    const date = new Date(a.workDate + 'T00:00:00');
-    const dateStr = date.toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' });
-    const time = a.shift
-      ? `${a.shift.startTime?.slice(0, 5)} — ${a.shift.endTime?.slice(0, 5)}`
-      : '';
-    const zone = a.zone?.zoneName || a.zoneId || '';
-    return { dateStr, time, zone, shiftName: a.shift?.name || 'Ca' };
-  };
-
-  const handleSubmit = async () => {
-    const newErrors: { assignment?: string; general?: string } = {};
-    if (!selectedAssignment) {
-      newErrors.assignment = 'Vui lòng chọn ca muốn đổi';
-    }
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
-
-    setSubmitting(true);
-    setErrors({});
-    try {
-      const payload: Parameters<typeof scheduleApi.createSwap>[0] = {
-        requesterAssignmentId: selectedAssignment!.id,
-        reason: reason.trim() || undefined,
-      };
-      if (targetStaffId.trim()) {
-        payload.targetStaffId = targetStaffId.trim();
-      }
-      await scheduleApi.createSwap(payload);
-      Alert.alert('Thành công', 'Đã gửi yêu cầu đổi ca', [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
-    } catch (err: any) {
-      setErrors({ general: err?.response?.data?.error || err?.message || 'Không thể tạo yêu cầu đổi ca' });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  if (loading) {
-    return <LoadingOverlay loading message="Đang tải ca trực..." />;
-  }
-
-  return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-    <ScrollView
-      style={styles.scrollView}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-    >
-      <GradientHeader
-        title="Yêu cầu đổi ca"
-        subtitle="Chọn ca muốn đổi"
-        icon="swap-horizontal"
-      />
-
-      {errors.general ? (
-        <View style={styles.errorBanner}>
-          <Ionicons name="warning" size={16} color="#ef4444" />
-          <Text style={styles.errorBannerText}>{errors.general}</Text>
-        </View>
-      ) : null}
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>1. Chọn ca muốn đổi *</Text>
-        {errors.assignment ? (
-          <Text style={styles.fieldErrorText}>{errors.assignment}</Text>
-        ) : null}
-        {myAssignments.length === 0 ? (
-          <EmptyState
-            icon="calendar-remove"
-            title="Không có ca để đổi"
-            description="Bạn không có ca sắp tới"
-          />
-        ) : (
-          myAssignments.slice(0, 20).map((a) => {
-            const { dateStr, time, zone, shiftName } = formatAssignment(a);
-            const isSelected = selectedAssignment?.id === a.id;
-            return (
-              <TouchableOpacity
-                key={a.id}
-                style={[styles.shiftCard, isSelected && styles.shiftCardSelected]}
-                onPress={() => {
-                  setSelectedAssignment(a);
-                  setErrors(e => ({ ...e, assignment: undefined }));
-                }}
-              >
-                <View style={styles.shiftRadio}>
-                  {isSelected
-                    ? <Ionicons name="radio-button-on" size={22} color={c.primary} />
-                    : <Ionicons name="radio-button-off" size={22} color={c.outline} />}
-                </View>
-                <View style={styles.shiftInfo}>
-                  <Text style={styles.shiftName}>{shiftName}</Text>
-                  <Text style={styles.shiftZone}>{zone}</Text>
-                  <Text style={styles.shiftTime}>{dateStr} · {time}</Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })
-        )}
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>2. Người muốn đổi cùng (không bắt buộc)</Text>
-        <Text style={styles.sectionHint}>Nhập ID nhân viên muốn đổi, hoặc để trống để tạo yêu cầu đổi ca mở — bất kỳ ai cũng có thể nhận</Text>
-        <TextInput
-          style={styles.input}
-          value={targetStaffId}
-          onChangeText={setTargetStaffId}
-          placeholder="Staff ID hoặc để trống (mở)"
-          placeholderTextColor={c.outline}
-        />
-        {!targetStaffId.trim() ? (
-          <View style={styles.openSwapBadge}>
-            <Ionicons name="globe-outline" size={14} color="#8b5cf6" />
-            <Text style={styles.openSwapText}>Yêu cầu mở — bất kỳ ai cũng có thể nhận</Text>
-          </View>
-        ) : null}
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>3. Lý do (không bắt buộc)</Text>
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          value={reason}
-          onChangeText={setReason}
-          placeholder="VD: Trùng lịch học, việc gia đình..."
-          placeholderTextColor={c.outline}
-          multiline
-          numberOfLines={3}
-        />
-      </View>
-
-      <TouchableOpacity
-        style={[styles.submitButton, submitting && styles.disabledButton]}
-        onPress={handleSubmit}
-        disabled={submitting}
-      >
-        <Text style={styles.submitButtonText}>
-          {submitting ? 'Đang gửi...' : 'Gửi yêu cầu đổi ca'}
-        </Text>
-      </TouchableOpacity>
-
-      <View style={{ height: 40 }} />
-    </ScrollView>
-    </SafeAreaView>
-  );
-}
-
-function createStyles(theme: AppTheme) {
-  const c = theme.colors;
-  return StyleSheet.create({
-  container: { flex: 1, backgroundColor: c.background },
-  scrollView: { flex: 1 },
-  errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#fef2f2',
-    marginHorizontal: 16,
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  errorBannerText: { fontSize: 13, color: '#ef4444', flex: 1 },
-  section: { paddingHorizontal: 16, paddingTop: 16 },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: c.onSurface, marginBottom: 8 },
-  sectionHint: { fontSize: 12, color: c.onSurfaceVariant, marginBottom: 8, marginTop: -4 },
-  fieldErrorText: { fontSize: 11, color: '#ef4444', marginBottom: 8 },
-  shiftCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: c.surface,
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: c.outline,
-    marginBottom: 8,
-  },
-  shiftCardSelected: { borderColor: c.primary, backgroundColor: '#6366f115' },
-  shiftRadio: { marginRight: 12 },
-  shiftInfo: { flex: 1 },
-  shiftName: { fontSize: 14, fontWeight: '700', color: c.onSurface },
-  shiftZone: { fontSize: 12, color: c.onSurfaceVariant, marginTop: 2 },
-  shiftTime: { fontSize: 11, color: c.outline, marginTop: 4 },
-  input: {
-    backgroundColor: c.surface,
-    borderWidth: 1,
-    borderColor: c.outline,
-    borderRadius: 8,
-    padding: 10,
-    fontSize: 14,
-    color: c.onSurface,
-    marginBottom: 12,
-  },
-  textArea: { height: 80, textAlignVertical: 'top' },
-  openSwapBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#8b5cf615',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    marginBottom: 8,
-  },
-  openSwapText: { fontSize: 12, color: '#8b5cf6', fontWeight: '600' },
-  submitButton: {
-    backgroundColor: c.primary,
-    marginHorizontal: 16,
-    marginTop: 8,
-    padding: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  disabledButton: { opacity: 0.5 },
-  submitButtonText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-});
-}
-</file>
-
 <file path="src/screens/ForgotPasswordScreen.tsx">
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -9388,130 +8805,6 @@ export { notificationApi } from './notification';
 export { scheduleApi } from './schedule';
 </file>
 
-<file path="src/api/schedule.ts">
-import api from './client';
-import { ScheduleAssignmentList, StaffAvailabilityRequest, StaffScheduleAssignment } from '../types';
-
-export interface ShiftBid {
-  id: string;
-  staffId: string;
-  assignmentId: string;
-  status: string;
-  note?: string | null;
-  createdAt: string;
-}
-
-export interface ShiftSwap {
-  id: string;
-  requesterStaffId: string;
-  targetStaffId: string | null;
-  requesterAssignmentId: string;
-  targetAssignmentId?: string | null;
-  reason?: string | null;
-  status: string;
-  responseNote?: string | null;
-  reviewedAt?: string | null;
-  createdAt: string;
-}
-
-export const scheduleApi = {
-  getMySchedules: async (from?: string, to?: string): Promise<ScheduleAssignmentList> => {
-    const response = await api.get<ScheduleAssignmentList>('/schedules/me', {
-      params: { from, to },
-    });
-    return response.data;
-  },
-
-  requestAvailability: async (
-    dateFrom: string,
-    dateTo: string,
-    reason?: string,
-  ): Promise<StaffAvailabilityRequest> => {
-    const response = await api.post<StaffAvailabilityRequest>('/schedules/me/availability', {
-      dateFrom,
-      dateTo,
-      reason,
-    });
-    return response.data;
-  },
-
-  getMyAvailability: async (): Promise<StaffAvailabilityRequest[]> => {
-    const response = await api.get<StaffAvailabilityRequest[]>('/schedules/me/availability');
-    return response.data;
-  },
-
-  confirmAssignment: async (id: string): Promise<StaffScheduleAssignment> => {
-    const response = await api.post<StaffScheduleAssignment>(`/schedules/assignments/${id}/confirm`);
-    return response.data;
-  },
-
-  checkIn: async (id: string, lat?: number, lng?: number): Promise<unknown> => {
-    const body: Record<string, unknown> = { method: 'mobile' };
-    if (lat != null && lng != null) {
-      body.lat = lat;
-      body.lng = lng;
-    }
-    const response = await api.post(`/schedules/assignments/${id}/check-in`, body);
-    return response.data;
-  },
-
-  checkOut: async (id: string): Promise<unknown> => {
-    const response = await api.post(`/schedules/assignments/${id}/check-out`, { method: 'mobile' });
-    return response.data;
-  },
-
-  getOpenShifts: async (): Promise<any[]> => {
-    const response = await api.get<any[]>('/schedules/open-shifts');
-    return response.data;
-  },
-
-  createBid: async (assignmentId: string, note?: string): Promise<ShiftBid> => {
-    const response = await api.post<ShiftBid>('/schedules/bids', { assignmentId, note });
-    return response.data;
-  },
-
-  listMyBids: async (status?: string): Promise<ShiftBid[]> => {
-    const response = await api.get<ShiftBid[]>('/schedules/bids', { params: { status } });
-    return response.data;
-  },
-
-  cancelBid: async (id: string): Promise<ShiftBid> => {
-    const response = await api.post<ShiftBid>(`/schedules/bids/${id}/cancel`);
-    return response.data;
-  },
-
-  createSwap: async (data: {
-    targetStaffId?: string;
-    requesterAssignmentId: string;
-    targetAssignmentId?: string;
-    reason?: string;
-  }): Promise<ShiftSwap> => {
-    const response = await api.post<ShiftSwap>('/schedules/swaps', data);
-    return response.data;
-  },
-
-  listMySwaps: async (status?: string): Promise<ShiftSwap[]> => {
-    const response = await api.get<ShiftSwap[]>('/schedules/swaps', { params: { status } });
-    return response.data;
-  },
-
-  respondSwap: async (id: string, action: 'accepted' | 'rejected', responseNote?: string): Promise<ShiftSwap> => {
-    const response = await api.post<ShiftSwap>(`/schedules/swaps/${id}/respond`, { action, responseNote });
-    return response.data;
-  },
-
-  requestManualCheckIn: async (assignmentId: string, reason?: string): Promise<any> => {
-    const response = await api.post('/schedules/attendance/manual-checkin', { assignmentId, reason });
-    return response.data;
-  },
-
-  claimOpenSwap: async (swapId: string): Promise<ShiftSwap> => {
-    const response = await api.post<ShiftSwap>(`/schedules/swaps/${swapId}/claim`);
-    return response.data;
-  },
-};
-</file>
-
 <file path="src/screens/BookRecommendationsScreen.tsx">
 import React, { useCallback, useMemo, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet } from 'react-native';
@@ -9841,484 +9134,6 @@ function createStyles(theme: AppTheme) {
 }
 </file>
 
-<file path="src/screens/MySwapsScreen.tsx">
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-  RefreshControl,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useTheme } from 'react-native-paper';
-import { AppTheme } from '../theme/DarkTheme';
-import { GradientHeader, SectionCard, EmptyState, GRADIENTS } from '../theme/MobileDesignSystem';
-import { LoadingOverlay } from '../components/LoadingOverlay';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import { scheduleApi, ShiftSwap } from '../api/schedule';
-
-export default function MySwapsScreen() {
-  const theme = useTheme() as AppTheme;
-  const c = theme.colors;
-  const styles = useMemo(() => createStyles(theme), [theme]);
-  const navigation = useNavigation<any>();
-  const [swaps, setSwaps] = useState<ShiftSwap[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [respondingId, setRespondingId] = useState<string | null>(null);
-
-  const loadData = useCallback(async () => {
-    try {
-      const result = await scheduleApi.listMySwaps();
-      setSwaps(Array.isArray(result) ? result : []);
-    } catch (err) {
-      console.error('Failed to load swaps:', err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => { loadData(); }, [loadData]);
-
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    loadData();
-  }, [loadData]);
-
-  const handleRespond = async (id: string, action: 'accepted' | 'rejected') => {
-    setRespondingId(id);
-    try {
-      await scheduleApi.respondSwap(id, action);
-      loadData();
-    } catch (err: any) {
-      Alert.alert('Lỗi', err?.response?.data?.error || 'Không thể xử lý');
-    } finally {
-      setRespondingId(null);
-    }
-  };
-
-  if (loading) {
-    return <LoadingOverlay loading message="Đang tải yêu cầu đổi ca..." />;
-  }
-
-  return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-    <ScrollView
-      style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-    >
-      <GradientHeader
-        title="Yêu cầu đổi ca"
-        subtitle={`${swaps.length} yêu cầu`}
-        icon="swap-horizontal"
-        right={
-          <TouchableOpacity activeOpacity={0.7} onPress={() => navigation.navigate('CreateSwap')} style={styles.addButton}>
-            <MaterialCommunityIcons name="plus" size={22} color="#fff" />
-          </TouchableOpacity>
-        }
-      />
-
-      {swaps.length === 0 ? (
-        <EmptyState
-          icon="swap-horizontal"
-          title="Không có yêu cầu đổi ca"
-          description="Bạn chưa có yêu cầu đổi ca nào"
-        />
-      ) : (
-        swaps.map((swap) => {
-          const statusColors: Record<string, string> = {
-            pending: '#f59e0b',
-            accepted: '#10b981',
-            rejected: '#ef4444',
-            cancelled: '#6b7280',
-            expired: '#6b7280',
-          };
-          const statusLabels: Record<string, string> = {
-            pending: 'Chờ xử lý',
-            accepted: 'Chấp nhận',
-            rejected: 'Từ chối',
-            cancelled: 'Đã hủy',
-            expired: 'Hết hạn',
-          };
-          const statusColor = statusColors[swap.status] || '#6b7280';
-          const statusLabel = statusLabels[swap.status] || swap.status;
-          const isOpenSwap = !swap.targetStaffId;
-          return (
-            <View key={swap.id} style={styles.swapCard}>
-              <View style={styles.swapHeader}>
-                <Ionicons name="swap-horizontal" size={20} color={c.primary} />
-                <View style={styles.swapInfo}>
-                  <Text style={styles.swapLabel}>Yêu cầu từ</Text>
-                  <Text style={styles.swapStaff}>{swap.requesterStaffId.slice(0, 8)}...</Text>
-                </View>
-                {isOpenSwap ? (
-                  <View style={styles.swapInfo}>
-                    <Text style={styles.swapLabel}>Đến</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <Ionicons name="globe-outline" size={12} color="#8b5cf6" />
-                      <Text style={[styles.swapStaff, { color: '#8b5cf6' }]}>Mở</Text>
-                    </View>
-                  </View>
-                ) : swap.targetStaffId ? (
-                  <View style={styles.swapInfo}>
-                    <Text style={styles.swapLabel}>Đến</Text>
-                    <Text style={styles.swapStaff}>{swap.targetStaffId.slice(0, 8)}...</Text>
-                  </View>
-                ) : null}
-                <View style={styles.swapStatus}>
-                  <Text style={[styles.swapStatusText, { color: statusColor }]}>{statusLabel}</Text>
-                </View>
-              </View>
-              {swap.reason ? (
-                <Text style={styles.swapReason}>Lý do: {swap.reason}</Text>
-              ) : null}
-              {swap.responseNote ? (
-                <Text style={[styles.swapReason, { color: '#ef4444' }]}>Phản hồi: {swap.responseNote}</Text>
-              ) : null}
-              <View style={styles.swapMeta}>
-                <Text style={styles.swapMetaText}>
-                  Ca: {swap.requesterAssignmentId.slice(0, 8)}... → {swap.targetAssignmentId?.slice(0, 8) || 'chưa chọn'}
-                </Text>
-              </View>
-              <View style={styles.timeline}>
-                <Text style={styles.timelineText}>Tạo: {new Date(swap.createdAt).toLocaleString('vi-VN')}</Text>
-                {swap.reviewedAt ? (
-                  <Text style={styles.timelineText}>
-                    {swap.status === 'accepted' ? 'Chấp nhận' : 'Từ chối'}: {new Date(swap.reviewedAt).toLocaleString('vi-VN')}
-                  </Text>
-                ) : null}
-              </View>
-              {swap.status === 'pending' ? (
-                <View style={styles.actionRow}>
-                  <TouchableOpacity
-                    style={[styles.acceptButton, respondingId === swap.id && styles.disabledButton]}
-                    onPress={() => handleRespond(swap.id, 'accepted')}
-                    disabled={respondingId === swap.id}
-                  >
-                    <Ionicons name="checkmark" size={16} color="#fff" />
-                    <Text style={styles.acceptButtonText}>Chấp nhận</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.rejectButton, respondingId === swap.id && styles.disabledButton]}
-                    onPress={() => handleRespond(swap.id, 'rejected')}
-                    disabled={respondingId === swap.id}
-                  >
-                    <Ionicons name="close" size={16} color="#fff" />
-                    <Text style={styles.rejectButtonText}>Từ chối</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : null}
-            </View>
-          );
-        })
-      )}
-    </ScrollView>
-    </SafeAreaView>
-  );
-}
-
-function createStyles(theme: AppTheme) {
-  const c = theme.colors;
-  return StyleSheet.create({
-    container: { flex: 1, backgroundColor: c.background },
-    addButton: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: c.primary,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    swapCard: {
-      backgroundColor: c.surface,
-      marginHorizontal: 16,
-      marginBottom: 8,
-      padding: 14,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: c.outline,
-    },
-    swapHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    swapInfo: { flex: 1 },
-    swapLabel: { fontSize: 11, color: c.onSurfaceVariant },
-    swapStaff: { fontSize: 14, fontWeight: '600', color: c.onSurface },
-    swapReason: { fontSize: 12, color: c.onSurfaceVariant, marginTop: 8 },
-    swapMeta: { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: c.outline },
-    swapMetaText: { fontSize: 11, color: c.onSurfaceVariant },
-    swapStatus: { alignItems: 'flex-end' },
-    swapStatusText: { fontSize: 11, fontWeight: '700' },
-    actionRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
-    acceptButton: {
-      flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: '#10b981',
-      padding: 10,
-      borderRadius: 8,
-      gap: 4,
-    },
-    rejectButton: {
-      flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: '#ef4444',
-      padding: 10,
-      borderRadius: 8,
-      gap: 4,
-    },
-    disabledButton: { opacity: 0.5 },
-    acceptButtonText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-    rejectButtonText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-    timeline: { marginTop: 6, gap: 2 },
-    timelineText: { fontSize: 10, color: c.outline },
-  });
-}
-</file>
-
-<file path="src/screens/OpenShiftsScreen.tsx">
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-  RefreshControl,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useTheme } from 'react-native-paper';
-import { AppTheme } from '../theme/DarkTheme';
-import { GradientHeader, SectionCard, EmptyState, GRADIENTS } from '../theme/MobileDesignSystem';
-import { LoadingOverlay } from '../components/LoadingOverlay';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { Ionicons } from '@expo/vector-icons';
-import { scheduleApi, ShiftSwap } from '../api/schedule';
-
-interface OpenShift {
-  shift: { id: string; name: string; startTime: string; endTime: string } | null;
-  zone: { id: string; zoneName: string } | null;
-  workDate: string;
-}
-
-export default function OpenShiftsScreen() {
-  const theme = useTheme() as AppTheme;
-  const [shifts, setShifts] = useState<OpenShift[]>([]);
-  const [openSwaps, setOpenSwaps] = useState<ShiftSwap[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [biddingId, setBiddingId] = useState<string | null>(null);
-  const [claimingId, setClaimingId] = useState<string | null>(null);
-
-  const styles = useMemo(() => createStyles(theme), [theme]);
-
-  const loadData = useCallback(async () => {
-    try {
-      const [shiftResult, swapResult] = await Promise.all([
-        scheduleApi.getOpenShifts(),
-        scheduleApi.listMySwaps('pending').catch(() => []),
-      ]);
-      setShifts(Array.isArray(shiftResult) ? shiftResult.slice(0, 30) : []);
-      const openSwapList = Array.isArray(swapResult)
-        ? swapResult.filter((s: ShiftSwap) => !s.targetStaffId && s.status === 'pending')
-        : [];
-      setOpenSwaps(openSwapList);
-    } catch (err) {
-      console.error('Failed to load open shifts:', err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => { loadData(); }, [loadData]);
-
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    loadData();
-  }, [loadData]);
-
-  const handleBid = async (shift: OpenShift) => {
-    if (!shift.shift?.id || !shift.zone?.id) {
-      Alert.alert('Lỗi', 'Thông tin ca không đầy đủ');
-      return;
-    }
-    const key = `${shift.shift?.id}-${shift.zone?.id}-${shift.workDate}`;
-    setBiddingId(key);
-    try {
-      const assignmentResult = await scheduleApi.createBid(shift.shift.id, `Open shift - ${shift.zone?.zoneName} - ${shift.workDate}`);
-      if (assignmentResult && assignmentResult.id) {
-        Alert.alert('Thành công', 'Đã đăng ký ca trống thành công!');
-      } else {
-        Alert.alert('Thành công', 'Đã gửi yêu cầu đăng ký ca trống. Chờ admin duyệt.');
-      }
-      loadData();
-    } catch (err: any) {
-      const msg = err?.response?.data?.error || err?.message || 'Không thể đăng ký';
-      Alert.alert('Lỗi', msg);
-    } finally {
-      setBiddingId(null);
-    }
-  };
-
-  const handleClaimSwap = async (swapId: string) => {
-    setClaimingId(swapId);
-    try {
-      await scheduleApi.claimOpenSwap(swapId);
-      Alert.alert('Thành công', 'Đã nhận yêu cầu đổi ca mở!');
-      loadData();
-    } catch (err: any) {
-      const msg = err?.response?.data?.error || err?.message || 'Không thể nhận yêu cầu đổi ca';
-      Alert.alert('Lỗi', msg);
-    } finally {
-      setClaimingId(null);
-    }
-  };
-
-  if (loading) {
-    return <LoadingOverlay loading message="Đang tải ca trống..." />;
-  }
-
-  return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-    <ScrollView
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-    >
-      <GradientHeader
-        title="Ca trống sắp tới"
-        subtitle={`${shifts.length + openSwaps.length} ca`}
-        icon="clock-outline"
-      />
-
-      {shifts.length === 0 ? (
-        <EmptyState
-          icon="check-circle-outline"
-          title="Không có ca trống"
-          description="Không có ca trống trong 2 tuần tới"
-        />
-      ) : (
-        <SectionCard title="Ca trống" icon="clock-outline" accentColor={GRADIENTS.indigo[0]}>
-        {shifts.map((s, idx) => {
-          const key = `${s.shift?.id}-${s.zone?.id}-${s.workDate}-${idx}`;
-          const isBidding = biddingId === key;
-          return (
-            <View key={key} style={styles.shiftCard}>
-              <View style={styles.shiftInfo}>
-                <Text style={styles.shiftName}>{s.shift?.name || 'Ca'}</Text>
-                <Text style={styles.shiftZone}>{s.zone?.zoneName}</Text>
-                <Text style={styles.shiftTime}>
-                  {new Date(s.workDate + 'T00:00:00').toLocaleDateString('vi-VN', {
-                    weekday: 'short',
-                    day: '2-digit',
-                    month: '2-digit',
-                  })}
-                  {' • '}
-                  {s.shift?.startTime?.slice(0, 5)} — {s.shift?.endTime?.slice(0, 5)}
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={[styles.bidButton, isBidding && styles.disabledButton]}
-                onPress={() => handleBid(s)}
-                disabled={isBidding}
-              >
-                <Ionicons name="hand-left-outline" size={16} color="#fff" />
-                <Text style={styles.bidButtonText}>Đăng ký</Text>
-              </TouchableOpacity>
-            </View>
-          );
-        })}
-        </SectionCard>
-      )}
-
-      {openSwaps.length > 0 ? (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Đổi ca mở</Text>
-          <Text style={styles.sectionHint}>Bất kỳ ai cũng có thể nhận yêu cầu đổi ca này</Text>
-          {openSwaps.map((swap) => (
-            <View key={swap.id} style={styles.shiftCard}>
-              <View style={styles.shiftInfo}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Ionicons name="swap-horizontal" size={16} color="#8b5cf6" />
-                  <Text style={[styles.shiftName, { color: '#8b5cf6' }]}>Đổi ca mở</Text>
-                </View>
-                <Text style={styles.shiftTime}>
-                  Ca: {swap.requesterAssignmentId.slice(0, 8)}... · {new Date(swap.createdAt).toLocaleDateString('vi-VN')}
-                </Text>
-                {swap.reason ? (
-                  <Text style={styles.shiftZone}>Lý do: {swap.reason}</Text>
-                ) : null}
-              </View>
-              <TouchableOpacity
-                style={[styles.claimButton, claimingId === swap.id && styles.disabledButton]}
-                onPress={() => handleClaimSwap(swap.id)}
-                disabled={claimingId === swap.id}
-              >
-                <Ionicons name="hand-right-outline" size={16} color="#fff" />
-                <Text style={styles.bidButtonText}>Nhận</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-        </View>
-      ) : null}
-    </ScrollView>
-    </SafeAreaView>
-  );
-}
-
-function createStyles(theme: AppTheme) {
-  const c = theme.colors;
-  return StyleSheet.create({
-  container: { flex: 1, backgroundColor: c.background },
-  shiftCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: c.surface,
-    marginHorizontal: 16,
-    marginBottom: 8,
-    padding: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: c.outline,
-  },
-  shiftInfo: { flex: 1 },
-  shiftName: { fontSize: 14, fontWeight: '700', color: c.onSurface },
-  shiftZone: { fontSize: 12, color: c.onSurfaceVariant, marginTop: 2 },
-  shiftTime: { fontSize: 11, color: c.outline, marginTop: 4 },
-  bidButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: c.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 4,
-  },
-  disabledButton: { opacity: 0.5 },
-  bidButtonText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  section: { paddingHorizontal: 16, paddingTop: 16 },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: c.onSurface, marginBottom: 4 },
-  sectionHint: { fontSize: 11, color: c.outline, marginBottom: 8 },
-  claimButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#8b5cf6',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 4,
-  },
-});
-}
-</file>
-
 <file path=".env.example">
 # ============================================
 # Library Mobile App - Environment Config
@@ -10341,6 +9156,51 @@ function createStyles(theme: AppTheme) {
 #      docker compose down && docker compose up -d
 
 EXPO_PUBLIC_API_URL=http://192.168.1.166:80/api
+
+# Web frontend URL for 3D tour and other web views
+# Android Emulator: http://10.0.2.2:3000
+# iOS Simulator: http://localhost:3000
+# Real Device (same network): http://<your-pc-ip>:3000
+EXPO_PUBLIC_WEB_URL=http://192.168.1.166:3000
+</file>
+
+<file path="src/api/schedule.ts">
+import api from './client';
+import { ScheduleAssignmentList, StaffScheduleAssignment } from '../types';
+
+export const scheduleApi = {
+  getMySchedules: async (from?: string, to?: string): Promise<ScheduleAssignmentList> => {
+    const response = await api.get<ScheduleAssignmentList>('/schedules/me', {
+      params: { from, to },
+    });
+    return response.data;
+  },
+
+  confirmAssignment: async (id: string): Promise<StaffScheduleAssignment> => {
+    const response = await api.post<StaffScheduleAssignment>(`/schedules/assignments/${id}/confirm`);
+    return response.data;
+  },
+
+  checkIn: async (id: string, lat?: number, lng?: number): Promise<unknown> => {
+    const body: Record<string, unknown> = { method: 'mobile' };
+    if (lat != null && lng != null) {
+      body.lat = lat;
+      body.lng = lng;
+    }
+    const response = await api.post(`/schedules/assignments/${id}/check-in`, body);
+    return response.data;
+  },
+
+  checkOut: async (id: string): Promise<unknown> => {
+    const response = await api.post(`/schedules/assignments/${id}/check-out`, { method: 'mobile' });
+    return response.data;
+  },
+
+  requestManualCheckIn: async (assignmentId: string, reason?: string): Promise<any> => {
+    const response = await api.post('/schedules/attendance/manual-checkin', { assignmentId, reason });
+    return response.data;
+  },
+};
 </file>
 
 <file path="src/screens/ChangePasswordScreen.tsx">
@@ -15133,6 +13993,124 @@ function createStyles(theme: AppTheme) {
 }
 </file>
 
+<file path="src/api/borrow.ts">
+import api from './client';
+import { BorrowResponse, ReturnResponse, BorrowRecord, Book, BookWithStats, BookImportResponse, StaffPatronActiveBorrowsResponse, CreateBorrowSlipRequest, CreateBorrowSlipResponse, LookupBorrowSlipRequest, LookupBorrowSlipResponse, ConfirmBorrowSlipRequest } from '../types';
+
+export interface BookReservation {
+  id: string;
+  book_id: string;
+  patron_id: string;
+  reserved_at: string;
+  expires_at: string;
+  status: string;
+  notified_at: string | null;
+  book: {
+    id: string;
+    isbn: string;
+    title: string;
+    author?: string;
+    cover_url?: string;
+  };
+}
+
+export const getMyReservations = async (): Promise<{ items: BookReservation[]; total: number }> => {
+  const response = await api.get<{ items: BookReservation[]; total: number }>('/borrow/reservations');
+  return response.data;
+};
+
+export const reserveBook = async (bookId: string): Promise<{ message: string; reservation: BookReservation }> => {
+  const response = await api.post<{ message: string; reservation: BookReservation }>('/borrow/reserve', { book_id: bookId });
+  return response.data;
+};
+
+export const cancelReservation = async (reservationId: string): Promise<void> => {
+  await api.delete(`/borrow/reservations/${reservationId}`);
+};
+
+export const borrowApi = {
+  borrowBook: async (barcode: string): Promise<BorrowResponse> => {
+    const response = await api.post<BorrowResponse>('/borrow/', { barcode });
+    return response.data;
+  },
+
+  returnBook: async (barcode: string, note?: string): Promise<ReturnResponse> => {
+    const response = await api.post<ReturnResponse>('/borrow/staff-return', { barcode, note });
+    return response.data;
+  },
+
+  lookupByBarcode: async (barcode: string): Promise<BorrowRecord> => {
+    const response = await api.get<BorrowRecord>(`/borrow/barcode/${encodeURIComponent(barcode)}`);
+    return response.data;
+  },
+
+  getActiveBorrowsByStudentCode: async (studentCode: string): Promise<StaffPatronActiveBorrowsResponse> => {
+    const response = await api.get<StaffPatronActiveBorrowsResponse>(
+      `/borrow/staff/patrons/${encodeURIComponent(studentCode)}/active`,
+    );
+    return response.data;
+  },
+
+  getPatronActiveBorrows: async (): Promise<StaffPatronActiveBorrowsResponse> => {
+    const response = await api.get<StaffPatronActiveBorrowsResponse>('/borrow/patron/active');
+    return response.data;
+  },
+
+  returnByPatron: async (studentCode: string, barcodeOrIsbn: string, note?: string): Promise<ReturnResponse> => {
+    const response = await api.post<ReturnResponse>('/borrow/staff-return/by-patron', {
+      student_code: studentCode,
+      barcode_or_isbn: barcodeOrIsbn,
+      note,
+    });
+    return response.data;
+  },
+
+  getHistory: async (status?: string): Promise<BorrowRecord[]> => {
+    const params = status ? { status_filter: status } : {};
+    const response = await api.get<BorrowRecord[]>('/borrow/history', { params });
+    return response.data;
+  },
+
+  getBooks: async (skip = 0, limit = 50): Promise<Book[]> => {
+    const response = await api.get<{ items: Book[]; total: number } | Book[]>('/borrow/books', {
+      params: { skip, limit },
+    });
+    const data = response.data;
+    return Array.isArray(data) ? data : data.items || [];
+  },
+
+  getBook: async (isbn: string): Promise<BookWithStats> => {
+    const response = await api.get<BookWithStats>(`/borrow/book/${isbn}`);
+    return response.data;
+  },
+
+  lookupBookByIsbn: async (isbn: string): Promise<BookWithStats> => {
+    const response = await api.get<BookWithStats>(`/borrow/book/${isbn}`);
+    return response.data;
+  },
+
+  batchImportByIsbn: async (items: { isbn: string; quantity: number }[]): Promise<BookImportResponse> => {
+    const response = await api.post<BookImportResponse>('/borrow/isbn-import/batch', { items });
+    return response.data;
+  },
+
+  createSlip: async (data: CreateBorrowSlipRequest): Promise<CreateBorrowSlipResponse> => {
+    const response = await api.post<CreateBorrowSlipResponse>('/borrow/staff/slip/create', data);
+    return response.data;
+  },
+
+  lookupBorrowSlip: async (data: LookupBorrowSlipRequest): Promise<LookupBorrowSlipResponse> => {
+    const response = await api.post<LookupBorrowSlipResponse>('/borrow/staff/slip/lookup', data);
+    return response.data;
+  },
+
+  confirmBorrowSlip: async (data: ConfirmBorrowSlipRequest): Promise<CreateBorrowSlipResponse> => {
+    const response = await api.post<CreateBorrowSlipResponse>('/borrow/staff/slip/confirm', data);
+    return response.data;
+  },
+};
+</file>
+
 <file path="src/screens/ScheduleScreen.tsx">
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -15906,32 +14884,7 @@ export default function ScheduleScreen() {
         </View>
       ) : null}
 
-      {/* Action Buttons */}
-      <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: c.surface }}>
-        <TouchableOpacity
-          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: c.primary + '15', paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: c.primary + '30' }}
-          onPress={() => navigation.navigate('Availability')}
-        >
-          <MaterialCommunityIcons name="calendar-remove" size={16} color={c.primary} />
-          <Text style={{ fontSize: 12, fontWeight: '700', color: c.primary }}>Xin nghỉ</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#f59e0b15', paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: '#f59e0b30' }}
-          onPress={() => navigation.navigate('OpenShifts')}
-        >
-          <MaterialCommunityIcons name="clock-outline" size={16} color="#f59e0b" />
-          <Text style={{ fontSize: 12, fontWeight: '700', color: '#f59e0b' }}>Ca trống</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#8b5cf615', paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: '#8b5cf630' }}
-          onPress={() => navigation.navigate('MySwaps')}
-        >
-          <MaterialCommunityIcons name="swap-horizontal" size={16} color="#8b5cf6" />
-          <Text style={{ fontSize: 12, fontWeight: '700', color: '#8b5cf6' }}>Đổi ca</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Content */}
+{/* Content */}
       {loading ? (
         <LoadingOverlay loading message="Đang tải lịch trực..." />
       ) : error ? (
@@ -16007,124 +14960,6 @@ export default function ScheduleScreen() {
     </SafeAreaView>
   );
 }
-</file>
-
-<file path="src/api/borrow.ts">
-import api from './client';
-import { BorrowResponse, ReturnResponse, BorrowRecord, Book, BookWithStats, BookImportResponse, StaffPatronActiveBorrowsResponse, CreateBorrowSlipRequest, CreateBorrowSlipResponse, LookupBorrowSlipRequest, LookupBorrowSlipResponse, ConfirmBorrowSlipRequest } from '../types';
-
-export interface BookReservation {
-  id: string;
-  book_id: string;
-  patron_id: string;
-  reserved_at: string;
-  expires_at: string;
-  status: string;
-  notified_at: string | null;
-  book: {
-    id: string;
-    isbn: string;
-    title: string;
-    author?: string;
-    cover_url?: string;
-  };
-}
-
-export const getMyReservations = async (): Promise<{ items: BookReservation[]; total: number }> => {
-  const response = await api.get<{ items: BookReservation[]; total: number }>('/borrow/reservations');
-  return response.data;
-};
-
-export const reserveBook = async (bookId: string): Promise<{ message: string; reservation: BookReservation }> => {
-  const response = await api.post<{ message: string; reservation: BookReservation }>('/borrow/reserve', { book_id: bookId });
-  return response.data;
-};
-
-export const cancelReservation = async (reservationId: string): Promise<void> => {
-  await api.delete(`/borrow/reservations/${reservationId}`);
-};
-
-export const borrowApi = {
-  borrowBook: async (barcode: string): Promise<BorrowResponse> => {
-    const response = await api.post<BorrowResponse>('/borrow/', { barcode });
-    return response.data;
-  },
-
-  returnBook: async (barcode: string, note?: string): Promise<ReturnResponse> => {
-    const response = await api.post<ReturnResponse>('/borrow/staff-return', { barcode, note });
-    return response.data;
-  },
-
-  lookupByBarcode: async (barcode: string): Promise<BorrowRecord> => {
-    const response = await api.get<BorrowRecord>(`/borrow/barcode/${encodeURIComponent(barcode)}`);
-    return response.data;
-  },
-
-  getActiveBorrowsByStudentCode: async (studentCode: string): Promise<StaffPatronActiveBorrowsResponse> => {
-    const response = await api.get<StaffPatronActiveBorrowsResponse>(
-      `/borrow/staff/patrons/${encodeURIComponent(studentCode)}/active`,
-    );
-    return response.data;
-  },
-
-  getPatronActiveBorrows: async (): Promise<StaffPatronActiveBorrowsResponse> => {
-    const response = await api.get<StaffPatronActiveBorrowsResponse>('/borrow/patron/active');
-    return response.data;
-  },
-
-  returnByPatron: async (studentCode: string, barcodeOrIsbn: string, note?: string): Promise<ReturnResponse> => {
-    const response = await api.post<ReturnResponse>('/borrow/staff-return/by-patron', {
-      student_code: studentCode,
-      barcode_or_isbn: barcodeOrIsbn,
-      note,
-    });
-    return response.data;
-  },
-
-  getHistory: async (status?: string): Promise<BorrowRecord[]> => {
-    const params = status ? { status_filter: status } : {};
-    const response = await api.get<BorrowRecord[]>('/borrow/history', { params });
-    return response.data;
-  },
-
-  getBooks: async (skip = 0, limit = 50): Promise<Book[]> => {
-    const response = await api.get<{ items: Book[]; total: number } | Book[]>('/borrow/books', {
-      params: { skip, limit },
-    });
-    const data = response.data;
-    return Array.isArray(data) ? data : data.items || [];
-  },
-
-  getBook: async (isbn: string): Promise<BookWithStats> => {
-    const response = await api.get<BookWithStats>(`/borrow/book/${isbn}`);
-    return response.data;
-  },
-
-  lookupBookByIsbn: async (isbn: string): Promise<BookWithStats> => {
-    const response = await api.get<BookWithStats>(`/borrow/book/${isbn}`);
-    return response.data;
-  },
-
-  batchImportByIsbn: async (items: { isbn: string; quantity: number }[]): Promise<BookImportResponse> => {
-    const response = await api.post<BookImportResponse>('/borrow/isbn-import/batch', { items });
-    return response.data;
-  },
-
-  createSlip: async (data: CreateBorrowSlipRequest): Promise<CreateBorrowSlipResponse> => {
-    const response = await api.post<CreateBorrowSlipResponse>('/borrow/staff/slip/create', data);
-    return response.data;
-  },
-
-  lookupBorrowSlip: async (data: LookupBorrowSlipRequest): Promise<LookupBorrowSlipResponse> => {
-    const response = await api.post<LookupBorrowSlipResponse>('/borrow/staff/slip/lookup', data);
-    return response.data;
-  },
-
-  confirmBorrowSlip: async (data: ConfirmBorrowSlipRequest): Promise<CreateBorrowSlipResponse> => {
-    const response = await api.post<CreateBorrowSlipResponse>('/borrow/staff/slip/confirm', data);
-    return response.data;
-  },
-};
 </file>
 
 <file path="src/api/auth.ts">
@@ -16530,7 +15365,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
               </Button>
             }
           >
-            <View style={{ gap: 4 }}>
+            <View style={{ gap: 4, marginLeft: 16 }}>
               <Text variant="titleSmall" style={styles.cardTitle}>
                 {nowShift.shift?.name || 'Ca trực'}
               </Text>
@@ -16712,6 +15547,7 @@ function createStyles(theme: AppTheme) {
     },
     mutedText: {
       color: theme.colors.onSurfaceVariant,
+      marginHorizontal: 16
     },
     cardTitle: {
       color: theme.colors.onSurface,
@@ -17020,16 +15856,6 @@ export interface DayCounts {
   [date: string]: number;
 }
 
-export interface StaffAvailabilityRequest {
-  id: string;
-  staffId: string;
-  dateFrom: string;
-  dateTo: string;
-  type: string;
-  reason?: string | null;
-  status: string;
-}
-
 export interface BookWithStats {
   id: string;
   isbn: string;
@@ -17191,10 +16017,6 @@ export type MainStackParamList = {
   Schedule: undefined;
   History: undefined;
   EditProfile: undefined;
-  Availability: undefined;
-  OpenShifts: undefined;
-  MySwaps: undefined;
-  CreateSwap: undefined;
   LibraryTour: undefined;
 };
 
@@ -17208,493 +16030,6 @@ declare global {
     interface RootParamList extends RootStackParamList {}
   }
 }
-</file>
-
-<file path="src/navigation/AppNavigator.tsx">
-import React, { useEffect, useMemo, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
-import { NavigationContainer, DarkTheme as NavigationDarkTheme, DefaultTheme as NavigationDefaultTheme } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { createStackNavigator } from '@react-navigation/stack';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { useTheme } from 'react-native-paper';
-import { useAuth } from '../context/AuthContext';
-import { useNotification } from '../context/NotificationContext';
-
-
-import ChangePasswordScreen from '../screens/ChangePasswordScreen';
-import FaceCameraScreen from '../screens/FaceCameraScreen';
-import FaceLoginScreen from '../screens/FaceLoginScreen';
-import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
-import HistoryScreen from '../screens/HistoryScreen';
-import HomeScreen from '../screens/HomeScreen';
-import ImportBooksScreen from '../screens/ImportBooksScreen';
-import LoginScreen from '../screens/LoginScreen';
-import NotificationScreen from '../screens/NotificationScreen';
-import NotificationDetailScreen from '../screens/NotificationDetailScreen';
-import ProfileScreen from '../screens/ProfileScreen';
-import RegisterScreen from '../screens/RegisterScreen';
-import ReturnScreen from '../screens/ReturnScreen';
-import ScheduleScreen from '../screens/ScheduleScreen';
-import StaffBorrowScreen from '../screens/StaffBorrowScreen';
-import AIChatScreen from '../screens/AIChatScreen';
-import AIHealthScreen from '../screens/AIHealthScreen';
-import BookRecommendationsScreen from '../screens/BookRecommendationsScreen';
-import MyReservationsScreen from '../screens/MyReservationsScreen';
-import BookCatalogScreen from '../screens/BookCatalogScreen';
-import EditProfileScreen from '../screens/EditProfileScreen';
-import AvailabilityScreen from '../screens/AvailabilityScreen';
-import OpenShiftsScreen from '../screens/OpenShiftsScreen';
-import MySwapsScreen from '../screens/MySwapsScreen';
-import CreateSwapScreen from '../screens/CreateSwapScreen';
-import LibraryTourScreen from '../screens/LibraryTourScreen';
-
-import { AuthStackParamList, MainStackParamList, MainTabParamList } from './types';
-
-const AuthStack = createStackNavigator<AuthStackParamList>();
-const MainTab = createBottomTabNavigator<MainTabParamList>();
-const MainStack = createStackNavigator<MainStackParamList>();
-const RootStack = createStackNavigator();
-
-function AuthNavigator() {
-  const theme = useTheme();
-
-  return (
-    <AuthStack.Navigator
-      screenOptions={{
-        headerShown: false,
-        cardStyle: { backgroundColor: theme.colors.background },
-      }}
-    >
-      <AuthStack.Screen name="Login" component={LoginScreen} />
-      <AuthStack.Screen name="Register" component={RegisterScreen} />
-      <AuthStack.Screen
-        name="FaceLogin"
-        component={FaceLoginScreen}
-        options={{
-          headerShown: true,
-          headerTitle: 'Đăng nhập khuôn mặt',
-          headerStyle: { backgroundColor: theme.colors.surface },
-          headerTintColor: theme.colors.onPrimary,
-        }}
-      />
-      <AuthStack.Screen
-        name="ForgotPassword"
-        component={ForgotPasswordScreen}
-        options={{
-          headerShown: false,
-        }}
-      />
-    </AuthStack.Navigator>
-  );
-}
-
-function NotificationsTabIcon({ color, size }: { color: string; size: number }) {
-  const { unreadCount } = useNotification();
-  return (
-    <View>
-      <MaterialCommunityIcons name="bell" size={size} color={color} />
-      {unreadCount > 0 && (
-        <View style={tabBadgeStyles.badge}>
-          <Text style={tabBadgeStyles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
-        </View>
-      )}
-    </View>
-  );
-}
-
-const tabBadgeStyles = StyleSheet.create({
-  badge: {
-    position: 'absolute',
-    top: -4,
-    right: -8,
-    backgroundColor: '#C44E4E',
-    borderRadius: 10,
-    minWidth: 18,
-    height: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
-  badgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-});
-
-function HeaderNotificationButton({ navigation }: { navigation: any }) {
-  const { unreadCount } = useNotification();
-  const theme = useTheme();
-
-  return (
-    <Pressable
-      onPress={() => navigation.navigate('Notifications')}
-      style={({ pressed }) => [
-        {
-          marginRight: 16,
-          opacity: pressed ? 0.7 : 1,
-        },
-      ]}
-    >
-      <View>
-        <MaterialCommunityIcons name="bell" size={24} color={theme.colors.onSurface} />
-        {unreadCount > 0 && (
-          <View style={tabBadgeStyles.badge}>
-            <Text style={tabBadgeStyles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
-          </View>
-        )}
-      </View>
-    </Pressable>
-  );
-}
-
-function MainTabNavigator() {
-  const theme = useTheme();
-  const { user } = useAuth();
-  const isStaffScanner = user?.role === 'admin' || user?.role === 'staff';
-
-  return (
-    <MainTab.Navigator
-      screenOptions={({ navigation }) => ({
-        tabBarStyle: {
-          backgroundColor: theme.colors.surface,
-          borderTopColor: theme.colors.outlineVariant,
-          paddingTop: 6,
-        },
-        tabBarActiveTintColor: theme.colors.primary,
-        tabBarInactiveTintColor: theme.colors.onSurfaceVariant,
-        headerStyle: {
-          backgroundColor: theme.colors.surface,
-        },
-        headerTintColor: theme.colors.onPrimary,
-        headerRight: () => <HeaderNotificationButton navigation={navigation} />,
-      })}
-    >
-      <MainTab.Screen
-        name="Home"
-        component={HomeScreen}
-        options={{
-          title: 'Trang chủ',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="home" size={size} color={color} />
-          ),
-        }}
-      />
-      <MainTab.Screen
-        name="AIChat"
-        component={AIChatScreen}
-        options={{
-          title: 'AI Chat',
-          headerShown: false,
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="robot" size={size} color={color} />
-          ),
-        }}
-      />
-      {!isStaffScanner && (
-        <>
-          <MainTab.Screen
-            name="BookCatalog"
-            component={BookCatalogScreen}
-            options={{
-              title: 'Tìm sách',
-              headerShown: false,
-              tabBarIcon: ({ color, size }) => (
-                <MaterialCommunityIcons name="book-search" size={size} color={color} />
-              ),
-            }}
-          />
-          <MainTab.Screen
-            name="BookRecommendations"
-            component={BookRecommendationsScreen}
-            options={{
-              title: 'Gợi ý',
-              tabBarIcon: ({ color, size }) => (
-                <MaterialCommunityIcons name="lightbulb" size={size} color={color} />
-              ),
-            }}
-          />
-        </>
-      )}
-      <MainTab.Screen
-        name="Profile"
-        component={ProfileScreen}
-        options={{
-          title: 'Hồ sơ',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="account" size={size} color={color} />
-          ),
-        }}
-      />
-    </MainTab.Navigator>
-  );
-}
-
-function MainStackNavigator() {
-  const theme = useTheme();
-
-  return (
-    <MainStack.Navigator
-      screenOptions={{
-        headerStyle: { backgroundColor: theme.colors.surface },
-        headerTintColor: theme.colors.onSurface,
-        cardStyle: { backgroundColor: theme.colors.background },
-      }}
-    >
-      <MainStack.Screen
-        name="MainTabs"
-        component={MainTabNavigator}
-        options={{ headerShown: false }}
-      />
-      <MainStack.Screen
-        name="NotificationDetail"
-        component={NotificationDetailScreen}
-        options={{
-          title: 'Chi tiết thông báo',
-          presentation: 'card',
-        }}
-      />
-      <MainStack.Screen
-        name="FaceCamera"
-        component={FaceCameraScreen}
-        options={{
-          title: 'Cập nhật khuôn mặt',
-          presentation: 'modal',
-        }}
-      />
-      <MainStack.Screen
-        name="ChangePassword"
-        component={ChangePasswordScreen}
-        options={{
-          title: 'Đổi mật khẩu',
-          presentation: 'card',
-        }}
-      />
-      <MainStack.Screen
-        name="ImportBooks"
-        component={ImportBooksScreen}
-        options={{
-          title: 'Nhập sách từ ISBN',
-          presentation: 'card',
-        }}
-      />
-      <MainStack.Screen
-        name="AIHealth"
-        component={AIHealthScreen}
-        options={{
-          title: 'AI Command Center',
-          presentation: 'card',
-        }}
-      />
-      <MainStack.Screen
-        name="BookRecommendations"
-        component={BookRecommendationsScreen}
-        options={{
-          title: 'Gợi sách AI',
-          presentation: 'card',
-        }}
-      />
-      <MainStack.Screen
-        name="MyReservations"
-        component={MyReservationsScreen}
-        options={{
-          title: 'Đặt chỗ của tôi',
-          presentation: 'card',
-        }}
-      />
-      <MainStack.Screen
-        name="BookCatalog"
-        component={BookCatalogScreen}
-        options={{
-          title: 'Mượn sách',
-          presentation: 'card',
-        }}
-      />
-      <MainStack.Screen
-        name="Availability"
-        component={AvailabilityScreen}
-        options={{
-          title: 'Xin nghỉ',
-          presentation: 'card',
-        }}
-      />
-      <MainStack.Screen
-        name="OpenShifts"
-        component={OpenShiftsScreen}
-        options={{
-          title: 'Ca trống',
-          presentation: 'card',
-        }}
-      />
-      <MainStack.Screen
-        name="MySwaps"
-        component={MySwapsScreen}
-        options={{
-          title: 'Đổi ca',
-          presentation: 'card',
-        }}
-      />
-      <MainStack.Screen
-        name="CreateSwap"
-        component={CreateSwapScreen}
-        options={{
-          title: 'Tạo yêu cầu đổi ca',
-          presentation: 'card',
-          headerShown: false,
-        }}
-      />
-      <MainStack.Screen
-        name="Notifications"
-        component={NotificationScreen}
-        options={{
-          title: 'Thông báo',
-          presentation: 'card',
-        }}
-      />
-      <MainStack.Screen
-        name="StaffReturn"
-        component={ReturnScreen}
-        options={{
-          title: 'Trả sách',
-          presentation: 'card',
-        }}
-      />
-      <MainStack.Screen
-        name="StaffBorrow"
-        component={StaffBorrowScreen}
-        options={{
-          title: 'Tạo phiếu mượn',
-          presentation: 'card',
-        }}
-      />
-      <MainStack.Screen
-        name="Schedule"
-        component={ScheduleScreen}
-        options={{
-          title: 'Lịch trực',
-          presentation: 'card',
-        }}
-      />
-      <MainStack.Screen
-        name="History"
-        component={HistoryScreen}
-        options={{
-          title: 'Lịch sử mượn sách',
-          presentation: 'card',
-        }}
-      />
-      <MainStack.Screen
-        name="EditProfile"
-        component={EditProfileScreen}
-        options={{
-          title: 'Chỉnh sửa hồ sơ',
-          presentation: 'card',
-        }}
-      />
-      <MainStack.Screen
-        name="LibraryTour"
-        component={LibraryTourScreen}
-        options={{
-          title: 'Tham quan Thư viện 3D',
-          presentation: 'card',
-          headerShown: true,
-        }}
-      />
-    </MainStack.Navigator>
-  );
-}
-
-export default function AppNavigator() {
-  const theme = useTheme();
-  const { isAuthenticated, isLoading } = useAuth();
-
-  const navigationTheme = useMemo(() => {
-    const base = theme.dark ? NavigationDarkTheme : NavigationDefaultTheme;
-    return {
-      ...base,
-      dark: theme.dark,
-      colors: {
-        ...base.colors,
-        background: theme.colors.background,
-        card: theme.colors.surface,
-        text: theme.colors.onSurface,
-        primary: theme.colors.primary,
-        border: theme.colors.outlineVariant,
-        notification: theme.colors.error,
-      },
-    };
-  }, [theme]);
-
-  if (isLoading) {
-    return <LoadingScreen />;
-  }
-
-  return (
-    <NavigationContainer theme={navigationTheme}>
-      <RootStack.Navigator screenOptions={{ headerShown: false }}>
-        {isAuthenticated ? (
-          <RootStack.Screen name="Main" component={MainStackNavigator} />
-        ) : (
-          <RootStack.Screen name="Auth" component={AuthNavigator} />
-        )}
-      </RootStack.Navigator>
-    </NavigationContainer>
-  );
-}
-
-function LoadingScreen() {
-  const theme = useTheme();
-  const opacity = useRef(new Animated.Value(0.3)).current;
-
-  useEffect(() => {
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 1, duration: 800, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
-      ]),
-    );
-    pulse.start();
-    return () => pulse.stop();
-  }, [opacity]);
-
-  return (
-    <View style={[loadingStyles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={[loadingStyles.logoCircle, { backgroundColor: theme.colors.primary }]}>
-        <Text style={[loadingStyles.logoText, { color: theme.colors.onPrimary }]}>TV</Text>
-      </View>
-      <Animated.Text style={[loadingStyles.brand, { opacity, color: theme.colors.primary }]}>
-        Thư Viện
-      </Animated.Text>
-    </View>
-  );
-}
-
-const loadingStyles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  logoText: {
-    fontSize: 32,
-    fontWeight: '800',
-    letterSpacing: 3,
-  },
-  brand: {
-    fontSize: 20,
-    fontWeight: '600',
-    letterSpacing: 4,
-  },
-});
 </file>
 
 <file path="src/screens/ProfileScreen.tsx">
@@ -18191,6 +16526,457 @@ function createStyles(theme: AppTheme) {
     },
   });
 }
+</file>
+
+<file path="src/navigation/AppNavigator.tsx">
+import React, { useEffect, useMemo, useRef } from 'react';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { NavigationContainer, DarkTheme as NavigationDarkTheme, DefaultTheme as NavigationDefaultTheme } from '@react-navigation/native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createStackNavigator } from '@react-navigation/stack';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { useTheme } from 'react-native-paper';
+import { useAuth } from '../context/AuthContext';
+import { useNotification } from '../context/NotificationContext';
+
+
+import ChangePasswordScreen from '../screens/ChangePasswordScreen';
+import FaceCameraScreen from '../screens/FaceCameraScreen';
+import FaceLoginScreen from '../screens/FaceLoginScreen';
+import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
+import HistoryScreen from '../screens/HistoryScreen';
+import HomeScreen from '../screens/HomeScreen';
+import ImportBooksScreen from '../screens/ImportBooksScreen';
+import LoginScreen from '../screens/LoginScreen';
+import NotificationScreen from '../screens/NotificationScreen';
+import NotificationDetailScreen from '../screens/NotificationDetailScreen';
+import ProfileScreen from '../screens/ProfileScreen';
+import RegisterScreen from '../screens/RegisterScreen';
+import ReturnScreen from '../screens/ReturnScreen';
+import ScheduleScreen from '../screens/ScheduleScreen';
+import StaffBorrowScreen from '../screens/StaffBorrowScreen';
+import AIChatScreen from '../screens/AIChatScreen';
+import AIHealthScreen from '../screens/AIHealthScreen';
+import BookRecommendationsScreen from '../screens/BookRecommendationsScreen';
+import MyReservationsScreen from '../screens/MyReservationsScreen';
+import BookCatalogScreen from '../screens/BookCatalogScreen';
+import EditProfileScreen from '../screens/EditProfileScreen';
+import LibraryTourScreen from '../screens/LibraryTourScreen';
+
+import { AuthStackParamList, MainStackParamList, MainTabParamList } from './types';
+
+const AuthStack = createStackNavigator<AuthStackParamList>();
+const MainTab = createBottomTabNavigator<MainTabParamList>();
+const MainStack = createStackNavigator<MainStackParamList>();
+const RootStack = createStackNavigator();
+
+function AuthNavigator() {
+  const theme = useTheme();
+
+  return (
+    <AuthStack.Navigator
+      screenOptions={{
+        headerShown: false,
+        cardStyle: { backgroundColor: theme.colors.background },
+      }}
+    >
+      <AuthStack.Screen name="Login" component={LoginScreen} />
+      <AuthStack.Screen name="Register" component={RegisterScreen} />
+      <AuthStack.Screen
+        name="FaceLogin"
+        component={FaceLoginScreen}
+        options={{
+          headerShown: true,
+          headerTitle: 'Đăng nhập khuôn mặt',
+          headerStyle: { backgroundColor: theme.colors.surface },
+          headerTintColor: theme.colors.onPrimary,
+        }}
+      />
+      <AuthStack.Screen
+        name="ForgotPassword"
+        component={ForgotPasswordScreen}
+        options={{
+          headerShown: false,
+        }}
+      />
+    </AuthStack.Navigator>
+  );
+}
+
+function NotificationsTabIcon({ color, size }: { color: string; size: number }) {
+  const { unreadCount } = useNotification();
+  return (
+    <View>
+      <MaterialCommunityIcons name="bell" size={size} color={color} />
+      {unreadCount > 0 && (
+        <View style={tabBadgeStyles.badge}>
+          <Text style={tabBadgeStyles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+const tabBadgeStyles = StyleSheet.create({
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -8,
+    backgroundColor: '#C44E4E',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+});
+
+function HeaderNotificationButton({ navigation }: { navigation: any }) {
+  const { unreadCount } = useNotification();
+  const theme = useTheme();
+
+  return (
+    <Pressable
+      onPress={() => navigation.navigate('Notifications')}
+      style={({ pressed }) => [
+        {
+          marginRight: 16,
+          opacity: pressed ? 0.7 : 1,
+        },
+      ]}
+    >
+      <View>
+        <MaterialCommunityIcons name="bell" size={24} color={theme.colors.onSurface} />
+        {unreadCount > 0 && (
+          <View style={tabBadgeStyles.badge}>
+            <Text style={tabBadgeStyles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+          </View>
+        )}
+      </View>
+    </Pressable>
+  );
+}
+
+function MainTabNavigator() {
+  const theme = useTheme();
+  const { user } = useAuth();
+  const isStaffScanner = user?.role === 'admin' || user?.role === 'staff';
+
+  return (
+    <MainTab.Navigator
+      screenOptions={({ navigation }) => ({
+        tabBarStyle: {
+          backgroundColor: theme.colors.surface,
+          borderTopColor: theme.colors.outlineVariant,
+          paddingTop: 6,
+        },
+        tabBarActiveTintColor: theme.colors.primary,
+        tabBarInactiveTintColor: theme.colors.onSurfaceVariant,
+        headerStyle: {
+          backgroundColor: theme.colors.surface,
+        },
+        headerTintColor: theme.colors.onPrimary,
+        headerRight: () => <HeaderNotificationButton navigation={navigation} />,
+      })}
+    >
+      <MainTab.Screen
+        name="Home"
+        component={HomeScreen}
+        options={{
+          title: 'Trang chủ',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="home" size={size} color={color} />
+          ),
+        }}
+      />
+      <MainTab.Screen
+        name="AIChat"
+        component={AIChatScreen}
+        options={{
+          title: 'AI Chat',
+          headerShown: false,
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="robot" size={size} color={color} />
+          ),
+        }}
+      />
+      {!isStaffScanner && (
+        <>
+          <MainTab.Screen
+            name="BookCatalog"
+            component={BookCatalogScreen}
+            options={{
+              title: 'Tìm sách',
+              headerShown: false,
+              tabBarIcon: ({ color, size }) => (
+                <MaterialCommunityIcons name="book-search" size={size} color={color} />
+              ),
+            }}
+          />
+          <MainTab.Screen
+            name="BookRecommendations"
+            component={BookRecommendationsScreen}
+            options={{
+              title: 'Gợi ý',
+              tabBarIcon: ({ color, size }) => (
+                <MaterialCommunityIcons name="lightbulb" size={size} color={color} />
+              ),
+            }}
+          />
+        </>
+      )}
+      <MainTab.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{
+          title: 'Hồ sơ',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="account" size={size} color={color} />
+          ),
+        }}
+      />
+    </MainTab.Navigator>
+  );
+}
+
+function MainStackNavigator() {
+  const theme = useTheme();
+
+  return (
+    <MainStack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: theme.colors.surface },
+        headerTintColor: theme.colors.onSurface,
+        cardStyle: { backgroundColor: theme.colors.background },
+      }}
+    >
+      <MainStack.Screen
+        name="MainTabs"
+        component={MainTabNavigator}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="NotificationDetail"
+        component={NotificationDetailScreen}
+        options={{
+          title: 'Chi tiết thông báo',
+          presentation: 'card',
+        }}
+      />
+      <MainStack.Screen
+        name="FaceCamera"
+        component={FaceCameraScreen}
+        options={{
+          title: 'Cập nhật khuôn mặt',
+          presentation: 'modal',
+        }}
+      />
+      <MainStack.Screen
+        name="ChangePassword"
+        component={ChangePasswordScreen}
+        options={{
+          title: 'Đổi mật khẩu',
+          presentation: 'card',
+        }}
+      />
+      <MainStack.Screen
+        name="ImportBooks"
+        component={ImportBooksScreen}
+        options={{
+          title: 'Nhập sách từ ISBN',
+          presentation: 'card',
+        }}
+      />
+      <MainStack.Screen
+        name="AIHealth"
+        component={AIHealthScreen}
+        options={{
+          title: 'AI Command Center',
+          presentation: 'card',
+        }}
+      />
+      <MainStack.Screen
+        name="BookRecommendations"
+        component={BookRecommendationsScreen}
+        options={{
+          title: 'Gợi sách AI',
+          presentation: 'card',
+        }}
+      />
+      <MainStack.Screen
+        name="MyReservations"
+        component={MyReservationsScreen}
+        options={{
+          title: 'Đặt chỗ của tôi',
+          presentation: 'card',
+        }}
+      />
+      <MainStack.Screen
+        name="BookCatalog"
+        component={BookCatalogScreen}
+        options={{
+          title: 'Mượn sách',
+          presentation: 'card',
+        }}
+      />
+
+      <MainStack.Screen
+        name="Notifications"
+        component={NotificationScreen}
+        options={{
+          title: 'Thông báo',
+          presentation: 'card',
+        }}
+      />
+      <MainStack.Screen
+        name="StaffReturn"
+        component={ReturnScreen}
+        options={{
+          title: 'Trả sách',
+          presentation: 'card',
+        }}
+      />
+      <MainStack.Screen
+        name="StaffBorrow"
+        component={StaffBorrowScreen}
+        options={{
+          title: 'Tạo phiếu mượn',
+          presentation: 'card',
+        }}
+      />
+      <MainStack.Screen
+        name="Schedule"
+        component={ScheduleScreen}
+        options={{
+          title: 'Lịch trực',
+          presentation: 'card',
+        }}
+      />
+      <MainStack.Screen
+        name="History"
+        component={HistoryScreen}
+        options={{
+          title: 'Lịch sử mượn sách',
+          presentation: 'card',
+        }}
+      />
+      <MainStack.Screen
+        name="EditProfile"
+        component={EditProfileScreen}
+        options={{
+          title: 'Chỉnh sửa hồ sơ',
+          presentation: 'card',
+        }}
+      />
+      <MainStack.Screen
+        name="LibraryTour"
+        component={LibraryTourScreen}
+        options={{
+          title: 'Tham quan Thư viện 3D',
+          presentation: 'card',
+          headerShown: true,
+        }}
+      />
+    </MainStack.Navigator>
+  );
+}
+
+export default function AppNavigator() {
+  const theme = useTheme();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  const navigationTheme = useMemo(() => {
+    const base = theme.dark ? NavigationDarkTheme : NavigationDefaultTheme;
+    return {
+      ...base,
+      dark: theme.dark,
+      colors: {
+        ...base.colors,
+        background: theme.colors.background,
+        card: theme.colors.surface,
+        text: theme.colors.onSurface,
+        primary: theme.colors.primary,
+        border: theme.colors.outlineVariant,
+        notification: theme.colors.error,
+      },
+    };
+  }, [theme]);
+
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
+
+  return (
+    <NavigationContainer theme={navigationTheme}>
+      <RootStack.Navigator screenOptions={{ headerShown: false }}>
+        {isAuthenticated ? (
+          <RootStack.Screen name="Main" component={MainStackNavigator} />
+        ) : (
+          <RootStack.Screen name="Auth" component={AuthNavigator} />
+        )}
+      </RootStack.Navigator>
+    </NavigationContainer>
+  );
+}
+
+function LoadingScreen() {
+  const theme = useTheme();
+  const opacity = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
+      ]),
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [opacity]);
+
+  return (
+    <View style={[loadingStyles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[loadingStyles.logoCircle, { backgroundColor: theme.colors.primary }]}>
+        <Text style={[loadingStyles.logoText, { color: theme.colors.onPrimary }]}>TV</Text>
+      </View>
+      <Animated.Text style={[loadingStyles.brand, { opacity, color: theme.colors.primary }]}>
+        Thư Viện
+      </Animated.Text>
+    </View>
+  );
+}
+
+const loadingStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logoCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  logoText: {
+    fontSize: 32,
+    fontWeight: '800',
+    letterSpacing: 3,
+  },
+  brand: {
+    fontSize: 20,
+    fontWeight: '600',
+    letterSpacing: 4,
+  },
+});
 </file>
 
 </files>

@@ -110,7 +110,7 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
 
     try {
       const patronId = patron?.id || user?.id;
-      const response = await aiApi.chat(msg, sessionId, patronId);
+      const response = await aiApi.chat(msg, sessionId, user?.role, patronId);
 
       if (response.sessionId && response.sessionId !== sessionId) {
         setSessionId(response.sessionId);
@@ -152,7 +152,7 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
 
     setLoading(true);
     try {
-      const response = await aiApi.confirm(sessionId, action);
+      const response = await aiApi.confirm(sessionId, action, user?.role);
       const msg: AIMessage = {
         id: Date.now().toString(),
         role: 'assistant',

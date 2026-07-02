@@ -193,7 +193,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
               </Button>
             }
           >
-            <View style={{ gap: 4 }}>
+            <View style={{ gap: 4, marginLeft: 16 }}>
               <Text variant="titleSmall" style={styles.cardTitle}>
                 {nowShift.shift?.name || 'Ca trực'}
               </Text>
@@ -375,6 +375,7 @@ function createStyles(theme: AppTheme) {
     },
     mutedText: {
       color: theme.colors.onSurfaceVariant,
+      marginHorizontal: 16
     },
     cardTitle: {
       color: theme.colors.onSurface,
