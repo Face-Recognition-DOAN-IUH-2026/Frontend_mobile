@@ -8,7 +8,7 @@ export type AuthStackParamList = {
   ForgotPassword: undefined;
 };
 
-export type MainTabParamList = {
+export type PatronTabParamList = {
   Home: undefined;
   AIChat: undefined;
   BookRecommendations: undefined;
@@ -16,17 +16,34 @@ export type MainTabParamList = {
   Profile: undefined;
 };
 
-export type MainStackParamList = {
-  MainTabs: NavigatorScreenParams<MainTabParamList>;
+export type StaffTabParamList = {
+  Home: undefined;
+  AIChat: undefined;
+  Profile: undefined;
+};
+
+export type PatronStackParamList = {
+  MainTabs: NavigatorScreenParams<PatronTabParamList>;
+  NotificationDetail: { notification: Notification };
+  FaceCamera: undefined;
+  ChangePassword: undefined;
+  BookRecommendations: undefined;
+  MyReservations: undefined;
+  BookCatalog: undefined;
+  Notifications: undefined;
+  History: undefined;
+  EditProfile: undefined;
+  LibraryTour: undefined;
+};
+
+export type StaffStackParamList = {
+  MainTabs: NavigatorScreenParams<StaffTabParamList>;
   NotificationDetail: { notification: Notification };
   FaceCamera: undefined;
   ChangePassword: undefined;
   ImportBooks: undefined;
-  AIChat: undefined;
   AIHealth: undefined;
-  BookRecommendations: undefined;
-  MyReservations: undefined;
-  BookCatalog: undefined;
+  AIChat: undefined;
   Notifications: undefined;
   StaffReturn: undefined;
   StaffBorrow: undefined;
@@ -38,7 +55,8 @@ export type MainStackParamList = {
 
 export type RootStackParamList = {
   Auth: NavigatorScreenParams<AuthStackParamList>;
-  Main: NavigatorScreenParams<MainStackParamList>;
+  Patron: NavigatorScreenParams<PatronStackParamList>;
+  Staff: NavigatorScreenParams<StaffStackParamList>;
 };
 
 declare global {
