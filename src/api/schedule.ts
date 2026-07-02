@@ -33,4 +33,9 @@ export const scheduleApi = {
     const response = await api.post('/schedules/attendance/manual-checkin', { assignmentId, reason });
     return response.data;
   },
+
+  deleteAssignment: async (id: string): Promise<{ deleted: boolean; id: string }> => {
+    const response = await api.delete<{ deleted: boolean; id: string }>(`/schedules/assignments/${id}`);
+    return response.data;
+  },
 };

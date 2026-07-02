@@ -20,6 +20,9 @@ import {
 import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
 import { SearchField } from '../../../components/SearchField';
 import { LoadingOverlay } from '../../../components/LoadingOverlay';
+import SwipeReserveRow from '../../../components/SwipeReserveRow';
+import { UndoBar } from '../../../components/UndoBar';
+import { cancelReservation } from '../../../api/borrow';
 
 interface BookCatalogScreenProps {
   navigation: any;
@@ -46,6 +49,7 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
   const [snackMsg, setSnackMsg] = useState('');
   const [snackVisible, setSnackVisible] = useState(false);
   const [reservingId, setReservingId] = useState<string | null>(null);
+  const [lastReservation, setLastReservation] = useState<{ id: string; title: string } | null>(null);
   const { isOnline } = useNetwork();
 
   const [detailVisible, setDetailVisible] = useState(false);
@@ -120,31 +124,52 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
       return;
     }
 
-    Alert.alert(
-      'Đặt chỗ',
-      `Bạn muốn đặt chỗ "${title}"?`,
-      [
-        { text: 'Hủy bỏ', style: 'cancel' },
-        {
-          text: 'Đặt chỗ',
-          onPress: async () => {
-            setReservingId(bookId);
-            try {
-              const result = await reserveBook(bookId);
-              setSnackMsg(result.message || 'Đặt chỗ thành công!');
-              setSnackVisible(true);
-              setDetailVisible(false);
-            } catch (error: any) {
-              const msg = error?.response?.data?.detail || error?.message || 'Không thể đặt chỗ';
-              setSnackMsg(msg);
-              setSnackVisible(true);
-            } finally {
-              setReservingId(null);
-            }
-          },
-        },
-      ]
-    );
+    setReservingId(bookId);
+    try {
+      const result = await reserveBook(bookId);
+      setLastReservation({ id: result.reservation.id, title });
+      setDetailVisible(false);
+    } catch (error: any) {
+      const msg = error?.response?.data?.detail || error?.message || 'Không thể đặt chỗ';
+      setSnackMsg(msg);
+      setSnackVisible(true);
+    } finally {
+      setReservingId(null);
+    }
+  };
+
+  const handleSwipeReserve = async (bookId: string, title: string) => {
+    if (!isOnline) {
+      Alert.alert('Requires Network', 'Reserving books requires an internet connection.');
+      return;
+    }
+
+    setReservingId(bookId);
+    try {
+      const result = await reserveBook(bookId);
+      setLastReservation({ id: result.reservation.id, title });
+    } catch (error: any) {
+      const msg = error?.response?.data?.detail || error?.message || 'Không thể đặt chỗ';
+      setSnackMsg(msg);
+      setSnackVisible(true);
+    } finally {
+      setReservingId(null);
+    }
+  };
+
+  const handleUndoReserve = async () => {
+    if (!lastReservation) return;
+    try {
+      await cancelReservation(lastReservation.id);
+      setSnackMsg(`Đã hủy đặt chỗ "${lastReservation.title}"`);
+      setSnackVisible(true);
+    } catch (error: any) {
+      const msg = error?.response?.data?.detail || error?.message || 'Không thể hủy đặt chỗ';
+      setSnackMsg(msg);
+      setSnackVisible(true);
+    } finally {
+      setLastReservation(null);
+    }
   };
 
   return (
@@ -183,7 +208,8 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
         ) : (
           filtered.map((book) => {
             const spineColor = getSpineColor(book.id);
-            return (
+            const canReserve = (book.available_copies ?? 0) === 0;
+            const card = (
               <SectionCard key={book.id} accentColor={spineColor} style={styles.bookCard}>
                 <View style={styles.bookRow}>
                   {book.cover_url ? (
@@ -207,18 +233,30 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
                     ) : null}
                   </View>
                   <Button
-                    mode={(book.available_copies ?? 0) > 0 ? 'contained' : 'outlined'}
+                    mode={canReserve ? 'outlined' : 'contained'}
                     onPress={() => openDetail(book)}
-                    style={(book.available_copies ?? 0) > 0 ? styles.borrowButton : styles.reserveButton}
+                    style={canReserve ? styles.reserveButton : styles.borrowButton}
                     labelStyle={styles.buttonLabel}
                     compact
                     disabled={reservingId === book.id}
                     loading={reservingId === book.id}
                   >
-                    {(book.available_copies ?? 0) > 0 ? 'Đặt sách' : 'Đặt chỗ'}
+                    {canReserve ? 'Đặt chỗ' : 'Đặt sách'}
                   </Button>
                 </View>
               </SectionCard>
+            );
+
+            return canReserve ? (
+              <SwipeReserveRow
+                key={book.id}
+                onReserve={() => handleSwipeReserve(book.id, book.title)}
+                disabled={reservingId === book.id}
+              >
+                {card}
+              </SwipeReserveRow>
+            ) : (
+              card
             );
           })
         )}
@@ -309,6 +347,13 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
         message={snackMsg}
         severity={snackMsg.includes('thành công') ? 'success' : 'error'}
         onDismiss={() => setSnackVisible(false)}
+      />
+
+      <UndoBar
+        visible={!!lastReservation}
+        message={`Đã đặt chỗ "${lastReservation?.title ?? ''}"`}
+        onUndo={handleUndoReserve}
+        onDismiss={() => setLastReservation(null)}
       />
     </SafeAreaView>
   );

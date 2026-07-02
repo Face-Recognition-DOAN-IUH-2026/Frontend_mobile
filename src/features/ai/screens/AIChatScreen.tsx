@@ -6,7 +6,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AIMessage, AIPendingAction } from '../../../types/ai';
 import { aiApi } from '../../../api/ai';
-import { reserveBook } from '../../../api/borrow';
+import { reserveBook, cancelReservation } from '../../../api/borrow';
 import { useAuth } from '../../../context/AuthContext';
 import { AppTheme } from '../../../theme/DarkTheme';
 import { GradientHeader } from '../../../theme/MobileDesignSystem';
@@ -16,6 +16,8 @@ import ToolResultCard from '../../../components/ai/ToolResultCard';
 import ConfirmDialog from '../../../components/ai/ConfirmDialog';
 import QuickActions from '../../../components/ai/QuickActions';
 import TypingIndicator from '../../../components/ai/TypingIndicator';
+import { UndoBar } from '../../../components/UndoBar';
+import { useNetwork } from '../../../context/NetworkContext';
 
 const SESSION_KEY_PREFIX = 'ai-chat-session';
 const MESSAGES_KEY_PREFIX = 'ai-chat-messages';
@@ -51,6 +53,8 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
   const [pendingAction, setPendingAction] = useState<AIPendingAction | null>(null);
   const [confirmVisible, setConfirmVisible] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+  const { isOnline } = useNetwork();
+  const [lastReservation, setLastReservation] = useState<{ id: string; bookId: string; title: string } | null>(null);
 
   const currentUserId = useMemo(() => patron?.id || user?.id, [patron?.id, user?.id]);
 
@@ -175,34 +179,49 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
   };
 
   const handleReserve = async (bookId: string, title: string) => {
-    Alert.alert('Đặt chỗ', `Bạn muốn đặt chỗ "${title}"?`, [
-      { text: 'Hủy', style: 'cancel' },
-      {
-        text: 'Đặt chỗ',
-        onPress: async () => {
-          try {
-            const result = await reserveBook(bookId);
-            const msg: AIMessage = {
-              id: Date.now().toString(),
-              role: 'assistant',
-              content: result.message || 'Đặt chỗ thành công!',
-              timestamp: new Date(),
-            };
-            addMessage(msg);
-          } catch (error: any) {
-            const msg = error?.response?.data?.detail || error?.message || 'Không thể đặt chỗ';
-            const errMsg: AIMessage = {
-              id: Date.now().toString(),
-              role: 'assistant',
-              content: `Lỗi đặt chỗ: ${msg}`,
-              timestamp: new Date(),
-            };
-            addMessage(errMsg);
-          }
-        },
-      },
-    ]);
+    if (!isOnline) {
+      Alert.alert('Requires Network', 'Reserving books requires an internet connection.');
+      return;
+    }
+    try {
+      const result = await reserveBook(bookId);
+      setLastReservation({ id: result.reservation.id, bookId, title });
+    } catch (error: any) {
+      const msg = error?.response?.data?.detail || error?.message || 'Không thể đặt chỗ';
+      const errMsg: AIMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `Lỗi đặt chỗ: ${msg}`,
+        timestamp: new Date(),
+      };
+      addMessage(errMsg);
+    }
   };
+
+  const handleUndoReserve = useCallback(async () => {
+    if (!lastReservation) return;
+    try {
+      await cancelReservation(lastReservation.id);
+      const msg: AIMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `Đã hủy đặt chỗ "${lastReservation.title}"`,
+        timestamp: new Date(),
+      };
+      addMessage(msg);
+    } catch (error: any) {
+      const msg = error?.response?.data?.detail || error?.message || 'Không thể hủy đặt chỗ';
+      const errMsg: AIMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `Lỗi hủy đặt chỗ: ${msg}`,
+        timestamp: new Date(),
+      };
+      addMessage(errMsg);
+    } finally {
+      setLastReservation(null);
+    }
+  }, [lastReservation, addMessage]);
 
   const renderItem = ({ item }: { item: AIMessage }) => (
     <View>
@@ -340,6 +359,13 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
           onApprove={() => handleConfirm('approve')}
           onReject={() => handleConfirm('reject')}
           onDismiss={() => setConfirmVisible(false)}
+        />
+
+        <UndoBar
+          visible={!!lastReservation}
+          message={`Đã đặt chỗ "${lastReservation?.title ?? ''}"`}
+          onUndo={handleUndoReserve}
+          onDismiss={() => setLastReservation(null)}
         />
       </KeyboardAvoidingView>
     </SafeAreaView>

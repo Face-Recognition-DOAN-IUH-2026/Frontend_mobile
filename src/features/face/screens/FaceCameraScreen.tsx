@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Alert, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AutoFaceCapture from '../../../components/AutoFaceCapture';
+import CameraFallback from '../../../components/CameraFallback';
 import { LoadingOverlay } from '../../../components/LoadingOverlay';
 import { GradientHeader } from '../../../theme/MobileDesignSystem';
 import api from '../../../api/client';
@@ -19,6 +20,7 @@ export default function FaceCameraScreen({ navigation }: FaceCameraScreenProps) 
   const c = theme.colors;
   const { patron } = useAuth();
   const [isUploading, setIsUploading] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
 
   const handleFilesReady = async (images: string[]) => {
     const patronId = patron?.id;
@@ -73,10 +75,19 @@ export default function FaceCameraScreen({ navigation }: FaceCameraScreenProps) 
     <SafeAreaView style={{ flex: 1, backgroundColor: c.background }} edges={['bottom']}>
       <GradientHeader title="Đăng ký khuôn mặt" icon="face-recognition" />
       <View style={{ flex: 1 }}>
-        <AutoFaceCapture
-          onFilesReady={handleFilesReady}
-          onError={(msg) => Alert.alert('Lỗi', msg)}
-        />
+        {cameraError ? (
+          <CameraFallback
+            message={cameraError}
+            onRetry={() => setCameraError(null)}
+            showManualInput={false}
+            showPickImage={false}
+          />
+        ) : (
+          <AutoFaceCapture
+            onFilesReady={handleFilesReady}
+            onError={(msg) => setCameraError(msg)}
+          />
+        )}
         {isUploading ? (
           <View style={{
             position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,

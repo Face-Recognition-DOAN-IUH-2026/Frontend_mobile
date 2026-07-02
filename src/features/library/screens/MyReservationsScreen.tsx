@@ -4,10 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, Surface, Button, useTheme } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useFocusEffect } from '@react-navigation/native';
-import { getMyReservations, cancelReservation, BookReservation } from '../../../api/borrow';
+import { getMyReservations, cancelReservation, reserveBook, BookReservation } from '../../../api/borrow';
 import { AppTheme } from '../../../theme/DarkTheme';
 import { GradientHeader, SectionCard, EmptyState, GRADIENTS } from '../../../theme/MobileDesignSystem';
 import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
+import { UndoBar } from '../../../components/UndoBar';
 import { devError } from '../../../utils/logger';
 import CacheManager from '../../../utils/cache/CacheManager';
 import { CACHE_KEYS, CACHE_TTL } from '../../../utils/cache/CacheKeys';
@@ -27,6 +28,7 @@ export default function MyReservationsScreen({ navigation }: MyReservationsScree
   const [snackMsg, setSnackMsg] = useState('');
   const [snackVisible, setSnackVisible] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [lastCancellation, setLastCancellation] = useState<{ id: string; bookId: string; title: string } | null>(null);
   const { isOnline } = useNetwork();
 
   const loadReservations = useCallback(async (showRefresh = false) => {
@@ -72,33 +74,42 @@ export default function MyReservationsScreen({ navigation }: MyReservationsScree
       Alert.alert('Requires Network', 'Cancelling reservations requires an internet connection.');
       return;
     }
-    
-    Alert.alert(
-      'Hủy đặt chỗ?',
-      `Bạn có chắc muốn hủy đặt chỗ "${reservation.book?.title || 'sách này'}"?`,
-      [
-        { text: 'Hủy bỏ', style: 'cancel' },
-        {
-          text: 'OK',
-          onPress: async () => {
-            setCancellingId(reservation.id);
-            try {
-              await cancelReservation(reservation.id);
-              setReservations((prev) => prev.filter((r) => r.id !== reservation.id));
-              setSnackMsg('Đã hủy đặt chỗ');
-              setSnackVisible(true);
-            } catch (error: any) {
-              const msg = error?.response?.data?.detail || error?.message || 'Không thể hủy đặt chỗ';
-              setSnackMsg(msg);
-              setSnackVisible(true);
-            } finally {
-              setCancellingId(null);
-            }
-          },
-        },
-      ]
-    );
-  }, []);
+
+    setCancellingId(reservation.id);
+    setLastCancellation({ id: reservation.id, bookId: reservation.book_id, title: reservation.book?.title || 'sách này' });
+    setCancellingId(null);
+  }, [isOnline]);
+
+  const handleUndoCancel = useCallback(async () => {
+    if (!lastCancellation || !isOnline) return;
+    try {
+      await reserveBook(lastCancellation.bookId);
+      setSnackMsg(`Đã khôi phục đặt chỗ "${lastCancellation.title}"`);
+      setSnackVisible(true);
+    } catch (error: any) {
+      const msg = error?.response?.data?.detail || error?.message || 'Không thể khôi phục đặt chỗ';
+      setSnackMsg(msg);
+      setSnackVisible(true);
+    } finally {
+      setLastCancellation(null);
+    }
+  }, [lastCancellation, isOnline]);
+
+  const commitCancellation = useCallback(async () => {
+    if (!lastCancellation) return;
+    try {
+      await cancelReservation(lastCancellation.id);
+      setReservations((prev) => prev.filter((r) => r.id !== lastCancellation.id));
+      setSnackMsg(`Đã hủy đặt chỗ "${lastCancellation.title}"`);
+      setSnackVisible(true);
+    } catch (error: any) {
+      const msg = error?.response?.data?.detail || error?.message || 'Không thể hủy đặt chỗ';
+      setSnackMsg(msg);
+      setSnackVisible(true);
+    } finally {
+      setLastCancellation(null);
+    }
+  }, [lastCancellation]);
 
   const getExpiryHours = (expiresAt: string): number => {
     const now = new Date();
@@ -214,6 +225,13 @@ export default function MyReservationsScreen({ navigation }: MyReservationsScree
         message={snackMsg}
         severity={snackMsg.includes('hủy') ? 'success' : 'error'}
         onDismiss={() => setSnackVisible(false)}
+      />
+
+      <UndoBar
+        visible={!!lastCancellation}
+        message={`Đã hủy đặt chỗ "${lastCancellation?.title ?? ''}"`}
+        onUndo={handleUndoCancel}
+        onDismiss={commitCancellation}
       />
     </SafeAreaView>
   );
