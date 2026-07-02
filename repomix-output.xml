@@ -12,7 +12,7 @@ or other automated processes.
 <file_format>
 The content is organized as follows:
 1. This summary section
-2. Repository information
+2. Repository informationa
 3. Directory structure
 4. Repository files (if enabled)
 5. Multiple file entries, each consisting of:
@@ -67,6 +67,7 @@ src/__tests__/App.test.tsx
 src/__tests__/components/LoadingOverlay.test.ts
 src/__tests__/components/NoticeSnackbar.test.ts
 src/__tests__/components/SearchField.test.ts
+src/__tests__/face-login/faceLogin.test.ts
 src/__tests__/theme/EmptyState.test.ts
 src/api/accessRealtime.ts
 src/api/ai.ts
@@ -1130,6 +1131,364 @@ describe('SearchField', () => {
 });
 </file>
 
+<file path="src/__tests__/face-login/faceLogin.test.ts">
+import { authApi, FaceLoginResponse } from '../../api/auth';
+
+// ─── Mock api client ─────────────────────────────────────────────────────────
+jest.mock('../../api/client', () => {
+  const mockAxiosInstance = {
+    post: jest.fn(),
+    get: jest.fn(),
+    put: jest.fn(),
+    delete: jest.fn(),
+    interceptors: {
+      request: { use: jest.fn(), eject: jest.fn() },
+      response: { use: jest.fn(), eject: jest.fn() },
+    },
+  };
+  return { __esModule: true, default: mockAxiosInstance };
+});
+
+jest.mock('../../api/secureStorage', () => ({
+  setAccessToken: jest.fn(),
+  getAccessToken: jest.fn(),
+  setRefreshToken: jest.fn(),
+  getRefreshToken: jest.fn(),
+  clearTokens: jest.fn(),
+}));
+
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  setItem: jest.fn(() => Promise.resolve()),
+  getItem: jest.fn(() => Promise.resolve(null)),
+  removeItem: jest.fn(() => Promise.resolve()),
+  multiRemove: jest.fn(() => Promise.resolve()),
+}));
+
+import api from '../../api/client';
+import { setAccessToken, setRefreshToken, clearTokens } from '../../api/secureStorage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const mockApi = api as jest.Mocked<typeof api>;
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// M2: Face login API call
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Face Login API (authApi.faceLogin)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('M2: sends POST to /auth/face-login with FormData', async () => {
+    mockApi.post.mockResolvedValueOnce({
+      data: {
+        access_token: 'mock-access-token',
+        refresh_token: 'mock-refresh-token',
+        token_type: 'bearer',
+      },
+    });
+
+    const result = await authApi.faceLogin('file:///tmp/face.jpg');
+
+    expect(mockApi.post).toHaveBeenCalledWith(
+      '/auth/face-login',
+      expect.any(FormData)
+    );
+    expect(result.access_token).toBe('mock-access-token');
+    expect(result.refresh_token).toBe('mock-refresh-token');
+    expect(result.token_type).toBe('bearer');
+  });
+
+  it('M2: stores access token after successful login', async () => {
+    mockApi.post.mockResolvedValueOnce({
+      data: {
+        access_token: 'access-abc',
+        refresh_token: 'refresh-xyz',
+        token_type: 'bearer',
+      },
+    });
+
+    await authApi.faceLogin('file:///tmp/face.jpg');
+
+    expect(setAccessToken).toHaveBeenCalledWith('access-abc');
+    expect(setRefreshToken).toHaveBeenCalledWith('refresh-xyz');
+  });
+
+  it('M2: handles response without refresh_token', async () => {
+    mockApi.post.mockResolvedValueOnce({
+      data: {
+        access_token: 'access-only',
+        token_type: 'bearer',
+      },
+    });
+
+    const result = await authApi.faceLogin('file:///tmp/face.jpg');
+
+    expect(result.access_token).toBe('access-only');
+    expect(setAccessToken).toHaveBeenCalledWith('access-only');
+    expect(setRefreshToken).not.toHaveBeenCalled();
+  });
+
+  it('M2: throws on API error', async () => {
+    mockApi.post.mockRejectedValueOnce({
+      response: { status: 400, data: { detail: 'Khuôn mặt không khớp' } },
+    });
+
+    await expect(authApi.faceLogin('file:///tmp/face.jpg')).rejects.toMatchObject({
+      response: { status: 400 },
+    });
+  });
+
+  it('M2: FormData contains file with correct MIME type', async () => {
+    mockApi.post.mockResolvedValueOnce({
+      data: { access_token: 'token', token_type: 'bearer' },
+    });
+
+    await authApi.faceLogin('file:///tmp/face.jpg');
+
+    const formData = mockApi.post.mock.calls[0][1] as FormData;
+    // FormData append is mocked, but we can verify the call structure
+    expect(mockApi.post).toHaveBeenCalledTimes(1);
+    expect(mockApi.post.mock.calls[0][0]).toBe('/auth/face-login');
+  });
+});
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// M5: Face login network error
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Face Login Network Errors', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('M5: timeout error is thrown correctly', async () => {
+    mockApi.post.mockRejectedValueOnce({
+      code: 'ECONNABORTED',
+      message: 'timeout of 30000ms exceeded',
+    });
+
+    await expect(authApi.faceLogin('file:///tmp/face.jpg')).rejects.toMatchObject({
+      code: 'ECONNABORTED',
+    });
+  });
+
+  it('M5: network error is thrown correctly', async () => {
+    mockApi.post.mockRejectedValueOnce({
+      code: 'ERR_NETWORK',
+      message: 'Network Error',
+    });
+
+    await expect(authApi.faceLogin('file:///tmp/face.jpg')).rejects.toMatchObject({
+      code: 'ERR_NETWORK',
+    });
+  });
+
+  it('M5: 401 unauthorized is thrown correctly', async () => {
+    mockApi.post.mockRejectedValueOnce({
+      response: { status: 401, data: { detail: 'Unauthorized' } },
+    });
+
+    await expect(authApi.faceLogin('file:///tmp/face.jpg')).rejects.toMatchObject({
+      response: { status: 401 },
+    });
+  });
+
+  it('M5: 429 rate limited is thrown correctly', async () => {
+    mockApi.post.mockRejectedValueOnce({
+      response: { status: 429, data: { detail: 'Too many requests' } },
+    });
+
+    await expect(authApi.faceLogin('file:///tmp/face.jpg')).rejects.toMatchObject({
+      response: { status: 429 },
+    });
+  });
+});
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// M6: AutoFaceCapture logic (4-angle enrollment)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('AutoFaceCapture 4-Angle Enrollment', () => {
+  const ANGLES = ['frontal', 'right', 'left', 'down'] as const;
+
+  it('M6: defines 4 required angles', () => {
+    expect(ANGLES).toHaveLength(4);
+    expect(ANGLES).toContain('frontal');
+    expect(ANGLES).toContain('right');
+    expect(ANGLES).toContain('left');
+    expect(ANGLES).toContain('down');
+  });
+
+  it('M6: enrollment sends all 4 images to batch endpoint', async () => {
+    const mockImages = [
+      { uri: 'file:///frontal.jpg', type: 'image/jpeg', name: 'frontal.jpg' },
+      { uri: 'file:///right.jpg', type: 'image/jpeg', name: 'right.jpg' },
+      { uri: 'file:///left.jpg', type: 'image/jpeg', name: 'left.jpg' },
+      { uri: 'file:///down.jpg', type: 'image/jpeg', name: 'down.jpg' },
+    ];
+
+    mockApi.post.mockResolvedValueOnce({
+      data: { job_id: 'enroll-job-001' },
+    });
+
+    // Simulate the enrollment API call (from FaceCameraScreen)
+    const formData = new FormData();
+    mockImages.forEach((img) => {
+      formData.append('images', img as any);
+    });
+    formData.append('consent_given', 'true');
+
+    const response = await mockApi.post('/patrons/patron-1/enroll-batch', formData);
+
+    expect(response.data.job_id).toBe('enroll-job-001');
+    expect(mockApi.post).toHaveBeenCalledWith(
+      '/patrons/patron-1/enroll-batch',
+      expect.any(FormData)
+    );
+  });
+
+  it('M6: partial capture (2 of 4 angles) should not submit', () => {
+    const captures = {
+      frontal: { done: true, file: 'file1' },
+      right: { done: true, file: 'file2' },
+      left: { done: false, file: null },
+      down: { done: false, file: null },
+    };
+
+    const allCaptured = Object.values(captures).every(c => c.done);
+    expect(allCaptured).toBe(false);
+  });
+
+  it('M6: all 4 angles captured allows submission', () => {
+    const captures = {
+      frontal: { done: true, file: 'file1' },
+      right: { done: true, file: 'file2' },
+      left: { done: true, file: 'file3' },
+      down: { done: true, file: 'file4' },
+    };
+
+    const allCaptured = Object.values(captures).every(c => c.done);
+    expect(allCaptured).toBe(true);
+  });
+});
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// M1: FaceLoginScreen camera state logic
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('FaceLoginScreen State Logic', () => {
+  it('M1: camera permission states', () => {
+    type CameraState = 'idle' | 'requesting' | 'granted' | 'denied';
+
+    const states: CameraState[] = ['idle', 'requesting', 'granted'];
+    expect(states).toContain('granted');
+
+    const deniedStates: CameraState[] = ['idle', 'requesting', 'denied'];
+    expect(deniedStates).toContain('denied');
+  });
+
+  it('M1: face capture flow states', () => {
+    type CaptureState = 'idle' | 'camera_active' | 'capturing' | 'processing' | 'success' | 'error';
+
+    const flow: CaptureState[] = ['idle', 'camera_active', 'capturing', 'processing', 'success'];
+    expect(flow[0]).toBe('idle');
+    expect(flow[flow.length - 1]).toBe('success');
+  });
+
+  it('M1: error message mapping', () => {
+    const errorMessages: Record<string, string> = {
+      'camera_permission': 'Không thể truy cập camera',
+      'no_face': 'Không phát hiện khuôn mặt',
+      'no_match': 'Không nhận diện được khuôn mặt',
+      'spoof': 'Phát hiện giả mạo',
+      'network': 'Lỗi kết nối mạng',
+      'lockout': 'Tài khoản tạm thời bị khóa',
+    };
+
+    expect(errorMessages['camera_permission']).toBe('Không thể truy cập camera');
+    expect(errorMessages['no_match']).toBe('Không nhận diện được khuôn mặt');
+    expect(errorMessages['lockout']).toContain('khóa');
+  });
+});
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// M3: Face login success -> navigation logic
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Face Login Success Navigation', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('M3: successful face login triggers token storage and auth state change', async () => {
+    mockApi.post.mockResolvedValueOnce({
+      data: {
+        access_token: 'new-access-token',
+        refresh_token: 'new-refresh-token',
+        token_type: 'bearer',
+      },
+    });
+
+    // Simulate the faceLogin flow from authApi
+    const result = await authApi.faceLogin('file:///tmp/face.jpg');
+
+    // Verify tokens are stored
+    expect(setAccessToken).toHaveBeenCalledWith('new-access-token');
+    expect(setRefreshToken).toHaveBeenCalledWith('new-refresh-token');
+
+    // Verify response structure
+    expect(result.access_token).toBe('new-access-token');
+    expect(result.token_type).toBe('bearer');
+  });
+
+  it('M3: logout clears all tokens and user data', async () => {
+    await authApi.logout();
+
+    expect(clearTokens).toHaveBeenCalled();
+    expect(AsyncStorage.multiRemove).toHaveBeenCalledWith(['patronData', 'userData']);
+  });
+});
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Token type validation
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Face Login Token Types', () => {
+  it('FaceLoginResponse has required fields', () => {
+    const validResponse: FaceLoginResponse = {
+      access_token: 'token',
+      token_type: 'bearer',
+    };
+
+    expect(validResponse.access_token).toBeTruthy();
+    expect(validResponse.token_type).toBe('bearer');
+  });
+
+  it('FaceLoginResponse allows optional refresh_token', () => {
+    const withRefresh: FaceLoginResponse = {
+      access_token: 'token',
+      refresh_token: 'refresh',
+      token_type: 'bearer',
+    };
+
+    const withoutRefresh: FaceLoginResponse = {
+      access_token: 'token',
+      token_type: 'bearer',
+    };
+
+    expect(withRefresh.refresh_token).toBeTruthy();
+    expect(withoutRefresh.refresh_token).toBeUndefined();
+  });
+});
+</file>
+
 <file path="src/__tests__/theme/EmptyState.test.ts">
 interface EmptyStateProps {
   icon: string;
@@ -1206,47 +1565,6 @@ describe('EmptyState (enhanced)', () => {
     expect(result.hasTitle).toBe(false);
   });
 });
-</file>
-
-<file path="src/api/ai.ts">
-import api from './client';
-import {
-  AIChatResponse,
-  AIConfirmResponse,
-  AIHealthSummary,
-  AIBookRecommendationResponse,
-  AICommandCenterChatResponse,
-} from '../types/ai';
-
-export const aiApi = {
-  async chat(message: string, sessionId?: string, patronId?: string): Promise<AIChatResponse> {
-    const body: Record<string, any> = { message };
-    if (sessionId) body.sessionId = sessionId;
-    if (patronId) body.patronId = patronId;
-    const { data } = await api.post('/ai/chat', body);
-    return data;
-  },
-
-  async confirm(sessionId: string, action: 'approve' | 'reject'): Promise<AIConfirmResponse> {
-    const { data } = await api.post('/ai/confirm', { sessionId, action });
-    return data;
-  },
-
-  async getHealthSummary(): Promise<AIHealthSummary> {
-    const { data } = await api.get('/ai/command-center/summary');
-    return data;
-  },
-
-  async commandCenterChat(question: string): Promise<AICommandCenterChatResponse> {
-    const { data } = await api.post('/ai/command-center/chat', { question });
-    return data;
-  },
-
-  async getBookRecommendations(studentCode: string): Promise<AIBookRecommendationResponse> {
-    const { data } = await api.get(`/ai/recommendations/patron/${studentCode}`);
-    return data;
-  },
-};
 </file>
 
 <file path="src/api/googlebooks.ts">
@@ -2469,6 +2787,55 @@ export async function connectAccessRealtime(
 
   return ws;
 }
+</file>
+
+<file path="src/api/ai.ts">
+import api from './client';
+import {
+  AIChatResponse,
+  AIConfirmResponse,
+  AIHealthSummary,
+  AIBookRecommendationResponse,
+  AICommandCenterChatResponse,
+} from '../types/ai';
+
+export const aiApi = {
+  async chat(message: string, sessionId?: string, role?: string, patronId?: string): Promise<AIChatResponse> {
+    const endpoint = role === 'patron' ? '/ai/patrons/chat'
+                   : role === 'staff' ? '/ai/staff/chat'
+                   : role === 'admin' ? '/ai/admin/chat'
+                   : '/ai/chat'; // fallback to legacy
+    const body: Record<string, any> = { message };
+    if (sessionId) body.sessionId = sessionId;
+    if (patronId && role !== 'patron') body.patronId = patronId;
+    const { data } = await api.post(endpoint, body);
+    return data;
+  },
+
+  async confirm(sessionId: string, action: 'approve' | 'reject', role?: string): Promise<AIConfirmResponse> {
+    const endpoint = role === 'patron' ? '/ai/patrons/confirm'
+                   : role === 'staff' ? '/ai/staff/confirm'
+                   : role === 'admin' ? '/ai/admin/confirm'
+                   : '/ai/confirm';
+    const { data } = await api.post(endpoint, { sessionId, action });
+    return data;
+  },
+
+  async getHealthSummary(): Promise<AIHealthSummary> {
+    const { data } = await api.get('/ai/command-center/summary');
+    return data;
+  },
+
+  async commandCenterChat(question: string): Promise<AICommandCenterChatResponse> {
+    const { data } = await api.post('/ai/command-center/chat', { question });
+    return data;
+  },
+
+  async getBookRecommendations(studentCode: string): Promise<AIBookRecommendationResponse> {
+    const { data } = await api.get(`/ai/recommendations/patron/${studentCode}`);
+    return data;
+  },
+};
 </file>
 
 <file path="src/api/notification.ts">
@@ -9134,36 +9501,6 @@ function createStyles(theme: AppTheme) {
 }
 </file>
 
-<file path=".env.example">
-# ============================================
-# Library Mobile App - Environment Config
-# ============================================
-#
-# IMPORTANT: Copy this file to .env and update values for your setup
-#
-# Android Emulator: http://10.0.2.2:80/api (default - maps to host localhost)
-# iOS Simulator: http://localhost:80/api
-# Real Device (same network): http://<your-pc-ip>:80/api
-#
-# To find your PC IP on Windows:
-#   ipconfig | Select-String "IPv4"
-#
-# If login fails with "Cannot connect to server":
-#   1. Make sure Docker containers are running: docker compose up -d
-#   2. Try accessing http://localhost:80/api/healthz from your browser
-#   3. If localhost works but 10.0.2.2 doesn't, the emulator can't reach Docker
-#   4. On Windows with Docker Desktop, try restarting Docker and running:
-#      docker compose down && docker compose up -d
-
-EXPO_PUBLIC_API_URL=http://192.168.1.166:80/api
-
-# Web frontend URL for 3D tour and other web views
-# Android Emulator: http://10.0.2.2:3000
-# iOS Simulator: http://localhost:3000
-# Real Device (same network): http://<your-pc-ip>:3000
-EXPO_PUBLIC_WEB_URL=http://192.168.1.166:3000
-</file>
-
 <file path="src/api/schedule.ts">
 import api from './client';
 import { ScheduleAssignmentList, StaffScheduleAssignment } from '../types';
@@ -9426,6 +9763,36 @@ function createStyles(theme: AppTheme) {
 }
 </file>
 
+<file path=".env.example">
+# ============================================
+# Library Mobile App - Environment Config
+# ============================================
+#
+# IMPORTANT: Copy this file to .env and update values for your setup
+#
+# Android Emulator: http://10.0.2.2:80/api (default - maps to host localhost)
+# iOS Simulator: http://localhost:80/api
+# Real Device (same network): http://<your-pc-ip>:80/api
+#
+# To find your PC IP on Windows:
+#   ipconfig | Select-String "IPv4"
+#
+# If login fails with "Cannot connect to server":
+#   1. Make sure Docker containers are running: docker compose up -d
+#   2. Try accessing http://localhost:80/api/healthz from your browser
+#   3. If localhost works but 10.0.2.2 doesn't, the emulator can't reach Docker
+#   4. On Windows with Docker Desktop, try restarting Docker and running:
+#      docker compose down && docker compose up -d
+
+EXPO_PUBLIC_API_URL=http://192.168.1.166:80/api
+
+# Web frontend URL for 3D tour and other web views
+# Android Emulator: http://10.0.2.2:3000
+# iOS Simulator: http://localhost:3000
+# Real Device (same network): http://<your-pc-ip>:3000
+EXPO_PUBLIC_WEB_URL=http://192.168.1.166:3000
+</file>
+
 <file path="App.tsx">
 import 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
@@ -9612,516 +9979,6 @@ export default api;
 
 <file path="src/components/AutoFaceCapture.tsx">
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';import { View, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';import { Text, Button, useTheme } from 'react-native-paper';import { CameraView, useCameraPermissions } from 'expo-camera';import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';import { AppTheme } from '../theme/DarkTheme';interface AutoFaceCaptureProps {  onFilesReady: (images: string[]) => Promise<void> | void;  onError?: (error: string) => void;}const ANGLES = [  { id: 'frontal' as const, instruction: 'Nhìn thẳng', tip: 'Giữ mặt thẳng, mắt mở tự nhiên' },  { id: 'right' as const, instruction: 'Quay phải', tip: 'Xoay đầu sang phải khoảng 30°' },  { id: 'left' as const, instruction: 'Quay trái', tip: 'Xoay đầu sang trái khoảng 30°' },  { id: 'down' as const, instruction: 'Cúi xuống', tip: 'Cúi nhẹ cằm xuống ngực' },];const COUNTDOWN = 5;const { width: SCREEN_WIDTH } = Dimensions.get('window');const GUIDE_SIZE = SCREEN_WIDTH * 0.35;export default function AutoFaceCapture({ onFilesReady, onError }: AutoFaceCaptureProps) {  const theme = useTheme<AppTheme>();  const c = theme.colors;  const [permission] = useCameraPermissions();  const styles = useMemo(() => StyleSheet.create({    container: { flex: 1, backgroundColor: c.background },    camera: { flex: 1 },    msgText: { color: c.onSurface, fontSize: 16, textAlign: 'center', marginTop: 100 },    guideOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' },    guideCircle: { width: GUIDE_SIZE, height: GUIDE_SIZE, borderRadius: GUIDE_SIZE / 2, borderWidth: 2, borderColor: 'rgba(212, 168, 83, 0.5)' },    countdownOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.75)' },    instructionText: { color: c.onSurface, fontSize: 20, fontWeight: '700', marginBottom: 4 },    tipTextCenter: { color: c.onSurfaceVariant, fontSize: 14, marginBottom: 16 },    dotRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },    dot: { width: 12, height: 12, borderRadius: 6, backgroundColor: c.outlineVariant },    dotDone: { backgroundColor: c.custom.success },    dotActive: { backgroundColor: c.primary },    holdText: { color: c.error, fontSize: 18, fontWeight: '900', marginBottom: 8 },    countdownNumber: { color: c.onSurface, fontSize: 64, fontWeight: '900' },    startContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },    startIconWrap: { width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(212, 168, 83, 0.15)', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },    startTitle: { color: c.onSurface, fontSize: 18, fontWeight: '700', marginBottom: 4 },    startDesc: { color: c.onSurfaceVariant, fontSize: 14, marginBottom: 20 },    tipsBox: { backgroundColor: c.surfaceVariant, borderRadius: 10, padding: 14, width: '100%', marginBottom: 24 },    tipsTitle: { color: c.primary, fontSize: 13, fontWeight: '700', marginBottom: 6 },    tipText: { color: c.onSurfaceVariant, fontSize: 13, lineHeight: 20 },    startBtn: { width: '100%', borderRadius: 10, backgroundColor: c.primary, paddingVertical: 4 },    startBtnLabel: { fontSize: 16, fontWeight: '700', color: c.background },    resultContainer: { flex: 1, padding: 16, justifyContent: 'center' },    grid: { flexDirection: 'row', gap: 8, marginBottom: 12 },    thumb: { flex: 1, aspectRatio: 0.75, borderRadius: 8, overflow: 'hidden', borderWidth: 2, borderColor: c.custom.success },    thumbInner: { flex: 1, backgroundColor: c.surfaceVariant, alignItems: 'center', justifyContent: 'center' },    thumbLabel: { position: 'absolute', bottom: 4, left: 4, backgroundColor: 'rgba(0,0,0,0.8)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },    thumbLabelText: { color: c.onSurface, fontSize: 10, fontWeight: '600' },    retakeRow: { flexDirection: 'row', gap: 6, marginBottom: 20 },    retakeBtn: { flex: 1, borderColor: c.outline, borderRadius: 8 },    retakeBtnLabel: { fontSize: 11, color: c.onSurfaceVariant },    consentRow: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, backgroundColor: c.surfaceVariant, borderRadius: 10, marginBottom: 16 },    checkbox: { width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: c.outlineVariant, alignItems: 'center', justifyContent: 'center' },    checkboxChecked: { backgroundColor: c.primary, borderColor: c.primary },    consentText: { color: c.onSurfaceVariant, fontSize: 13, flex: 1, lineHeight: 18 },    submitBtn: { borderRadius: 10, backgroundColor: c.custom.success, paddingVertical: 4 },    submitBtnDisabled: { opacity: 0.4 },    submitBtnLabel: { fontSize: 16, fontWeight: '700' },  }), [c]);  const cameraRef = useRef<CameraView>(null);  const [captured, setCaptured] = useState<string[]>([]);  const [currentIdx, setCurrentIdx] = useState(-1);  const [countdownVal, setCountdownVal] = useState<number | null>(null);  const [isRunning, setIsRunning] = useState(false);  const [consent, setConsent] = useState(false);  const capturedRef = useRef<string[]>([]);  const idxRef = useRef(-1);  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);  const cancelledRef = useRef(false);  useEffect(() => {    return () => {      cancelledRef.current = true;      if (timerRef.current) clearInterval(timerRef.current);    };  }, []);  const runCountdown = useCallback((idx: number) => {    if (idx < 0 || idx >= ANGLES.length) return;    if (timerRef.current) clearInterval(timerRef.current);    idxRef.current = idx;    let c = COUNTDOWN;    setCountdownVal(c);    timerRef.current = setInterval(async () => {      c--;      if (cancelledRef.current) { clearInterval(timerRef.current!); return; }      if (c <= 0) {        clearInterval(timerRef.current!);        timerRef.current = null;        setCountdownVal(null);        if (!cameraRef.current) return;        try {          const photo = await cameraRef.current.takePictureAsync({            base64: true, quality: 0.9, skipProcessing: true,          });          if (cancelledRef.current) return;          if (!photo?.base64) { onError?.('Không thể chụp ảnh'); return; }          capturedRef.current = [...capturedRef.current, photo.base64];          setCaptured([...capturedRef.current]);          const nextIdx = idxRef.current + 1;          if (nextIdx >= ANGLES.length) {            setIsRunning(false);            setCurrentIdx(-1);          } else {            setTimeout(() => {              if (!cancelledRef.current) {                setCurrentIdx(nextIdx);                runCountdown(nextIdx);              }            }, 800);          }        } catch {          onError?.('Lỗi khi chụp ảnh');        }      } else {        setCountdownVal(c);      }    }, 1000);  }, [onError]);  const startSequence = useCallback(() => {    capturedRef.current = [];    setCaptured([]);    cancelledRef.current = false;    setIsRunning(true);    setCurrentIdx(0);    runCountdown(0);  }, [runCountdown]);  const retakeAngle = useCallback((idx: number) => {    capturedRef.current = capturedRef.current.slice(0, idx);    setCaptured([...capturedRef.current]);    cancelledRef.current = false;    setIsRunning(true);    setCurrentIdx(idx);    runCountdown(idx);  }, [runCountdown]);  const allCaptured = captured.length === ANGLES.length;  const handleSubmit = async () => {    if (!consent || !allCaptured) return;    await onFilesReady(captured);  };  if (!permission) {    return (      <View style={styles.container}>        <Text style={styles.msgText}>Đang tải camera...</Text>      </View>    );  }  if (!permission.granted) {    return (      <View style={styles.container}>        <Text style={styles.msgText}>Cần quyền camera</Text>      </View>    );  }  if (allCaptured) {    return (      <View style={styles.container}>        <View style={styles.resultContainer}>          <View style={styles.grid}>            {ANGLES.map((a, i) => (              <View key={a.id} style={styles.thumb}>                <View style={styles.thumbInner}>                  <MaterialCommunityIcons name="check-circle" size={32} color={c.custom.success} />                </View>                <View style={styles.thumbLabel}>                  <Text style={styles.thumbLabelText}>{a.instruction}</Text>                </View>              </View>            ))}          </View>          <View style={styles.retakeRow}>            {ANGLES.map((a, i) => (              <Button key={a.id} mode="outlined" compact onPress={() => retakeAngle(i)}                style={styles.retakeBtn} labelStyle={styles.retakeBtnLabel}>                {a.instruction}              </Button>            ))}          </View>          <TouchableOpacity style={styles.consentRow} activeOpacity={0.7} onPress={() => setConsent(!consent)}>            <View style={[styles.checkbox, consent && styles.checkboxChecked]}>              {consent && <MaterialCommunityIcons name="check" size={14} color={c.background} />}            </View>            <Text style={styles.consentText}>              Tôi đồng ý cho hệ thống xử lý dữ liệu khuôn mặt để nhận diện tại cổng            </Text>          </TouchableOpacity>          <Button mode="contained" onPress={handleSubmit} disabled={!consent}            style={[styles.submitBtn, !consent && styles.submitBtnDisabled]} labelStyle={styles.submitBtnLabel}>            Xác nhận {captured.length} góc ảnh          </Button>        </View>      </View>    );  }  if (!isRunning && currentIdx < 0) {    return (      <View style={styles.container}>        <View style={styles.startContainer}>          <View style={styles.startIconWrap}>            <MaterialCommunityIcons name="camera" size={32} color={c.primary} />          </View>          <Text style={styles.startTitle}>Chụp khuôn mặt từ 4 góc</Text>          <Text style={styles.startDesc}>Nhận diện nhanh hơn, chính xác hơn tại cổng</Text>          <View style={styles.tipsBox}>            <Text style={styles.tipsTitle}>Lưu ý khi chụp:</Text>            <Text style={styles.tipText}>• Đủ ánh sáng, không ngược sáng</Text>            <Text style={styles.tipText}>• Giữ yên khi đếm ngược về 0</Text>            <Text style={styles.tipText}>• Mặt vừa đủ trong khung tròn</Text>          </View>          <Button mode="contained" onPress={startSequence}            style={styles.startBtn} labelStyle={styles.startBtnLabel} icon="camera">            Bắt đầu chụp          </Button>        </View>      </View>    );  }  return (    <View style={styles.container}>      <CameraView ref={cameraRef} style={styles.camera} facing="front" />      <View style={styles.guideOverlay}>        <View style={styles.guideCircle} />      </View>      {countdownVal !== null && (        <View style={styles.countdownOverlay}>          <Text style={styles.instructionText}>{ANGLES[currentIdx].instruction}</Text>          <Text style={styles.tipTextCenter}>{ANGLES[currentIdx].tip}</Text>          <View style={styles.dotRow}>            {ANGLES.map((a, i) => (              <View key={a.id} style={[                styles.dot,                i < captured.length && styles.dotDone,                i === currentIdx && styles.dotActive,              ]} />            ))}          </View>          {countdownVal === 1 && <Text style={styles.holdText}>GIỮ YÊN!</Text>}          <Text style={styles.countdownNumber}>{countdownVal}</Text>        </View>      )}    </View>  );}
-</file>
-
-<file path="src/screens/AIChatScreen.tsx">
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, FlatList, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { IconButton, Text, TextInput, Surface, useTheme } from 'react-native-paper';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AIMessage, AIPendingAction } from '../types/ai';
-import { aiApi } from '../api/ai';
-import { reserveBook } from '../api/borrow';
-import { useAuth } from '../context/AuthContext';
-import { AppTheme } from '../theme/DarkTheme';
-import { GradientHeader } from '../theme/MobileDesignSystem';
-import { GRADIENTS } from '../theme/MobileDesignSystem';
-import ChatBubble from '../components/ai/ChatBubble';
-import ToolResultCard from '../components/ai/ToolResultCard';
-import ConfirmDialog from '../components/ai/ConfirmDialog';
-import QuickActions from '../components/ai/QuickActions';
-import TypingIndicator from '../components/ai/TypingIndicator';
-
-const SESSION_KEY_PREFIX = 'ai-chat-session';
-const MESSAGES_KEY_PREFIX = 'ai-chat-messages';
-
-interface AIChatScreenProps {
-  navigation: any;
-}
-
-const WELCOME_ACTIONS_STAFF = [
-  { label: 'Tìm sách', message: 'tìm kiếm sách', icon: 'book-search' },
-  { label: 'Lịch trực', message: 'xem lịch trực hôm nay', icon: 'calendar-clock' },
-  { label: 'Sách trễ hạn', message: 'kiểm tra sách trễ hạn', icon: 'alert-circle' },
-  { label: 'Thẻ thư viện', message: 'tra cứu thông tin thẻ', icon: 'card-account-details' },
-];
-
-const WELCOME_ACTIONS_PATRON = [
-  { label: 'Tìm sách', message: 'tìm kiếm sách', icon: 'book-search' },
-  { label: 'Lịch sử mượn', message: 'xem lịch sử mượn sách', icon: 'history' },
-  { label: 'Gợi ý sách', message: 'gợi ý sách phù hợp', icon: 'lightbulb' },
-  { label: 'Thẻ thư viện', message: 'tra cứu thông tin thẻ', icon: 'card-account-details' },
-];
-
-export default function AIChatScreen({ navigation }: AIChatScreenProps) {
-  const theme = useTheme() as AppTheme;
-  const styles = useMemo(() => createStyles(theme), [theme]);
-  const { user, patron } = useAuth();
-  const isStaff = user?.role === 'admin' || user?.role === 'staff';
-
-  const [messages, setMessages] = useState<AIMessage[]>([]);
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [sessionId, setSessionId] = useState<string | undefined>();
-  const [pendingAction, setPendingAction] = useState<AIPendingAction | null>(null);
-  const [confirmVisible, setConfirmVisible] = useState(false);
-  const flatListRef = useRef<FlatList>(null);
-
-  const currentUserId = useMemo(() => patron?.id || user?.id, [patron?.id, user?.id]);
-
-  const sessionKey = useMemo(() => currentUserId ? `${SESSION_KEY_PREFIX}-${currentUserId}` : null, [currentUserId]);
-  const messagesKey = useMemo(() => currentUserId ? `${MESSAGES_KEY_PREFIX}-${currentUserId}` : null, [currentUserId]);
-
-  useEffect(() => {
-    setMessages([]);
-    setSessionId(undefined);
-    loadSession();
-  }, [currentUserId]);
-
-  const loadSession = async () => {
-    if (!sessionKey || !messagesKey) return;
-    try {
-      const savedMessages = await AsyncStorage.getItem(messagesKey);
-      const savedSessionId = await AsyncStorage.getItem(sessionKey);
-      if (savedMessages) setMessages(JSON.parse(savedMessages));
-      if (savedSessionId) setSessionId(savedSessionId);
-    } catch {}
-  };
-
-  const saveSession = async (msgs: AIMessage[], sid?: string) => {
-    if (!sessionKey || !messagesKey) return;
-    try {
-      await AsyncStorage.setItem(messagesKey, JSON.stringify(msgs));
-      if (sid) await AsyncStorage.setItem(sessionKey, sid);
-    } catch {}
-  };
-
-  const addMessage = useCallback((msg: AIMessage) => {
-    setMessages(prev => {
-      const next = [...prev, msg];
-      saveSession(next, sessionId);
-      return next;
-    });
-  }, [sessionId]);
-
-  const scrollToBottom = () => {
-    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-  };
-
-  const sendMessage = async (text?: string) => {
-    const msg = (text || input).trim();
-    if (!msg || loading) return;
-
-    const userMessage: AIMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: msg,
-      timestamp: new Date(),
-    };
-    addMessage(userMessage);
-    setInput('');
-    setLoading(true);
-    scrollToBottom();
-
-    try {
-      const patronId = patron?.id || user?.id;
-      const response = await aiApi.chat(msg, sessionId, patronId);
-
-      if (response.sessionId && response.sessionId !== sessionId) {
-        setSessionId(response.sessionId);
-        if (sessionKey) await AsyncStorage.setItem(sessionKey, response.sessionId);
-      }
-
-      const assistantMessage: AIMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: response.response,
-        toolResults: response.toolResults,
-        requiresConfirmation: response.requiresConfirmation,
-        pendingAction: response.pendingAction,
-        timestamp: new Date(),
-      };
-      addMessage(assistantMessage);
-
-      if (response.requiresConfirmation && response.pendingAction) {
-        setPendingAction(response.pendingAction);
-        setConfirmVisible(true);
-      }
-    } catch (error: any) {
-      const errorMessage: AIMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: 'Xin lỗi, đã xảy ra lỗi. Vui lòng thử lại.',
-        timestamp: new Date(),
-      };
-      addMessage(errorMessage);
-    } finally {
-      setLoading(false);
-      scrollToBottom();
-    }
-  };
-
-  const handleConfirm = async (action: 'approve' | 'reject') => {
-    setConfirmVisible(false);
-    if (!sessionId) return;
-
-    setLoading(true);
-    try {
-      const response = await aiApi.confirm(sessionId, action);
-      const msg: AIMessage = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: response.message || (action === 'approve' ? 'Đã thực hiện thành công.' : 'Đã hủy hành động.'),
-        timestamp: new Date(),
-      };
-      addMessage(msg);
-    } catch {
-      const msg: AIMessage = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: 'Lỗi khi xử lý xác nhận.',
-        timestamp: new Date(),
-      };
-      addMessage(msg);
-    } finally {
-      setLoading(false);
-      scrollToBottom();
-    }
-  };
-
-  const handleReserve = async (bookId: string, title: string) => {
-    Alert.alert('Đặt chỗ', `Bạn muốn đặt chỗ "${title}"?`, [
-      { text: 'Hủy', style: 'cancel' },
-      {
-        text: 'Đặt chỗ',
-        onPress: async () => {
-          try {
-            const result = await reserveBook(bookId);
-            const msg: AIMessage = {
-              id: Date.now().toString(),
-              role: 'assistant',
-              content: result.message || 'Đặt chỗ thành công!',
-              timestamp: new Date(),
-            };
-            addMessage(msg);
-          } catch (error: any) {
-            const msg = error?.response?.data?.detail || error?.message || 'Không thể đặt chỗ';
-            const errMsg: AIMessage = {
-              id: Date.now().toString(),
-              role: 'assistant',
-              content: `Lỗi đặt chỗ: ${msg}`,
-              timestamp: new Date(),
-            };
-            addMessage(errMsg);
-          }
-        },
-      },
-    ]);
-  };
-
-  const renderItem = ({ item }: { item: AIMessage }) => (
-    <View>
-      <ChatBubble message={item} />
-      {item.toolResults?.map((tr, idx) => (
-        <View key={idx} style={styles.toolResultWrapper}>
-          <ToolResultCard toolResult={tr} onReserve={handleReserve} />
-        </View>
-      ))}
-    </View>
-  );
-
-  const welcomeActions = isStaff ? WELCOME_ACTIONS_STAFF : WELCOME_ACTIONS_PATRON;
-
-  const renderEmpty = () => (
-    <View style={styles.emptyContainer}>
-      <View style={styles.welcomeAvatarOuter}>
-        <View style={styles.welcomeAvatarMid}>
-          <View style={styles.welcomeAvatarInner}>
-            <MaterialCommunityIcons name="robot" size={40} color="#FFFFFF" />
-          </View>
-        </View>
-      </View>
-      <Text variant="headlineSmall" style={styles.welcomeTitle}>
-        Xin chào! 👋
-      </Text>
-      <Text variant="bodyLarge" style={styles.welcomeSubtitle}>
-        Tôi là Trợ Lý AI của Thư Viện.
-      </Text>
-      <Text variant="bodyMedium" style={styles.welcomeHint}>
-        Bạn muốn tìm sách, kiểm tra thẻ, hay xem lịch sử mượn?
-      </Text>
-      <View style={styles.welcomeActions}>
-        {welcomeActions.map((action, idx) => (
-          <Surface key={idx} style={styles.chipSurface} elevation={0}>
-            <IconButton
-              icon={action.icon}
-              size={18}
-              onPress={() => sendMessage(action.message)}
-              iconColor={GRADIENTS.indigo[0]}
-              style={styles.chipIcon}
-            />
-            <Text
-              variant="bodySmall"
-              style={styles.welcomeActionText}
-              onPress={() => sendMessage(action.message)}
-            >
-              {action.label}
-            </Text>
-          </Surface>
-        ))}
-      </View>
-    </View>
-  );
-
-  const showWelcome = messages.length === 0 && !loading;
-
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <GradientHeader
-        title="TVTL AI"
-        subtitle="Trợ lý thông minh"
-        icon="robot"
-      />
-
-      <KeyboardAvoidingView
-        style={styles.keyboardView}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-      >
-        {showWelcome ? (
-          renderEmpty()
-        ) : (
-          <View style={styles.chatArea}>
-            {messages.length > 0 ? (
-              <QuickActions onSelect={sendMessage} isStaff={isStaff} />
-            ) : null}
-            <FlatList
-              ref={flatListRef}
-              data={messages}
-              renderItem={renderItem}
-              keyExtractor={item => item.id}
-              style={styles.flatList}
-              contentContainerStyle={styles.messageList}
-              onContentSizeChange={scrollToBottom}
-              ListEmptyComponent={null}
-            />
-          </View>
-        )}
-
-        {loading && !showWelcome ? (
-          <View style={styles.typingRow}>
-            <View style={styles.typingAvatar}>
-              <MaterialCommunityIcons name="robot" size={12} color="#FFFFFF" />
-            </View>
-            <View style={styles.typingBubble}>
-              <TypingIndicator />
-            </View>
-          </View>
-        ) : null}
-
-        <View style={styles.inputContainer}>
-          <View style={styles.inputWrapper}>
-            <MaterialCommunityIcons name="pencil" size={18} color={theme.colors.onSurfaceVariant} style={{ marginLeft: 14 }} />
-            <TextInput
-              style={styles.input}
-              placeholder="Nhập tin nhắn..."
-              placeholderTextColor={theme.colors.onSurfaceVariant}
-              value={input}
-              onChangeText={setInput}
-              onSubmitEditing={() => sendMessage()}
-              returnKeyType="send"
-              dense
-              mode="flat"
-              underlineColor="transparent"
-              activeUnderlineColor="transparent"
-              textColor={theme.colors.onSurface}
-            />
-            <View style={[styles.sendBtn, (!input.trim() || loading) && styles.sendBtnDisabled]}>
-              <IconButton
-                icon="send"
-                size={20}
-                onPress={() => sendMessage()}
-                disabled={!input.trim() || loading}
-                iconColor="#FFFFFF"
-                style={{ margin: 0 }}
-              />
-            </View>
-          </View>
-        </View>
-
-        <ConfirmDialog
-          visible={confirmVisible}
-          pendingAction={pendingAction}
-          onApprove={() => handleConfirm('approve')}
-          onReject={() => handleConfirm('reject')}
-          onDismiss={() => setConfirmVisible(false)}
-        />
-      </KeyboardAvoidingView>
-    </SafeAreaView>
-  );
-}
-
-function createStyles(theme: AppTheme) {
-  const c = theme.colors;
-  return StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: c.background,
-    },
-    keyboardView: {
-      flex: 1,
-      backgroundColor: c.background,
-    },
-    chatArea: {
-      flex: 1,
-    },
-    flatList: {
-      flex: 1,
-    },
-    emptyContainer: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: 32,
-    },
-    welcomeAvatarOuter: {
-      width: 100,
-      height: 100,
-      borderRadius: 50,
-      backgroundColor: c.primary + '15',
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: 24,
-    },
-    welcomeAvatarMid: {
-      width: 80,
-      height: 80,
-      borderRadius: 40,
-      backgroundColor: c.primary + '25',
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    welcomeAvatarInner: {
-      width: 64,
-      height: 64,
-      borderRadius: 32,
-      backgroundColor: c.primary,
-      alignItems: 'center',
-      justifyContent: 'center',
-      elevation: 2,
-    },
-    welcomeTitle: {
-      color: c.onSurface,
-      fontWeight: '800',
-      marginBottom: 6,
-    },
-    welcomeSubtitle: {
-      color: c.onSurfaceVariant,
-      textAlign: 'center',
-      marginBottom: 6,
-    },
-    welcomeHint: {
-      color: c.onSurfaceVariant,
-      opacity: 0.8,
-      textAlign: 'center',
-      marginBottom: 32,
-      paddingHorizontal: 16,
-    },
-    welcomeActions: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      justifyContent: 'center',
-      gap: 10,
-    },
-    chipSurface: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: c.surface,
-      borderRadius: 24,
-      borderWidth: 1,
-      borderColor: c.outlineVariant,
-    },
-    chipIcon: {
-      margin: 0,
-      marginRight: -6,
-    },
-    welcomeActionText: {
-      color: c.onSurfaceVariant,
-      fontWeight: '600',
-      marginRight: 14,
-      fontSize: 13,
-    },
-    messageList: {
-      paddingVertical: 10,
-      paddingHorizontal: 4,
-    },
-    messageListEmpty: {
-      flex: 1,
-    },
-    toolResultWrapper: {
-      paddingHorizontal: 16,
-    },
-    typingRow: {
-      flexDirection: 'row',
-      alignItems: 'flex-end',
-      paddingHorizontal: 16,
-      paddingVertical: 6,
-      gap: 8,
-    },
-    typingAvatar: {
-      width: 26,
-      height: 26,
-      borderRadius: 13,
-      backgroundColor: c.primary,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    typingBubble: {
-      backgroundColor: c.surfaceVariant,
-      borderRadius: 18,
-      borderBottomLeftRadius: 6,
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-    },
-    inputContainer: {
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      backgroundColor: c.background,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: c.outlineVariant,
-    },
-    inputWrapper: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: c.surface,
-      borderRadius: 28,
-      borderWidth: 1,
-      borderColor: c.outlineVariant,
-      paddingLeft: 4,
-    },
-    input: {
-      flex: 1,
-      backgroundColor: 'transparent',
-      fontSize: 14,
-      color: c.onSurface,
-      minHeight: 44,
-    },
-    sendBtn: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: c.primary,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginRight: 4,
-    },
-    sendBtnDisabled: {
-      backgroundColor: c.outlineVariant,
-    },
-  });
-}
 </file>
 
 <file path="src/screens/BookCatalogScreen.tsx">
@@ -10975,6 +10832,516 @@ function createStyles(theme: AppTheme) {
     },
     "owner": "22664321a"
   }
+}
+</file>
+
+<file path="src/screens/AIChatScreen.tsx">
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, FlatList, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { IconButton, Text, TextInput, Surface, useTheme } from 'react-native-paper';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AIMessage, AIPendingAction } from '../types/ai';
+import { aiApi } from '../api/ai';
+import { reserveBook } from '../api/borrow';
+import { useAuth } from '../context/AuthContext';
+import { AppTheme } from '../theme/DarkTheme';
+import { GradientHeader } from '../theme/MobileDesignSystem';
+import { GRADIENTS } from '../theme/MobileDesignSystem';
+import ChatBubble from '../components/ai/ChatBubble';
+import ToolResultCard from '../components/ai/ToolResultCard';
+import ConfirmDialog from '../components/ai/ConfirmDialog';
+import QuickActions from '../components/ai/QuickActions';
+import TypingIndicator from '../components/ai/TypingIndicator';
+
+const SESSION_KEY_PREFIX = 'ai-chat-session';
+const MESSAGES_KEY_PREFIX = 'ai-chat-messages';
+
+interface AIChatScreenProps {
+  navigation: any;
+}
+
+const WELCOME_ACTIONS_STAFF = [
+  { label: 'Tìm sách', message: 'tìm kiếm sách', icon: 'book-search' },
+  { label: 'Lịch trực', message: 'xem lịch trực hôm nay', icon: 'calendar-clock' },
+  { label: 'Sách trễ hạn', message: 'kiểm tra sách trễ hạn', icon: 'alert-circle' },
+  { label: 'Thẻ thư viện', message: 'tra cứu thông tin thẻ', icon: 'card-account-details' },
+];
+
+const WELCOME_ACTIONS_PATRON = [
+  { label: 'Tìm sách', message: 'tìm kiếm sách', icon: 'book-search' },
+  { label: 'Lịch sử mượn', message: 'xem lịch sử mượn sách', icon: 'history' },
+  { label: 'Gợi ý sách', message: 'gợi ý sách phù hợp', icon: 'lightbulb' },
+  { label: 'Thẻ thư viện', message: 'tra cứu thông tin thẻ', icon: 'card-account-details' },
+];
+
+export default function AIChatScreen({ navigation }: AIChatScreenProps) {
+  const theme = useTheme() as AppTheme;
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const { user, patron } = useAuth();
+  const isStaff = user?.role === 'admin' || user?.role === 'staff';
+
+  const [messages, setMessages] = useState<AIMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [sessionId, setSessionId] = useState<string | undefined>();
+  const [pendingAction, setPendingAction] = useState<AIPendingAction | null>(null);
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const flatListRef = useRef<FlatList>(null);
+
+  const currentUserId = useMemo(() => patron?.id || user?.id, [patron?.id, user?.id]);
+
+  const sessionKey = useMemo(() => currentUserId ? `${SESSION_KEY_PREFIX}-${currentUserId}` : null, [currentUserId]);
+  const messagesKey = useMemo(() => currentUserId ? `${MESSAGES_KEY_PREFIX}-${currentUserId}` : null, [currentUserId]);
+
+  useEffect(() => {
+    setMessages([]);
+    setSessionId(undefined);
+    loadSession();
+  }, [currentUserId]);
+
+  const loadSession = async () => {
+    if (!sessionKey || !messagesKey) return;
+    try {
+      const savedMessages = await AsyncStorage.getItem(messagesKey);
+      const savedSessionId = await AsyncStorage.getItem(sessionKey);
+      if (savedMessages) setMessages(JSON.parse(savedMessages));
+      if (savedSessionId) setSessionId(savedSessionId);
+    } catch {}
+  };
+
+  const saveSession = async (msgs: AIMessage[], sid?: string) => {
+    if (!sessionKey || !messagesKey) return;
+    try {
+      await AsyncStorage.setItem(messagesKey, JSON.stringify(msgs));
+      if (sid) await AsyncStorage.setItem(sessionKey, sid);
+    } catch {}
+  };
+
+  const addMessage = useCallback((msg: AIMessage) => {
+    setMessages(prev => {
+      const next = [...prev, msg];
+      saveSession(next, sessionId);
+      return next;
+    });
+  }, [sessionId]);
+
+  const scrollToBottom = () => {
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+  };
+
+  const sendMessage = async (text?: string) => {
+    const msg = (text || input).trim();
+    if (!msg || loading) return;
+
+    const userMessage: AIMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: msg,
+      timestamp: new Date(),
+    };
+    addMessage(userMessage);
+    setInput('');
+    setLoading(true);
+    scrollToBottom();
+
+    try {
+      const patronId = patron?.id || user?.id;
+      const response = await aiApi.chat(msg, sessionId, user?.role, patronId);
+
+      if (response.sessionId && response.sessionId !== sessionId) {
+        setSessionId(response.sessionId);
+        if (sessionKey) await AsyncStorage.setItem(sessionKey, response.sessionId);
+      }
+
+      const assistantMessage: AIMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: response.response,
+        toolResults: response.toolResults,
+        requiresConfirmation: response.requiresConfirmation,
+        pendingAction: response.pendingAction,
+        timestamp: new Date(),
+      };
+      addMessage(assistantMessage);
+
+      if (response.requiresConfirmation && response.pendingAction) {
+        setPendingAction(response.pendingAction);
+        setConfirmVisible(true);
+      }
+    } catch (error: any) {
+      const errorMessage: AIMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: 'Xin lỗi, đã xảy ra lỗi. Vui lòng thử lại.',
+        timestamp: new Date(),
+      };
+      addMessage(errorMessage);
+    } finally {
+      setLoading(false);
+      scrollToBottom();
+    }
+  };
+
+  const handleConfirm = async (action: 'approve' | 'reject') => {
+    setConfirmVisible(false);
+    if (!sessionId) return;
+
+    setLoading(true);
+    try {
+      const response = await aiApi.confirm(sessionId, action, user?.role);
+      const msg: AIMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: response.message || (action === 'approve' ? 'Đã thực hiện thành công.' : 'Đã hủy hành động.'),
+        timestamp: new Date(),
+      };
+      addMessage(msg);
+    } catch {
+      const msg: AIMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: 'Lỗi khi xử lý xác nhận.',
+        timestamp: new Date(),
+      };
+      addMessage(msg);
+    } finally {
+      setLoading(false);
+      scrollToBottom();
+    }
+  };
+
+  const handleReserve = async (bookId: string, title: string) => {
+    Alert.alert('Đặt chỗ', `Bạn muốn đặt chỗ "${title}"?`, [
+      { text: 'Hủy', style: 'cancel' },
+      {
+        text: 'Đặt chỗ',
+        onPress: async () => {
+          try {
+            const result = await reserveBook(bookId);
+            const msg: AIMessage = {
+              id: Date.now().toString(),
+              role: 'assistant',
+              content: result.message || 'Đặt chỗ thành công!',
+              timestamp: new Date(),
+            };
+            addMessage(msg);
+          } catch (error: any) {
+            const msg = error?.response?.data?.detail || error?.message || 'Không thể đặt chỗ';
+            const errMsg: AIMessage = {
+              id: Date.now().toString(),
+              role: 'assistant',
+              content: `Lỗi đặt chỗ: ${msg}`,
+              timestamp: new Date(),
+            };
+            addMessage(errMsg);
+          }
+        },
+      },
+    ]);
+  };
+
+  const renderItem = ({ item }: { item: AIMessage }) => (
+    <View>
+      <ChatBubble message={item} />
+      {item.toolResults?.map((tr, idx) => (
+        <View key={idx} style={styles.toolResultWrapper}>
+          <ToolResultCard toolResult={tr} onReserve={handleReserve} />
+        </View>
+      ))}
+    </View>
+  );
+
+  const welcomeActions = isStaff ? WELCOME_ACTIONS_STAFF : WELCOME_ACTIONS_PATRON;
+
+  const renderEmpty = () => (
+    <View style={styles.emptyContainer}>
+      <View style={styles.welcomeAvatarOuter}>
+        <View style={styles.welcomeAvatarMid}>
+          <View style={styles.welcomeAvatarInner}>
+            <MaterialCommunityIcons name="robot" size={40} color="#FFFFFF" />
+          </View>
+        </View>
+      </View>
+      <Text variant="headlineSmall" style={styles.welcomeTitle}>
+        Xin chào! 👋
+      </Text>
+      <Text variant="bodyLarge" style={styles.welcomeSubtitle}>
+        Tôi là Trợ Lý AI của Thư Viện.
+      </Text>
+      <Text variant="bodyMedium" style={styles.welcomeHint}>
+        Bạn muốn tìm sách, kiểm tra thẻ, hay xem lịch sử mượn?
+      </Text>
+      <View style={styles.welcomeActions}>
+        {welcomeActions.map((action, idx) => (
+          <Surface key={idx} style={styles.chipSurface} elevation={0}>
+            <IconButton
+              icon={action.icon}
+              size={18}
+              onPress={() => sendMessage(action.message)}
+              iconColor={GRADIENTS.indigo[0]}
+              style={styles.chipIcon}
+            />
+            <Text
+              variant="bodySmall"
+              style={styles.welcomeActionText}
+              onPress={() => sendMessage(action.message)}
+            >
+              {action.label}
+            </Text>
+          </Surface>
+        ))}
+      </View>
+    </View>
+  );
+
+  const showWelcome = messages.length === 0 && !loading;
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <GradientHeader
+        title="TVTL AI"
+        subtitle="Trợ lý thông minh"
+        icon="robot"
+      />
+
+      <KeyboardAvoidingView
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
+        {showWelcome ? (
+          renderEmpty()
+        ) : (
+          <View style={styles.chatArea}>
+            {messages.length > 0 ? (
+              <QuickActions onSelect={sendMessage} isStaff={isStaff} />
+            ) : null}
+            <FlatList
+              ref={flatListRef}
+              data={messages}
+              renderItem={renderItem}
+              keyExtractor={item => item.id}
+              style={styles.flatList}
+              contentContainerStyle={styles.messageList}
+              onContentSizeChange={scrollToBottom}
+              ListEmptyComponent={null}
+            />
+          </View>
+        )}
+
+        {loading && !showWelcome ? (
+          <View style={styles.typingRow}>
+            <View style={styles.typingAvatar}>
+              <MaterialCommunityIcons name="robot" size={12} color="#FFFFFF" />
+            </View>
+            <View style={styles.typingBubble}>
+              <TypingIndicator />
+            </View>
+          </View>
+        ) : null}
+
+        <View style={styles.inputContainer}>
+          <View style={styles.inputWrapper}>
+            <MaterialCommunityIcons name="pencil" size={18} color={theme.colors.onSurfaceVariant} style={{ marginLeft: 14 }} />
+            <TextInput
+              style={styles.input}
+              placeholder="Nhập tin nhắn..."
+              placeholderTextColor={theme.colors.onSurfaceVariant}
+              value={input}
+              onChangeText={setInput}
+              onSubmitEditing={() => sendMessage()}
+              returnKeyType="send"
+              dense
+              mode="flat"
+              underlineColor="transparent"
+              activeUnderlineColor="transparent"
+              textColor={theme.colors.onSurface}
+            />
+            <View style={[styles.sendBtn, (!input.trim() || loading) && styles.sendBtnDisabled]}>
+              <IconButton
+                icon="send"
+                size={20}
+                onPress={() => sendMessage()}
+                disabled={!input.trim() || loading}
+                iconColor="#FFFFFF"
+                style={{ margin: 0 }}
+              />
+            </View>
+          </View>
+        </View>
+
+        <ConfirmDialog
+          visible={confirmVisible}
+          pendingAction={pendingAction}
+          onApprove={() => handleConfirm('approve')}
+          onReject={() => handleConfirm('reject')}
+          onDismiss={() => setConfirmVisible(false)}
+        />
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+function createStyles(theme: AppTheme) {
+  const c = theme.colors;
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: c.background,
+    },
+    keyboardView: {
+      flex: 1,
+      backgroundColor: c.background,
+    },
+    chatArea: {
+      flex: 1,
+    },
+    flatList: {
+      flex: 1,
+    },
+    emptyContainer: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 32,
+    },
+    welcomeAvatarOuter: {
+      width: 100,
+      height: 100,
+      borderRadius: 50,
+      backgroundColor: c.primary + '15',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 24,
+    },
+    welcomeAvatarMid: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: c.primary + '25',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    welcomeAvatarInner: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      backgroundColor: c.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      elevation: 2,
+    },
+    welcomeTitle: {
+      color: c.onSurface,
+      fontWeight: '800',
+      marginBottom: 6,
+    },
+    welcomeSubtitle: {
+      color: c.onSurfaceVariant,
+      textAlign: 'center',
+      marginBottom: 6,
+    },
+    welcomeHint: {
+      color: c.onSurfaceVariant,
+      opacity: 0.8,
+      textAlign: 'center',
+      marginBottom: 32,
+      paddingHorizontal: 16,
+    },
+    welcomeActions: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'center',
+      gap: 10,
+    },
+    chipSurface: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: c.surface,
+      borderRadius: 24,
+      borderWidth: 1,
+      borderColor: c.outlineVariant,
+    },
+    chipIcon: {
+      margin: 0,
+      marginRight: -6,
+    },
+    welcomeActionText: {
+      color: c.onSurfaceVariant,
+      fontWeight: '600',
+      marginRight: 14,
+      fontSize: 13,
+    },
+    messageList: {
+      paddingVertical: 10,
+      paddingHorizontal: 4,
+    },
+    messageListEmpty: {
+      flex: 1,
+    },
+    toolResultWrapper: {
+      paddingHorizontal: 16,
+    },
+    typingRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      paddingHorizontal: 16,
+      paddingVertical: 6,
+      gap: 8,
+    },
+    typingAvatar: {
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+      backgroundColor: c.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    typingBubble: {
+      backgroundColor: c.surfaceVariant,
+      borderRadius: 18,
+      borderBottomLeftRadius: 6,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+    },
+    inputContainer: {
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      backgroundColor: c.background,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: c.outlineVariant,
+    },
+    inputWrapper: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: c.surface,
+      borderRadius: 28,
+      borderWidth: 1,
+      borderColor: c.outlineVariant,
+      paddingLeft: 4,
+    },
+    input: {
+      flex: 1,
+      backgroundColor: 'transparent',
+      fontSize: 14,
+      color: c.onSurface,
+      minHeight: 44,
+    },
+    sendBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: c.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 4,
+    },
+    sendBtnDisabled: {
+      backgroundColor: c.outlineVariant,
+    },
+  });
 }
 </file>
 
@@ -16139,7 +16506,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,

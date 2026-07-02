@@ -4,6 +4,7 @@ import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Card, Text, useTheme } from 'react-native-paper';
 import { useAuth } from '../../../context/AuthContext';
+import CameraFallback from '../../../components/CameraFallback';
 import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
 import { AppTheme } from '../../../theme/DarkTheme';
 
@@ -17,6 +18,7 @@ export default function FaceLoginScreen({ navigation }: FaceLoginScreenProps) {
   const [permission, requestPermission] = useCameraPermissions();
   const [isCapturing, setIsCapturing] = useState(false);
   const [error, setError] = useState('');
+  const [cameraError, setCameraError] = useState(false);
   const cameraRef = useRef<CameraView>(null);
   const { faceLogin } = useAuth();
 
@@ -61,9 +63,32 @@ export default function FaceLoginScreen({ navigation }: FaceLoginScreenProps) {
     );
   }
 
+  if (cameraError) {
+    return (
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <CameraFallback
+          message="Không thể khởi động camera"
+          onRetry={() => setCameraError(false)}
+          showManualInput
+          manualLabel="Email"
+          manualPlaceholder="Nhập email để đăng nhập..."
+          onManualSubmit={(value) => {
+            navigation.navigate('Login', { prefilledEmail: value });
+          }}
+          showPickImage={false}
+        />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      <CameraView ref={cameraRef} style={styles.camera} facing="front" />
+      <CameraView
+        ref={cameraRef}
+        style={styles.camera}
+        facing="front"
+        onMountError={() => setCameraError(true)}
+      />
       <View style={styles.overlay}>
         <View style={styles.faceGuide}>
           <View style={[styles.guideCorner, styles.topLeft]} />

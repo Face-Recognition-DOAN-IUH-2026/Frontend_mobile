@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet } from 'react-native';
+import { Alert, FlatList, RefreshControl, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, useTheme } from 'react-native-paper';
 import { LoadingOverlay } from '../../../components/LoadingOverlay';
@@ -10,6 +10,11 @@ import { aiApi } from '../../../api/ai';
 import { useAuth } from '../../../context/AuthContext';
 import { AppTheme } from '../../../theme/DarkTheme';
 import BookRecommendationCard from '../../../components/ai/BookRecommendationCard';
+import SwipeReserveRow from '../../../components/SwipeReserveRow';
+import { UndoBar } from '../../../components/UndoBar';
+import { reserveBook, cancelReservation } from '../../../api/borrow';
+import { useNetwork } from '../../../context/NetworkContext';
+import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
 
 interface BookRecommendationsScreenProps {
   navigation: any;
@@ -19,10 +24,15 @@ export default function BookRecommendationsScreen({ navigation }: BookRecommenda
   const theme = useTheme() as AppTheme;
   const styles = useMemo(() => createStyles(theme), [theme]);
   const { patron } = useAuth();
+  const { isOnline } = useNetwork();
   const [recommendations, setRecommendations] = useState<AIBookRecommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reservingId, setReservingId] = useState<string | null>(null);
+  const [lastReservation, setLastReservation] = useState<{ id: string; title: string } | null>(null);
+  const [snackMsg, setSnackMsg] = useState('');
+  const [snackVisible, setSnackVisible] = useState(false);
 
   const loadData = async () => {
     const studentCode = patron?.student_code || patron?.studentCode;
@@ -54,6 +64,40 @@ export default function BookRecommendationsScreen({ navigation }: BookRecommenda
     loadData();
   };
 
+  const handleSwipeReserve = async (bookId: string, title: string) => {
+    if (!isOnline) {
+      Alert.alert('Requires Network', 'Reserving books requires an internet connection.');
+      return;
+    }
+
+    setReservingId(bookId);
+    try {
+      const result = await reserveBook(bookId);
+      setLastReservation({ id: result.reservation.id, title });
+    } catch (error: any) {
+      const msg = error?.response?.data?.detail || error?.message || 'Không thể đặt chỗ';
+      setSnackMsg(msg);
+      setSnackVisible(true);
+    } finally {
+      setReservingId(null);
+    }
+  };
+
+  const handleUndoReserve = async () => {
+    if (!lastReservation) return;
+    try {
+      await cancelReservation(lastReservation.id);
+      setSnackMsg(`Đã hủy đặt chỗ "${lastReservation.title}"`);
+      setSnackVisible(true);
+    } catch (error: any) {
+      const msg = error?.response?.data?.detail || error?.message || 'Không thể hủy đặt chỗ';
+      setSnackMsg(msg);
+      setSnackVisible(true);
+    } finally {
+      setLastReservation(null);
+    }
+  };
+
   if (loading) {
     return <LoadingOverlay loading message="Đang tải gợi ý sách..." />;
   }
@@ -62,9 +106,17 @@ export default function BookRecommendationsScreen({ navigation }: BookRecommenda
     return <EmptyState icon="alert-circle" title="Lỗi" description={error} />;
   }
 
-  const renderItem = ({ item }: { item: AIBookRecommendation }) => (
-    <BookRecommendationCard recommendation={item} />
-  );
+  const renderItem = ({ item }: { item: AIBookRecommendation }) => {
+    const card = <BookRecommendationCard recommendation={item} />;
+    return (
+      <SwipeReserveRow
+        onReserve={() => handleSwipeReserve(item.book_id, item.title)}
+        disabled={reservingId === item.book_id}
+      >
+        {card}
+      </SwipeReserveRow>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -82,6 +134,20 @@ export default function BookRecommendationsScreen({ navigation }: BookRecommenda
           />
         }
         ListEmptyComponent={<EmptyState icon="book-off" title="Chưa có gợi ý nào" />}
+      />
+
+      <NoticeSnackbar
+        visible={snackVisible}
+        message={snackMsg}
+        severity={snackMsg.includes('thành công') || snackMsg.includes('hủy') ? 'success' : 'error'}
+        onDismiss={() => setSnackVisible(false)}
+      />
+
+      <UndoBar
+        visible={!!lastReservation}
+        message={`Đã đặt chỗ "${lastReservation?.title ?? ''}"`}
+        onUndo={handleUndoReserve}
+        onDismiss={() => setLastReservation(null)}
       />
     </SafeAreaView>
   );
