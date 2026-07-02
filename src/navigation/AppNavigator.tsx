@@ -9,34 +9,37 @@ import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 
 
-import ChangePasswordScreen from '../screens/ChangePasswordScreen';
-import FaceCameraScreen from '../screens/FaceCameraScreen';
-import FaceLoginScreen from '../screens/FaceLoginScreen';
-import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
-import HistoryScreen from '../screens/HistoryScreen';
-import HomeScreen from '../screens/HomeScreen';
-import ImportBooksScreen from '../screens/ImportBooksScreen';
-import LoginScreen from '../screens/LoginScreen';
-import NotificationScreen from '../screens/NotificationScreen';
-import NotificationDetailScreen from '../screens/NotificationDetailScreen';
-import ProfileScreen from '../screens/ProfileScreen';
-import RegisterScreen from '../screens/RegisterScreen';
-import ReturnScreen from '../screens/ReturnScreen';
-import ScheduleScreen from '../screens/ScheduleScreen';
-import StaffBorrowScreen from '../screens/StaffBorrowScreen';
-import AIChatScreen from '../screens/AIChatScreen';
-import AIHealthScreen from '../screens/AIHealthScreen';
-import BookRecommendationsScreen from '../screens/BookRecommendationsScreen';
-import MyReservationsScreen from '../screens/MyReservationsScreen';
-import BookCatalogScreen from '../screens/BookCatalogScreen';
-import EditProfileScreen from '../screens/EditProfileScreen';
-import LibraryTourScreen from '../screens/LibraryTourScreen';
+import ChangePasswordScreen from '../features/profile/screens/ChangePasswordScreen';
+import FaceCameraScreen from '../features/face/screens/FaceCameraScreen';
+import FaceLoginScreen from '../features/auth/screens/FaceLoginScreen';
+import ForgotPasswordScreen from '../features/auth/screens/ForgotPasswordScreen';
+import HistoryScreen from '../features/history/screens/HistoryScreen';
+import HomeScreen from '../features/home/screens/HomeScreen';
+import ImportBooksScreen from '../features/import/screens/ImportBooksScreen';
+import LoginScreen from '../features/auth/screens/LoginScreen';
+import NotificationScreen from '../features/notifications/screens/NotificationScreen';
+import NotificationDetailScreen from '../features/notifications/screens/NotificationDetailScreen';
+import ProfileScreen from '../features/profile/screens/ProfileScreen';
+import RegisterScreen from '../features/auth/screens/RegisterScreen';
+import ReturnScreen from '../features/borrow/screens/ReturnScreen';
+import ScheduleScreen from '../features/schedule/screens/ScheduleScreen';
+import StaffBorrowScreen from '../features/borrow/screens/StaffBorrowScreen';
+import AIChatScreen from '../features/ai/screens/AIChatScreen';
+import AIHealthScreen from '../features/ai/screens/AIHealthScreen';
+import BookRecommendationsScreen from '../features/book/screens/BookRecommendationsScreen';
+import MyReservationsScreen from '../features/library/screens/MyReservationsScreen';
+import BookCatalogScreen from '../features/book/screens/BookCatalogScreen';
+import EditProfileScreen from '../features/profile/screens/EditProfileScreen';
+import LibraryTourScreen from '../features/library/screens/LibraryTourScreen';
+import ReauthModal from '../components/ReauthModal';
 
-import { AuthStackParamList, MainStackParamList, MainTabParamList } from './types';
+import { AuthStackParamList, PatronStackParamList, StaffStackParamList, PatronTabParamList, StaffTabParamList } from './types';
 
 const AuthStack = createStackNavigator<AuthStackParamList>();
-const MainTab = createBottomTabNavigator<MainTabParamList>();
-const MainStack = createStackNavigator<MainStackParamList>();
+const PatronTab = createBottomTabNavigator<PatronTabParamList>();
+const StaffTab = createBottomTabNavigator<StaffTabParamList>();
+const PatronStack = createStackNavigator<PatronStackParamList>();
+const StaffStack = createStackNavigator<StaffStackParamList>();
 const RootStack = createStackNavigator();
 
 function AuthNavigator() {
@@ -132,13 +135,11 @@ function HeaderNotificationButton({ navigation }: { navigation: any }) {
   );
 }
 
-function MainTabNavigator() {
+function PatronTabNavigator() {
   const theme = useTheme();
-  const { user } = useAuth();
-  const isStaffScanner = user?.role === 'admin' || user?.role === 'staff';
 
   return (
-    <MainTab.Navigator
+    <PatronTab.Navigator
       screenOptions={({ navigation }) => ({
         tabBarStyle: {
           backgroundColor: theme.colors.surface,
@@ -154,7 +155,7 @@ function MainTabNavigator() {
         headerRight: () => <HeaderNotificationButton navigation={navigation} />,
       })}
     >
-      <MainTab.Screen
+      <PatronTab.Screen
         name="Home"
         component={HomeScreen}
         options={{
@@ -164,7 +165,7 @@ function MainTabNavigator() {
           ),
         }}
       />
-      <MainTab.Screen
+      <PatronTab.Screen
         name="AIChat"
         component={AIChatScreen}
         options={{
@@ -175,32 +176,28 @@ function MainTabNavigator() {
           ),
         }}
       />
-      {!isStaffScanner && (
-        <>
-          <MainTab.Screen
-            name="BookCatalog"
-            component={BookCatalogScreen}
-            options={{
-              title: 'Tìm sách',
-              headerShown: false,
-              tabBarIcon: ({ color, size }) => (
-                <MaterialCommunityIcons name="book-search" size={size} color={color} />
-              ),
-            }}
-          />
-          <MainTab.Screen
-            name="BookRecommendations"
-            component={BookRecommendationsScreen}
-            options={{
-              title: 'Gợi ý',
-              tabBarIcon: ({ color, size }) => (
-                <MaterialCommunityIcons name="lightbulb" size={size} color={color} />
-              ),
-            }}
-          />
-        </>
-      )}
-      <MainTab.Screen
+      <PatronTab.Screen
+        name="BookCatalog"
+        component={BookCatalogScreen}
+        options={{
+          title: 'Tìm sách',
+          headerShown: false,
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="book-search" size={size} color={color} />
+          ),
+        }}
+      />
+      <PatronTab.Screen
+        name="BookRecommendations"
+        component={BookRecommendationsScreen}
+        options={{
+          title: 'Gợi ý',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="lightbulb" size={size} color={color} />
+          ),
+        }}
+      />
+      <PatronTab.Screen
         name="Profile"
         component={ProfileScreen}
         options={{
@@ -210,155 +207,224 @@ function MainTabNavigator() {
           ),
         }}
       />
-    </MainTab.Navigator>
+    </PatronTab.Navigator>
   );
 }
 
-function MainStackNavigator() {
+function StaffTabNavigator() {
   const theme = useTheme();
 
   return (
-    <MainStack.Navigator
+    <StaffTab.Navigator
+      screenOptions={({ navigation }) => ({
+        tabBarStyle: {
+          backgroundColor: theme.colors.surface,
+          borderTopColor: theme.colors.outlineVariant,
+          paddingTop: 6,
+        },
+        tabBarActiveTintColor: theme.colors.primary,
+        tabBarInactiveTintColor: theme.colors.onSurfaceVariant,
+        headerStyle: {
+          backgroundColor: theme.colors.surface,
+        },
+        headerTintColor: theme.colors.onPrimary,
+        headerRight: () => <HeaderNotificationButton navigation={navigation} />,
+      })}
+    >
+      <StaffTab.Screen
+        name="Home"
+        component={HomeScreen}
+        options={{
+          title: 'Trang chủ',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="home" size={size} color={color} />
+          ),
+        }}
+      />
+      <StaffTab.Screen
+        name="AIChat"
+        component={AIChatScreen}
+        options={{
+          title: 'AI Chat',
+          headerShown: false,
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="robot" size={size} color={color} />
+          ),
+        }}
+      />
+      <StaffTab.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{
+          title: 'Hồ sơ',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="account" size={size} color={color} />
+          ),
+        }}
+      />
+    </StaffTab.Navigator>
+  );
+}
+
+function PatronStackNavigator() {
+  const theme = useTheme();
+
+  return (
+    <PatronStack.Navigator
       screenOptions={{
         headerStyle: { backgroundColor: theme.colors.surface },
         headerTintColor: theme.colors.onSurface,
         cardStyle: { backgroundColor: theme.colors.background },
       }}
     >
-      <MainStack.Screen
+      <PatronStack.Screen
         name="MainTabs"
-        component={MainTabNavigator}
+        component={PatronTabNavigator}
         options={{ headerShown: false }}
       />
-      <MainStack.Screen
+      <PatronStack.Screen
         name="NotificationDetail"
         component={NotificationDetailScreen}
-        options={{
-          title: 'Chi tiết thông báo',
-          presentation: 'card',
-        }}
+        options={{ title: 'Chi tiết thông báo', presentation: 'card' }}
       />
-      <MainStack.Screen
+      <PatronStack.Screen
         name="FaceCamera"
         component={FaceCameraScreen}
-        options={{
-          title: 'Cập nhật khuôn mặt',
-          presentation: 'modal',
-        }}
+        options={{ title: 'Cập nhật khuôn mặt', presentation: 'modal' }}
       />
-      <MainStack.Screen
+      <PatronStack.Screen
         name="ChangePassword"
         component={ChangePasswordScreen}
-        options={{
-          title: 'Đổi mật khẩu',
-          presentation: 'card',
-        }}
+        options={{ title: 'Đổi mật khẩu', presentation: 'card' }}
       />
-      <MainStack.Screen
-        name="ImportBooks"
-        component={ImportBooksScreen}
-        options={{
-          title: 'Nhập sách từ ISBN',
-          presentation: 'card',
-        }}
-      />
-      <MainStack.Screen
-        name="AIHealth"
-        component={AIHealthScreen}
-        options={{
-          title: 'AI Command Center',
-          presentation: 'card',
-        }}
-      />
-      <MainStack.Screen
+      <PatronStack.Screen
         name="BookRecommendations"
         component={BookRecommendationsScreen}
-        options={{
-          title: 'Gợi sách AI',
-          presentation: 'card',
-        }}
+        options={{ title: 'Gợi sách AI', presentation: 'card' }}
       />
-      <MainStack.Screen
+      <PatronStack.Screen
         name="MyReservations"
         component={MyReservationsScreen}
-        options={{
-          title: 'Đặt chỗ của tôi',
-          presentation: 'card',
-        }}
+        options={{ title: 'Đặt chỗ của tôi', presentation: 'card' }}
       />
-      <MainStack.Screen
+      <PatronStack.Screen
         name="BookCatalog"
         component={BookCatalogScreen}
-        options={{
-          title: 'Mượn sách',
-          presentation: 'card',
-        }}
+        options={{ title: 'Mượn sách', presentation: 'card' }}
       />
-
-      <MainStack.Screen
+      <PatronStack.Screen
         name="Notifications"
         component={NotificationScreen}
-        options={{
-          title: 'Thông báo',
-          presentation: 'card',
-        }}
+        options={{ title: 'Thông báo', presentation: 'card' }}
       />
-      <MainStack.Screen
-        name="StaffReturn"
-        component={ReturnScreen}
-        options={{
-          title: 'Trả sách',
-          presentation: 'card',
-        }}
-      />
-      <MainStack.Screen
-        name="StaffBorrow"
-        component={StaffBorrowScreen}
-        options={{
-          title: 'Tạo phiếu mượn',
-          presentation: 'card',
-        }}
-      />
-      <MainStack.Screen
-        name="Schedule"
-        component={ScheduleScreen}
-        options={{
-          title: 'Lịch trực',
-          presentation: 'card',
-        }}
-      />
-      <MainStack.Screen
+      <PatronStack.Screen
         name="History"
         component={HistoryScreen}
-        options={{
-          title: 'Lịch sử mượn sách',
-          presentation: 'card',
-        }}
+        options={{ title: 'Lịch sử mượn sách', presentation: 'card' }}
       />
-      <MainStack.Screen
+      <PatronStack.Screen
         name="EditProfile"
         component={EditProfileScreen}
-        options={{
-          title: 'Chỉnh sửa hồ sơ',
-          presentation: 'card',
-        }}
+        options={{ title: 'Chỉnh sửa hồ sơ', presentation: 'card' }}
       />
-      <MainStack.Screen
+      <PatronStack.Screen
         name="LibraryTour"
         component={LibraryTourScreen}
-        options={{
-          title: 'Tham quan Thư viện 3D',
-          presentation: 'card',
-          headerShown: true,
-        }}
+        options={{ title: 'Tham quan Thư viện 3D', presentation: 'card', headerShown: true }}
       />
-    </MainStack.Navigator>
+    </PatronStack.Navigator>
+  );
+}
+
+function StaffStackNavigator() {
+  const theme = useTheme();
+  const { user } = useAuth();
+
+  return (
+    <StaffStack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: theme.colors.surface },
+        headerTintColor: theme.colors.onSurface,
+        cardStyle: { backgroundColor: theme.colors.background },
+      }}
+    >
+      <StaffStack.Screen
+        name="MainTabs"
+        component={StaffTabNavigator}
+        options={{ headerShown: false }}
+      />
+      <StaffStack.Screen
+        name="NotificationDetail"
+        component={NotificationDetailScreen}
+        options={{ title: 'Chi tiết thông báo', presentation: 'card' }}
+      />
+      <StaffStack.Screen
+        name="FaceCamera"
+        component={FaceCameraScreen}
+        options={{ title: 'Cập nhật khuôn mặt', presentation: 'modal' }}
+      />
+      <StaffStack.Screen
+        name="ChangePassword"
+        component={ChangePasswordScreen}
+        options={{ title: 'Đổi mật khẩu', presentation: 'card' }}
+      />
+      <StaffStack.Screen
+        name="ImportBooks"
+        component={ImportBooksScreen}
+        options={{ title: 'Nhập sách từ ISBN', presentation: 'card' }}
+      />
+      <StaffStack.Screen
+        name="AIHealth"
+        component={AIHealthScreen}
+        options={{ title: 'AI Command Center', presentation: 'card' }}
+      />
+      <StaffStack.Screen
+        name="AIChat"
+        component={AIChatScreen}
+        options={{ title: 'AI Chat', presentation: 'card' }}
+      />
+      <StaffStack.Screen
+        name="Notifications"
+        component={NotificationScreen}
+        options={{ title: 'Thông báo', presentation: 'card' }}
+      />
+      <StaffStack.Screen
+        name="StaffReturn"
+        component={ReturnScreen}
+        options={{ title: 'Trả sách', presentation: 'card' }}
+      />
+      <StaffStack.Screen
+        name="StaffBorrow"
+        component={StaffBorrowScreen}
+        options={{ title: 'Tạo phiếu mượn', presentation: 'card' }}
+      />
+      <StaffStack.Screen
+        name="Schedule"
+        component={ScheduleScreen}
+        options={{ title: 'Lịch trực', presentation: 'card' }}
+      />
+      <StaffStack.Screen
+        name="History"
+        component={HistoryScreen}
+        options={{ title: 'Lịch sử mượn sách', presentation: 'card' }}
+      />
+      <StaffStack.Screen
+        name="EditProfile"
+        component={EditProfileScreen}
+        options={{ title: 'Chỉnh sửa hồ sơ', presentation: 'card' }}
+      />
+      <StaffStack.Screen
+        name="LibraryTour"
+        component={LibraryTourScreen}
+        options={{ title: 'Tham quan Thư viện 3D', presentation: 'card', headerShown: true }}
+      />
+    </StaffStack.Navigator>
   );
 }
 
 export default function AppNavigator() {
   const theme = useTheme();
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
 
   const navigationTheme = useMemo(() => {
     const base = theme.dark ? NavigationDarkTheme : NavigationDefaultTheme;
@@ -381,16 +447,24 @@ export default function AppNavigator() {
     return <LoadingScreen />;
   }
 
+  const role = user?.role || '';
+  const isStaff = role === 'admin' || role === 'staff';
+
   return (
-    <NavigationContainer theme={navigationTheme}>
-      <RootStack.Navigator screenOptions={{ headerShown: false }}>
-        {isAuthenticated ? (
-          <RootStack.Screen name="Main" component={MainStackNavigator} />
-        ) : (
-          <RootStack.Screen name="Auth" component={AuthNavigator} />
-        )}
-      </RootStack.Navigator>
-    </NavigationContainer>
+    <>
+      <NavigationContainer theme={navigationTheme}>
+        <RootStack.Navigator screenOptions={{ headerShown: false }}>
+          {!isAuthenticated ? (
+            <RootStack.Screen name="Auth" component={AuthNavigator} />
+          ) : isStaff ? (
+            <RootStack.Screen name="Staff" component={StaffStackNavigator} />
+          ) : (
+            <RootStack.Screen name="Patron" component={PatronStackNavigator} />
+          )}
+        </RootStack.Navigator>
+      </NavigationContainer>
+      <ReauthModal />
+    </>
   );
 }
 
