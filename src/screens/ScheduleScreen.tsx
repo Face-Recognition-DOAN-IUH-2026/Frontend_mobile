@@ -770,32 +770,7 @@ export default function ScheduleScreen() {
         </View>
       ) : null}
 
-      {/* Action Buttons */}
-      <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: c.surface }}>
-        <TouchableOpacity
-          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: c.primary + '15', paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: c.primary + '30' }}
-          onPress={() => navigation.navigate('Availability')}
-        >
-          <MaterialCommunityIcons name="calendar-remove" size={16} color={c.primary} />
-          <Text style={{ fontSize: 12, fontWeight: '700', color: c.primary }}>Xin nghỉ</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#f59e0b15', paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: '#f59e0b30' }}
-          onPress={() => navigation.navigate('OpenShifts')}
-        >
-          <MaterialCommunityIcons name="clock-outline" size={16} color="#f59e0b" />
-          <Text style={{ fontSize: 12, fontWeight: '700', color: '#f59e0b' }}>Ca trống</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#8b5cf615', paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: '#8b5cf630' }}
-          onPress={() => navigation.navigate('MySwaps')}
-        >
-          <MaterialCommunityIcons name="swap-horizontal" size={16} color="#8b5cf6" />
-          <Text style={{ fontSize: 12, fontWeight: '700', color: '#8b5cf6' }}>Đổi ca</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Content */}
+{/* Content */}
       {loading ? (
         <LoadingOverlay loading message="Đang tải lịch trực..." />
       ) : error ? (

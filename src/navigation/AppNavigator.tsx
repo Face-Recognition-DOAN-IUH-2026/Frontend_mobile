@@ -30,10 +30,6 @@ import BookRecommendationsScreen from '../screens/BookRecommendationsScreen';
 import MyReservationsScreen from '../screens/MyReservationsScreen';
 import BookCatalogScreen from '../screens/BookCatalogScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
-import AvailabilityScreen from '../screens/AvailabilityScreen';
-import OpenShiftsScreen from '../screens/OpenShiftsScreen';
-import MySwapsScreen from '../screens/MySwapsScreen';
-import CreateSwapScreen from '../screens/CreateSwapScreen';
 import LibraryTourScreen from '../screens/LibraryTourScreen';
 
 import { AuthStackParamList, MainStackParamList, MainTabParamList } from './types';
@@ -298,39 +294,7 @@ function MainStackNavigator() {
           presentation: 'card',
         }}
       />
-      <MainStack.Screen
-        name="Availability"
-        component={AvailabilityScreen}
-        options={{
-          title: 'Xin nghỉ',
-          presentation: 'card',
-        }}
-      />
-      <MainStack.Screen
-        name="OpenShifts"
-        component={OpenShiftsScreen}
-        options={{
-          title: 'Ca trống',
-          presentation: 'card',
-        }}
-      />
-      <MainStack.Screen
-        name="MySwaps"
-        component={MySwapsScreen}
-        options={{
-          title: 'Đổi ca',
-          presentation: 'card',
-        }}
-      />
-      <MainStack.Screen
-        name="CreateSwap"
-        component={CreateSwapScreen}
-        options={{
-          title: 'Tạo yêu cầu đổi ca',
-          presentation: 'card',
-          headerShown: false,
-        }}
-      />
+
       <MainStack.Screen
         name="Notifications"
         component={NotificationScreen}

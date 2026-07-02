@@ -33,10 +33,6 @@ export type MainStackParamList = {
   Schedule: undefined;
   History: undefined;
   EditProfile: undefined;
-  Availability: undefined;
-  OpenShifts: undefined;
-  MySwaps: undefined;
-  CreateSwap: undefined;
   LibraryTour: undefined;
 };
 
