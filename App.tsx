@@ -5,12 +5,14 @@ import { PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import { QueryClientProvider } from '@tanstack/react-query';
 
 import { AuthProvider } from './src/context/AuthContext';
 import { NetworkProvider } from './src/context/NetworkContext';
 import { NotificationProvider } from './src/context/NotificationContext';
 import { MobileThemeProvider, useMobileTheme } from './src/context/ThemeContext';
 import AppNavigator from './src/navigation/AppNavigator';
+import { queryClient } from './src/lib/queryClient';
 
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -87,16 +89,18 @@ function AppContent() {
   const { theme, isDark } = useMobileTheme();
 
   return (
-    <PaperProvider theme={theme}>
-      <NetworkProvider>
-        <AuthProvider>
-          <NotificationProvider>
-            <StatusBar style={isDark ? 'light' : 'dark'} />
-            <AppNavigator />
-          </NotificationProvider>
-        </AuthProvider>
-      </NetworkProvider>
-    </PaperProvider>
+    <QueryClientProvider client={queryClient}>
+      <PaperProvider theme={theme}>
+        <NetworkProvider>
+          <AuthProvider>
+            <NotificationProvider>
+              <StatusBar style={isDark ? 'light' : 'dark'} />
+              <AppNavigator />
+            </NotificationProvider>
+          </AuthProvider>
+        </NetworkProvider>
+      </PaperProvider>
+    </QueryClientProvider>
   );
 }
 

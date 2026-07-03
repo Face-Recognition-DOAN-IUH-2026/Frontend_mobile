@@ -128,6 +128,31 @@ export const authApi = {
     return response.data;
   },
 
+  processFaceImage: async (
+    imageUri: string,
+    processType: 'face_recognition' | 'liveness_check' | 'verify' | 'identify' = 'face_recognition',
+    cameraId: string = 'mobile',
+    targetUserId?: string,
+  ): Promise<{ task_id: string; status: string }> => {
+    const formData = new FormData();
+    formData.append('file', {
+      uri: imageUri,
+      type: 'image/jpeg',
+      name: 'face_process.jpg',
+    } as any);
+    formData.append('camera_id', cameraId);
+    formData.append('process_type', processType);
+    formData.append('consent_given', 'true');
+    if (targetUserId) {
+      formData.append('target_user_id', targetUserId);
+    }
+    const response = await api.post<{ task_id: string; status: string }>('/face/process', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000,
+    });
+    return response.data;
+  },
+
   refreshToken: async (refreshToken: string): Promise<{ access_token: string }> => {
     const response = await api.post('/auth/refresh', { refresh_token: refreshToken });
     return response.data;

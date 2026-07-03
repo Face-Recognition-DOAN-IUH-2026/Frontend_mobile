@@ -4,8 +4,7 @@ import { getAccessToken } from '../api/secureStorage';
 import { useAuth } from './AuthContext';
 import { Notification } from '../types';
 import { devError } from '../utils/logger';
-import CacheManager from '../utils/cache/CacheManager';
-import { CACHE_KEYS, CACHE_TTL } from '../utils/cache/CacheKeys';
+import { queryClient } from '../lib/queryClient';
 
 interface NotificationContextValue {
   notifications: Notification[];
@@ -95,35 +94,25 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (!(await hasToken())) return;
     try {
       setIsLoading(true);
-      
-      const cache = CacheManager.getInstance();
-      const cacheKey = unreadOnly ? `${CACHE_KEYS.NOTIFICATIONS}_unread` : CACHE_KEYS.NOTIFICATIONS;
-      
-      const cached = await cache.get<{ items: Notification[]; unread: number }>(cacheKey);
-      if (cached) {
-        setNotifications(cached.items);
-        setUnreadCount(cached.unread);
-        setIsLoading(false);
-      }
 
-      try {
-        const result = await notificationApi.getNotifications({ unread: unreadOnly || undefined, limit: 50 });
+      const queryKey = ['notifications', unreadOnly ? 'unread' : 'all'];
+
+      // Use react-query cache: returns cached data if still fresh, otherwise fetches
+      const result = await queryClient.fetchQuery<{ items: Notification[]; unread: number }>({
+        queryKey,
+        queryFn: () => notificationApi.getNotifications({ unread: unreadOnly || undefined, limit: 50 }),
+        staleTime: 2 * 60 * 1000, // 2 minutes for notifications
+      });
+
+      if (mountedRef.current) {
         setNotifications(result.items);
         setUnreadCount(result.unread);
-        await cache.set(cacheKey, result, CACHE_TTL.NOTIFICATIONS);
-      } catch (err: any) {
-        if (err.response?.status === 401) return;
-        if (!cached) {
-          devError('[Notification] Failed to fetch notifications:', err);
-        }
-      } finally {
-        setIsLoading(false);
       }
     } catch (err: any) {
       if (err.response?.status === 401) return;
       devError('[Notification] Failed to fetch notifications:', err);
     } finally {
-      setIsLoading(false);
+      if (mountedRef.current) setIsLoading(false);
     }
   }, []);
 

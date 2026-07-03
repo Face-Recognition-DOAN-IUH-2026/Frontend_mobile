@@ -5,6 +5,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as FileSystem from 'expo-file-system/legacy';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import TextRecognition from '@react-native-ml-kit/text-recognition';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppTheme } from '../theme/DarkTheme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -28,123 +29,55 @@ interface StudentCardScannerProps {
   onSkip?: () => void;
 }
 
-const SURNAMES = [
-  'nguyễn', 'trần', 'lê', 'phạm', 'huỳnh', 'hoàng', 'phan',
-  'vũ', 'võ', 'đặng', 'bùi', 'đỗ', 'hồ', 'ngô', 'dương', 'lý',
-  'cao', 'đinh', 'tạ', 'châu', 'mai', 'tô', 'hà', 'vương',
-];
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:80';
 
-const HEADER_KEYWORDS = [
-  'bộ công thương', 'trường đại học công nghiệp', 'thẻ sinh viên',
-  'trường đại học', 'đại học công nghiệp', 'thành phố hồ chí minh',
-  'student card', 'student id', 'the sinh vien', 'cong thuong',
-  'sinh viên', 'ngày sinh', 'khóa học', 'hktt',
-  'hộ khẩu', 'khoa', 'lớp', 'ngành', 'msv', 'mssv',
-];
-
-function parseCardText(text: string): Partial<ScannedCardData> {
-  const result: Partial<ScannedCardData> = { rawText: text };
-  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
-
-  const studentCodeRegex = /(?:MSSV|Mã SV|Mã Số SV|Student Code|Mã số sinh viên|MSV)[:\s]*(\S{4,})/i;
-  const fullNameRegex = /(?:Họ\s*và\s*tên|Full Name|Họ tên|HỌ TÊN|HỌ VÀ TÊN)[:\s]*([A-ZÀ-ỸĂÂĐÊÔƠƯ][A-ZÀ-ỸĂÂĐÊÔƠƯa-zà-ỹăâđêôơưừếệấ]+(?:\s+[A-ZÀ-ỸĂÂĐÊÔƠƯ][A-ZÀ-ỸĂÂĐÊÔƠƯa-zà-ỹăâđêôơưừếệấ]+)+)/i;
-  const classNameRegex = /(?:Lớp|Class|LỚP)[:\s]*(\S+)/i;
-  const dobRegex = /(?:Ngày sinh|DOB|Birth|Ngày tháng năm sinh|NGÀY SINH|Sinh)[:\s]*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/i;
-  const courseRegex = /(?:Khóa\s*h[oọô]c|Course|Khóa|KHÓA)[:\s]*(.+)/i;
-  const addressRegex = /(?:HKTT|Hộ khẩu|Địa chỉ|Address|Hộ khẩu thường trú)[:\s]*(.+)/i;
-  const facultyRegex = /(?:Khoa|Faculty|Department|KHOA)[:\s]*(.+)/i;
-
-  for (const line of lines) {
-    if (!result.studentCode) {
-      const m = line.match(studentCodeRegex);
-      if (m) result.studentCode = m[1].replace(/[^A-Za-z0-9]/g, '');
-    }
-    if (!result.fullName) {
-      const m = line.match(fullNameRegex);
-      if (m) result.fullName = m[1].trim();
-    }
-    if (!result.className) {
-      const m = line.match(classNameRegex);
-      if (m) result.className = m[1].trim();
-    }
-    if (!result.dateOfBirth) {
-      const m = line.match(dobRegex);
-      if (m) result.dateOfBirth = m[1].trim();
-    }
-    if (!result.course) {
-      const m = line.match(courseRegex);
-      if (m) result.course = m[1].trim();
-    }
-    if (!result.permanentAddress) {
-      const m = line.match(addressRegex);
-      if (m) result.permanentAddress = m[1].trim();
-    }
-    if (!result.faculty) {
-      const m = line.match(facultyRegex);
-      if (m) result.faculty = m[1].trim();
-    }
+/**
+ * Parse raw OCR text into structured card data using the backend LLM endpoint.
+ *
+ * This replaces the previous inline regex parsing with an LLM-powered extraction
+ * that handles variations in card layout, OCR errors, and damaged cards.
+ */
+async function parseCardText(rawText: string): Promise<Partial<ScannedCardData>> {
+  if (!rawText || rawText.trim().length === 0) {
+    return { rawText: rawText || '' };
   }
 
-  if (!result.studentCode) {
-    const strictMatch = text.match(/\b(\d{8})\b/);
-    if (strictMatch) {
-      result.studentCode = strictMatch[1];
-    } else {
-      const looseMatch = text.match(/\b(\d{7,13})\b/);
-      if (looseMatch) result.studentCode = looseMatch[1];
+  try {
+    const token = await AsyncStorage.getItem('accessToken');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
-  }
 
-  if (!result.fullName) {
-    const candidateLines = lines.filter((line) => {
-      const lower = line.toLowerCase();
-      if (HEADER_KEYWORDS.some((k) => lower.includes(k))) return false;
-      if (/^\d+$/.test(line.trim())) return false;
-      if (line.trim().length < 5) return false;
-      if (/^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/.test(line.trim())) return false;
-      return true;
+    const response = await fetch(`${API_BASE_URL}/api/ai/parse-card-text`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ raw_text: rawText }),
     });
 
-    const nameBySurname = candidateLines.find((l) => {
-      const lower = l.toLowerCase().trim();
-      return SURNAMES.some(
-        (s) => lower.startsWith(s) || lower.startsWith(`${s} `),
-      );
-    });
-    if (nameBySurname) {
-      result.fullName = nameBySurname.replace(/^[\d:\s]+/, '').trim();
+    if (!response.ok) {
+      console.warn(`Card parsing API failed: ${response.status}`);
+      return { rawText };
     }
 
-    if (!result.fullName) {
-      const nameByCase = candidateLines.find((l) => {
-        const words = l.trim().split(/\s+/);
-        if (words.length < 2 || words.length > 6) return false;
-        if (!/^[A-ZÀ-ỸĂÂĐÊÔƠƯ]/.test(l.trim())) return false;
-        if (/^[A-Z0-9]{4,}$/.test(words[0])) return false;
-        return true;
-      });
-      if (nameByCase) {
-        result.fullName = nameByCase.replace(/^[\d:\s]+/, '').trim();
-      }
-    }
-  }
+    const parsed = await response.json();
 
-  if (!result.course) {
-    const yearMatch = text.match(/\b(20\d{2}\s*[-–]\s*20\d{2})\b/);
-    if (yearMatch) result.course = yearMatch[1];
+    return {
+      studentCode: parsed.student_code || '',
+      fullName: parsed.full_name || '',
+      className: parsed.class_name || null,
+      dateOfBirth: parsed.date_of_birth || null,
+      course: parsed.course || null,
+      permanentAddress: parsed.permanent_address || null,
+      faculty: parsed.faculty || null,
+      rawText,
+    };
+  } catch (err) {
+    console.warn('Card parsing failed, returning raw text:', err);
+    return { rawText };
   }
-
-  if (!result.course) {
-    const khoaMatch = text.match(/Khóa\s+(\d{4}(?:\s*[-–]\s*\d{4})?)/i);
-    if (khoaMatch) result.course = khoaMatch[1];
-  }
-
-  if (!result.className) {
-    const classMatch = text.match(/\b(DH[A-Z]{2,}\d{2,}[A-Z]?)\b/i);
-    if (classMatch) result.className = classMatch[1].toUpperCase();
-  }
-
-  return result;
 }
 
 export default function StudentCardScanner({ onScanned, onError, onSkip }: StudentCardScannerProps) {
@@ -205,7 +138,7 @@ export default function StudentCardScanner({ onScanned, onError, onSkip }: Stude
     try {
       const result = await TextRecognition.recognize(photoUri);
       if (!result?.text) return null;
-      return parseCardText(result.text);
+      return await parseCardText(result.text);
     } catch (err: any) {
       onError?.('Lỗi nhận dạng văn bản: ' + (err.message || ''));
       return null;

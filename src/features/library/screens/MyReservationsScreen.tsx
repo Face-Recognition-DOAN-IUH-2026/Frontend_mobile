@@ -4,14 +4,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, Surface, Button, useTheme } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useFocusEffect } from '@react-navigation/native';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getMyWaitlist, joinWaitlist, leaveWaitlist, WaitlistEntry } from '../../../api/borrow';
 import { AppTheme } from '../../../theme/DarkTheme';
 import { GradientHeader, SectionCard, EmptyState, GRADIENTS } from '../../../theme/MobileDesignSystem';
 import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
 import { UndoBar } from '../../../components/UndoBar';
 import { devError } from '../../../utils/logger';
-import CacheManager from '../../../utils/cache/CacheManager';
-import { CACHE_KEYS, CACHE_TTL } from '../../../utils/cache/CacheKeys';
 import { useNetwork } from '../../../context/NetworkContext';
 
 interface MyReservationsScreenProps {
@@ -22,51 +21,32 @@ export default function MyReservationsScreen({ navigation }: MyReservationsScree
   const theme = useTheme() as AppTheme;
   const c = theme.colors;
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const [entries, setEntries] = useState<WaitlistEntry[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [snackMsg, setSnackMsg] = useState('');
   const [snackVisible, setSnackVisible] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [lastCancellation, setLastCancellation] = useState<{ id: string; title: string } | null>(null);
   const { isOnline } = useNetwork();
+  const qc = useQueryClient();
 
-  const loadEntries = useCallback(async (showRefresh = false) => {
-    if (showRefresh) setRefreshing(true);
-    try {
-      setLoadError(null);
+  const {
+    data: waitlistData,
+    error: waitlistError,
+    isFetching,
+    refetch,
+  } = useQuery({
+    queryKey: ['myReservations'],
+    queryFn: () => getMyWaitlist(),
+    staleTime: 5 * 60 * 1000,
+  });
 
-      const cache = CacheManager.getInstance();
-      const cached = await cache.get<{ items: WaitlistEntry[] }>(CACHE_KEYS.RESERVATIONS);
-      if (cached) {
-        setEntries(cached.items);
-        setRefreshing(false);
-      }
-
-      try {
-        const data = await getMyWaitlist();
-        setEntries(data.items);
-        await cache.set(CACHE_KEYS.RESERVATIONS, data, CACHE_TTL.RESERVATIONS);
-      } catch (error: any) {
-        if (!cached) {
-          devError('Failed to load waitlist:', error);
-          setLoadError(error?.response?.data?.detail || error?.message || 'Không thể tải danh sách nhận thông báo');
-        }
-      } finally {
-        setRefreshing(false);
-      }
-    } catch (error: any) {
-      devError('Failed to load waitlist:', error);
-      setLoadError(error?.response?.data?.detail || error?.message || 'Không thể tải danh sách nhận thông báo');
-    } finally {
-      setRefreshing(false);
-    }
-  }, []);
+  const entries: WaitlistEntry[] = waitlistData?.items || [];
+  const loadError = waitlistError ? (waitlistError as any)?.response?.data?.detail || (waitlistError as Error)?.message || 'Không thể tải danh sách nhận thông báo' : null;
+  const refreshing = isFetching;
 
   useFocusEffect(
     useCallback(() => {
-      loadEntries();
-    }, [loadEntries])
+      refetch();
+    }, [refetch])
   );
 
   const handleCancel = useCallback((entry: WaitlistEntry) => {
@@ -102,7 +82,8 @@ export default function MyReservationsScreen({ navigation }: MyReservationsScree
     if (!lastCancellation) return;
     try {
       await leaveWaitlist(lastCancellation.id);
-      setEntries((prev) => prev.filter((e) => e.id !== lastCancellation.id));
+      // Invalidate query to refetch fresh data from server
+      qc.invalidateQueries({ queryKey: ['myReservations'] });
       setSnackMsg(`Đã hủy nhận thông báo "${lastCancellation.title}"`);
       setSnackVisible(true);
     } catch (error: any) {
@@ -129,7 +110,7 @@ export default function MyReservationsScreen({ navigation }: MyReservationsScree
       <ScrollView
         style={styles.flex}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => loadEntries(true)} tintColor={c.primary} />
+          <RefreshControl refreshing={refreshing} onRefresh={() => refetch()} tintColor={c.primary} />
         }
       >
         <GradientHeader
@@ -142,7 +123,7 @@ export default function MyReservationsScreen({ navigation }: MyReservationsScree
           <EmptyState
             icon="cloud-off-outline"
             title={loadError}
-            action={<Button mode="outlined" onPress={() => loadEntries()} icon="refresh">Thử lại</Button>}
+            action={<Button mode="outlined" onPress={() => refetch()} icon="refresh">Thử lại</Button>}
           />
         ) : entries.length === 0 ? (
           <EmptyState icon="bell-off-outline" title="Bạn chưa đăng ký nhận thông báo nào" />

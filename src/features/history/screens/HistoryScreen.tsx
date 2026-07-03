@@ -4,13 +4,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, Surface, Button, useTheme } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useFocusEffect } from '@react-navigation/native';
+import { useQuery } from '@tanstack/react-query';
 import { borrowApi } from '../../../api/borrow';
 import { BorrowRecord } from '../../../types';
 import { AppTheme } from '../../../theme/DarkTheme';
 import { formatDate, getDaysUntil } from '../../../utils/dateUtils';
 import { devError } from '../../../utils/logger';
-import CacheManager from '../../../utils/cache/CacheManager';
-import { CACHE_KEYS, CACHE_TTL } from '../../../utils/cache/CacheKeys';
 import {
   GradientHeader,
   SectionCard,
@@ -58,60 +57,46 @@ export default function HistoryScreen({ navigation }: HistoryScreenProps) {
   const theme = useTheme() as AppTheme;
   const c = theme.colors;
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const [records, setRecords] = useState<BorrowRecord[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [showHeader, setShowHeader] = useState(false);
 
-  const loadHistory = async () => {
-    try {
-      setLoadError(null);
+  const {
+    data: records,
+    error: historyError,
+    isFetching,
+    refetch,
+  } = useQuery<BorrowRecord[], Error>({
+    queryKey: ['borrowHistory'],
+    queryFn: () => borrowApi.getHistory(),
+    staleTime: 5 * 60 * 1000,
+  });
 
-      const cache = CacheManager.getInstance();
-      const cached = await cache.get<BorrowRecord[]>(CACHE_KEYS.BORROW_HISTORY);
-      if (cached) {
-        setRecords(cached);
-        setShowHeader(true);
-      }
+  const safeRecords: BorrowRecord[] = records || [];
+  const loadError = historyError?.message || null;
+  const refreshing = isFetching;
 
-      try {
-        const data = await borrowApi.getHistory();
-        setRecords(data);
-        setShowHeader(true);
-        await cache.set(CACHE_KEYS.BORROW_HISTORY, data, CACHE_TTL.BORROW_HISTORY);
-      } catch (error: any) {
-        if (!cached) {
-          devError('Failed to load history:', error);
-          setLoadError(error?.response?.data?.detail || error?.message || 'Không thể tải lịch sử');
-        }
-      }
-    } catch (error: any) {
-      devError('Failed to load history:', error);
-      setLoadError(error?.response?.data?.detail || error?.message || 'Không thể tải lịch sử');
-    }
-  };
+  useEffect(() => {
+    if (records && records.length >= 0) setShowHeader(true);
+  }, [records]);
 
   useFocusEffect(
     useCallback(() => {
-      loadHistory();
-    }, [])
+      refetch();
+    }, [refetch]),
   );
 
   const onRefresh = async () => {
-    setRefreshing(true);
-    await loadHistory();
-    setRefreshing(false);
+    await refetch();
   };
 
-  const filtered = records.filter((r) => {
+  const filtered = safeRecords.filter((r: BorrowRecord) => {
     if (activeFilter === 'all') return true;
     return r.status === activeFilter;
   });
 
-  const borrowedCount = records.filter((r) => r.status === 'borrowed').length;
-  const returnedCount = records.filter((r) => r.status === 'returned').length;
-  const overdueCount = records.filter((r) => r.status === 'borrowed' && getDaysUntil(r.due_at) < 0).length;
+  const borrowedCount = safeRecords.filter((r: BorrowRecord) => r.status === 'borrowed').length;
+  const returnedCount = safeRecords.filter((r: BorrowRecord) => r.status === 'returned').length;
+  const overdueCount = safeRecords.filter((r: BorrowRecord) => r.status === 'borrowed' && getDaysUntil(r.due_at) < 0).length;
 
   const StatBadge = ({ label, value, icon, color }: { label: string; value: string | number; icon: string; color: string }) => (
     <Surface style={[styles.statBadge, { borderColor: c.outline }]} elevation={0}>
@@ -135,14 +120,14 @@ export default function HistoryScreen({ navigation }: HistoryScreenProps) {
       >
         <GradientHeader
           title="Lịch sử mượn sách"
-          subtitle={`${records.length} bản ghi`}
+          subtitle={`${safeRecords.length} bản ghi`}
           icon="history"
         />
 
-        {showHeader && records.length > 0 ? (
+        {showHeader && safeRecords.length > 0 ? (
           <AnimatedCard delay={50}>
             <View style={styles.statRow}>
-              <StatBadge label="Tổng số" value={records.length} icon="book-open-variant" color={GRADIENTS.indigo[0]} />
+              <StatBadge label="Tổng số" value={safeRecords.length} icon="book-open-variant" color={GRADIENTS.indigo[0]} />
               <StatBadge label="Đang mượn" value={borrowedCount} icon="book-check" color={GRADIENTS.emerald[0]} />
               <StatBadge label="Quá hạn" value={overdueCount} icon="alert-circle" color={GRADIENTS.red[0]} />
               <StatBadge label="Đã trả" value={returnedCount} icon="book-check" color={GRADIENTS.amber[0]} />
@@ -167,7 +152,7 @@ export default function HistoryScreen({ navigation }: HistoryScreenProps) {
           <AnimatedCard delay={150}>
             <View style={styles.stateWrap}>
               <EmptyState icon="cloud-off-outline" message={loadError} />
-              <Button mode="outlined" onPress={loadHistory} style={styles.stateButton} labelStyle={styles.stateButtonLabel} icon="refresh">
+              <Button mode="outlined" onPress={() => refetch()} style={styles.stateButton} labelStyle={styles.stateButtonLabel} icon="refresh">
                 Thử lại
               </Button>
             </View>
@@ -186,7 +171,7 @@ export default function HistoryScreen({ navigation }: HistoryScreenProps) {
             />
           </AnimatedCard>
         ) : (
-          filtered.map((record, idx) => {
+          filtered.map((record: BorrowRecord, idx: number) => {
             const isReturned = record.status === 'returned';
             const overdue = !isReturned && getDaysUntil(record.due_at) < 0;
             const spineColor = isReturned
