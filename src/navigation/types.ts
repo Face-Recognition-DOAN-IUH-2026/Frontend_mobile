@@ -1,31 +1,62 @@
 import { NavigatorScreenParams } from '@react-navigation/native';
+import { Notification } from '../types';
 
 export type AuthStackParamList = {
   Login: undefined;
   Register: undefined;
   FaceLogin: undefined;
+  ForgotPassword: undefined;
 };
 
-export type MainTabParamList = {
+export type PatronTabParamList = {
   Home: undefined;
-  Borrow: undefined;
+  AIChat: undefined;
+  BookRecommendations: undefined;
+  BookCatalog: undefined;
+  Profile: undefined;
+};
+
+export type StaffTabParamList = {
+  Home: undefined;
+  AIChat: undefined;
+  Profile: undefined;
+};
+
+export type PatronStackParamList = {
+  MainTabs: NavigatorScreenParams<PatronTabParamList>;
+  NotificationDetail: { notification: Notification };
+  FaceCamera: undefined;
+  ChangePassword: undefined;
+  BookRecommendations: undefined;
+  MyReservations: undefined;
+  BookCatalog: undefined;
+  Notifications: undefined;
+  History: undefined;
+  EditProfile: undefined;
+  LibraryTour: undefined;
+};
+
+export type StaffStackParamList = {
+  MainTabs: NavigatorScreenParams<StaffTabParamList>;
+  NotificationDetail: { notification: Notification };
+  FaceCamera: undefined;
+  ChangePassword: undefined;
+  ImportBooks: undefined;
+  AIHealth: undefined;
+  AIChat: undefined;
+  Notifications: undefined;
   StaffReturn: undefined;
   StaffBorrow: undefined;
   Schedule: undefined;
   History: undefined;
-  Profile: undefined;
-};
-
-export type MainStackParamList = {
-  MainTabs: NavigatorScreenParams<MainTabParamList>;
-  FaceCamera: undefined;
-  ChangePassword: undefined;
-  ImportBooks: undefined;
+  EditProfile: undefined;
+  LibraryTour: undefined;
 };
 
 export type RootStackParamList = {
   Auth: NavigatorScreenParams<AuthStackParamList>;
-  Main: NavigatorScreenParams<MainStackParamList>;
+  Patron: NavigatorScreenParams<PatronStackParamList>;
+  Staff: NavigatorScreenParams<StaffStackParamList>;
 };
 
 declare global {

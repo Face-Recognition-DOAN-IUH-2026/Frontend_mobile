@@ -22,10 +22,10 @@
     "forgotPassword": "Quên mật khẩu?",
     "loginSuccess": "Đăng nhập thành công",
     "loginFailed": "Đăng nhập thất bại",
-    "invalidCredentials": "Email hoặc mật khẩu không đúng",
+    "invalidCredentials": "Email",
     "tokenExpired": "Phiên đăng nhập hết hạn"
   },
-  "home": {
+  "home": { 
     "welcome": "Xin chào",
     "patronCard": "Thẻ thư viện",
     "borrowing": "Sách đang mượn",

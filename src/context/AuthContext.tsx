@@ -1,8 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getAccessToken } from '../api/secureStorage';
 import { User } from '../types';
 import { authApi } from '../api/auth';
 import { devError } from '../utils/logger';
+import CacheManager from '../utils/cache/CacheManager';
 
 interface AuthContextType {
   user: User | null;
@@ -14,12 +16,23 @@ interface AuthContextType {
   faceLogin: (imageUri: string) => Promise<void>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
+  updateUser: (patch: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function getFullName(data: any): string {
   return data?.fullName || data?.full_name || '';
+}
+
+function decodeJwtPayload(token: string): any {
+  try {
+    const base64 = token.split('.')[1];
+    const json = atob(base64.replace(/-/g, '+').replace(/_/g, '/'));
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -29,22 +42,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const checkAuth = async () => {
     try {
-      const token = await AsyncStorage.getItem('accessToken');
+      const token = await getAccessToken();
       const patronDataStr = await AsyncStorage.getItem('patronData');
       const userDataStr = await AsyncStorage.getItem('userData');
       if (token && patronDataStr) {
         const patronData = JSON.parse(patronDataStr);
         setPatron(patronData);
-        setUser({ id: patronData.id, email: patronData.email || '', full_name: getFullName(patronData), role: 'patron' });
+        setUser({ id: patronData.id, email: patronData.email || '', full_name: getFullName(patronData), role: 'patron', avatar_url: patronData.avatar_url || patronData.avatarUrl });
       } else if (token && userDataStr) {
         const userData = JSON.parse(userDataStr);
         setPatron(null);
         setUser({
-          id: userData.id,
-          email: userData.email || '',
-          full_name: getFullName(userData),
-          role: userData.role,
-        });
+    id: userData.id,
+    email: userData.email || '',
+    full_name: getFullName(userData),
+    role: userData.role,
+    avatar_url: userData.avatar_url || userData.avatarUrl,
+  });
+      }
+
+      if (token) {
+        try {
+          const role = user?.role;
+          if (role === 'admin' || role === 'staff') {
+            const freshData: any = await authApi.getCurrentUser();
+            await AsyncStorage.setItem('userData', JSON.stringify(freshData));
+            setUser((prev) => prev ? { ...prev, avatar_url: freshData.avatar_url || freshData.avatarUrl, full_name: getFullName(freshData) } : prev);
+          } else if (role === 'patron') {
+            const freshData: any = await authApi.getCurrentPatron();
+            await AsyncStorage.setItem('patronData', JSON.stringify(freshData));
+            setPatron(freshData);
+            setUser((prev) => prev ? { ...prev, avatar_url: freshData.avatar_url || freshData.avatarUrl, full_name: getFullName(freshData) } : prev);
+          }
+        } catch {
+          devError('Background refresh failed, using cached data');
+        }
       }
     } catch (error) {
       devError('Auth check failed:', error);
@@ -63,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const response = await authApi.patronLogin({ student_code: studentCode, password });
       setPatron(response.user);
-      setUser({ id: response.user.id, email: response.user.email || '', full_name: getFullName(response.user), role: 'patron' });
+      setUser({ id: response.user.id, email: response.user.email || '', full_name: getFullName(response.user), role: 'patron', avatar_url: response.user.avatar_url || response.user.avatarUrl });
     } finally {
       setIsLoading(false);
     }
@@ -79,12 +111,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error('Tài khoản này không có quyền dùng máy quét trả sách');
       }
       setPatron(null);
-      setUser({
-        id: userData.id,
-        email: userData.email || email,
-        full_name: getFullName(userData),
-        role: userData.role,
-      });
+setUser({
+  id: userData.id,
+  email: userData.email || email,
+  full_name: getFullName(userData),
+  role: userData.role,
+  avatar_url: userData.avatar_url,
+});
     } finally {
       setIsLoading(false);
     }
@@ -93,11 +126,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const faceLogin = async (imageUri: string) => {
     setIsLoading(true);
     try {
-      await authApi.faceLogin(imageUri);
-      const patronData = await authApi.getCurrentPatron();
-      await AsyncStorage.setItem('patronData', JSON.stringify(patronData));
-      setPatron(patronData);
-      setUser({ id: patronData.id, email: patronData.email || '', full_name: getFullName(patronData), role: 'patron' });
+      const tokenRes = await authApi.faceLogin(imageUri);
+      const payload = decodeJwtPayload(tokenRes.access_token);
+      const role: string = payload?.roles?.[0] || payload?.role || 'patron';
+
+      if (role === 'admin' || role === 'staff') {
+        const userData = await authApi.getCurrentUser();
+        await AsyncStorage.setItem('userData', JSON.stringify(userData));
+        await AsyncStorage.removeItem('patronData');
+        setPatron(null);
+        setUser({ id: userData.id, email: userData.email || '', full_name: getFullName(userData), role: userData.role, avatar_url: userData.avatar_url });
+      } else {
+        const patronData = await authApi.getCurrentPatron();
+        await AsyncStorage.setItem('patronData', JSON.stringify(patronData));
+        setPatron(patronData);
+        setUser({ id: patronData.id, email: patronData.email || '', full_name: getFullName(patronData), role: 'patron', avatar_url: patronData.avatar_url || patronData.avatarUrl });
+      }
     } catch (error) {
       await authApi.logout();
       throw error;
@@ -108,8 +152,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     await authApi.logout();
+    const cache = CacheManager.getInstance();
+    await cache.invalidateAll();
     setUser(null);
     setPatron(null);
+  };
+
+  const updateUser = (patch: Partial<User>) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, ...patch };
+      // persist to storage
+      AsyncStorage.getItem('userData').then((raw) => {
+        if (raw) {
+          const stored = JSON.parse(raw);
+          AsyncStorage.setItem('userData', JSON.stringify({ ...stored, ...patch }));
+        }
+      });
+      AsyncStorage.getItem('patronData').then((raw) => {
+        if (raw) {
+          const stored = JSON.parse(raw);
+          AsyncStorage.setItem('patronData', JSON.stringify({ ...stored, ...patch }));
+        }
+      });
+      return next;
+    });
   };
 
   return (
@@ -124,6 +191,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         faceLogin,
         logout,
         checkAuth,
+        updateUser,
       }}
     >
       {children}

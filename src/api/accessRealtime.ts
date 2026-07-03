@@ -1,7 +1,6 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getAccessToken } from './secureStorage';
 import { CameraEvent } from '../types';
-
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:80/api';
+import { API_BASE_URL } from '../config/api';
 
 function toWsUrl(baseUrl: string, token: string) {
   const url = new URL('/api/access/ws', baseUrl.replace(/\/api\/?$/, ''));
@@ -14,7 +13,7 @@ export async function connectAccessRealtime(
   onEvent: (event: CameraEvent) => void,
   onStatus?: (status: 'connected' | 'closed' | 'error') => void,
 ) {
-  const token = await AsyncStorage.getItem('accessToken');
+  const token = await getAccessToken();
   if (!token) {
     throw new Error('Missing access token');
   }

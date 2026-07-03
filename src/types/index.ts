@@ -1,10 +1,13 @@
+export type UserRole = 'admin' | 'staff' | 'patron';
+
 export interface User {
   id: string;
   email: string;
   full_name?: string;
-  role: string;
+  role: UserRole;
   student_code?: string;
   password_auto_generated?: boolean;
+  avatar_url?: string;
 }
 
 export interface AuthTokens {
@@ -21,6 +24,8 @@ export interface Book {
   cover_url?: string;
   shelf_location?: string;
   is_available?: boolean;
+  total_copies?: number;
+  available_copies?: number;
   publish_year?: number;
   pages?: number;
   publisher?: string;
@@ -177,14 +182,8 @@ export interface ScheduleAssignmentList {
   total: number;
 }
 
-export interface StaffAvailabilityRequest {
-  id: string;
-  staffId: string;
-  dateFrom: string;
-  dateTo: string;
-  type: string;
-  reason?: string | null;
-  status: string;
+export interface DayCounts {
+  [date: string]: number;
 }
 
 export interface BookWithStats {
@@ -291,4 +290,22 @@ export interface ConfirmBorrowSlipItem {
 export interface ConfirmBorrowSlipRequest {
   patron_id: string;
   items: ConfirmBorrowSlipItem[];
+}
+
+export interface Notification {
+  id: string;
+  userId: string;
+  type: string;
+  title: string;
+  body: string;
+  data?: Record<string, any>;
+  isRead: boolean;
+  createdAt: string;
+  readAt?: string;
+}
+
+export interface NotificationListResponse {
+  items: Notification[];
+  total: number;
+  unread: number;
 }

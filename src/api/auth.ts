@@ -1,5 +1,6 @@
 import api from './client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { setAccessToken, setRefreshToken, clearTokens } from './secureStorage';
 import { AuthTokens, User } from '../types';
 
 export interface LoginRequest {
@@ -20,6 +21,7 @@ export interface PatronRegisterRequest {
   class_name?: string;
   course?: string;
   permanent_address?: string;
+  verification_token?: string;
 }
 
 export interface LoginResponse {
@@ -50,8 +52,8 @@ export const authApi = {
       refresh_token: response.data.refresh_token,
       token_type: response.data.token_type,
     };
-    await AsyncStorage.setItem('accessToken', tokens.access_token);
-    await AsyncStorage.setItem('refreshToken', tokens.refresh_token);
+    await setAccessToken(tokens.access_token);
+    await setRefreshToken(tokens.refresh_token);
     if (response.data.user) {
       await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
       await AsyncStorage.removeItem('patronData');
@@ -61,21 +63,51 @@ export const authApi = {
 
   patronLogin: async (data: PatronLoginRequest): Promise<PatronLoginResponse> => {
     const response = await api.post<PatronLoginResponse>('/patrons/login', data);
-    await AsyncStorage.setItem('accessToken', response.data.access_token);
+    await setAccessToken(response.data.access_token);
     if (response.data.refresh_token) {
-      await AsyncStorage.setItem('refreshToken', response.data.refresh_token);
+      await setRefreshToken(response.data.refresh_token);
     }
     await AsyncStorage.setItem('patronData', JSON.stringify(response.data.user));
     return response.data;
   },
 
   patronRegister: async (data: PatronRegisterRequest): Promise<PatronLoginResponse> => {
-    const response = await api.post<PatronLoginResponse>('/patrons/register', data);
+    const params: any = {
+      student_code: data.student_code,
+      password: data.password,
+      full_name: data.full_name,
+      email: data.email,
+    };
+    if (data.class_name) params.class_name = data.class_name;
+    if (data.course) params.course = data.course;
+    if (data.permanent_address) params.permanent_address = data.permanent_address;
+    if (data.verification_token) params.verification_token = data.verification_token;
+    const response = await api.post<PatronLoginResponse>('/patrons/register', params);
     if (!response.data.user) {
       throw new Error('Invalid response: missing user data');
     }
-    await AsyncStorage.setItem('accessToken', response.data.access_token);
-    await AsyncStorage.setItem('patronData', JSON.stringify(response.data.user));
+    return response.data;
+  },
+
+  preRegisterOtp: async (email: string): Promise<void> => {
+    await api.post('/auth/pre-register-otp', { email });
+  },
+
+  preRegisterVerify: async (email: string, code: string): Promise<{ verification_token: string }> => {
+    const response = await api.post<{ verification_token: string }>('/auth/pre-register-verify', { email, code });
+    return response.data;
+  },
+
+  checkExists: async (studentCode: string, email: string): Promise<{ student_code_exists: boolean; email_exists: boolean }> => {
+    const response = await api.post<{ student_code_exists: boolean; email_exists: boolean }>('/patrons/check-exists', {
+      student_code: studentCode,
+      email,
+    });
+    return response.data;
+  },
+
+  checkStudentCode: async (code: string): Promise<{ exists: boolean }> => {
+    const response = await api.get<{ exists: boolean }>(`/patrons/check-code/${code}`);
     return response.data;
   },
 
@@ -88,10 +120,10 @@ export const authApi = {
     } as any);
     const response = await api.post<FaceLoginResponse>('/auth/face-login', formData);
     if (response.data.access_token) {
-      await AsyncStorage.setItem('accessToken', response.data.access_token);
+      await setAccessToken(response.data.access_token);
     }
     if (response.data.refresh_token) {
-      await AsyncStorage.setItem('refreshToken', response.data.refresh_token);
+      await setRefreshToken(response.data.refresh_token);
     }
     return response.data;
   },
@@ -102,7 +134,8 @@ export const authApi = {
   },
 
   logout: async (): Promise<void> => {
-    await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'patronData', 'userData']);
+    await clearTokens();
+    await AsyncStorage.multiRemove(['patronData', 'userData']);
   },
 
   getCurrentUser: async (): Promise<User> => {
@@ -115,8 +148,56 @@ export const authApi = {
     return response.data;
   },
 
-  changePassword: async (patronId: string, newPassword: string): Promise<void> => {
+  changePassword: async (patronId: string, currentPassword: string, newPassword: string): Promise<void> => {
     await api.put(`/patrons/${patronId}/password`, {
+      current_password: currentPassword,
+      new_password: newPassword,
+    });
+  },
+
+  uploadAvatar: async (imageUri: string): Promise<{ avatarUrl: string }> => {
+    const formData = new FormData();
+    formData.append('avatar', {
+      uri: imageUri,
+      type: 'image/jpeg',
+      name: 'avatar.jpg',
+    } as any);
+    const response = await api.post<{ avatarUrl: string }>('/users/me/avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000,
+    });
+    return response.data;
+  },
+
+  deleteAvatar: async (): Promise<void> => {
+    await api.delete('/users/me/avatar');
+  },
+
+  updateProfile: async (data: { full_name?: string; phone?: string; permanent_address?: string }): Promise<any> => {
+    const response = await api.put('/users/me/profile', data);
+    return response.data;
+  },
+
+  requestEmailChangeOtp: async (newEmail: string): Promise<void> => {
+    await api.post('/users/me/email/request-otp', { new_email: newEmail });
+  },
+
+  verifyAndChangeEmail: async (newEmail: string, code: string): Promise<void> => {
+    await api.put('/users/me/email', { new_email: newEmail, code });
+  },
+
+  forgotPassword: async (email: string): Promise<void> => {
+    await api.post('/auth/forgot-password', { email });
+  },
+
+  verifyResetCode: async (email: string, code: string): Promise<void> => {
+    await api.post('/auth/verify-reset-code', { email, code });
+  },
+
+  resetPassword: async (email: string, code: string, newPassword: string): Promise<void> => {
+    await api.post('/auth/reset-password', {
+      email,
+      code,
       new_password: newPassword,
     });
   },

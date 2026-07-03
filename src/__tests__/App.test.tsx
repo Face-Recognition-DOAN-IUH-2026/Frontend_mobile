@@ -158,7 +158,6 @@ describe('Mobile App Tests', () => {
     const mockScreens = [
       'LoginScreen',
       'HomeScreen',
-      'BorrowScreen',
       'ReturnScreen',
       'ProfileScreen',
       'FaceCameraScreen',
@@ -171,7 +170,7 @@ describe('Mobile App Tests', () => {
       mockScreens.forEach(screen => {
         expect(screen).toBeDefined();
       });
-      expect(mockScreens.length).toBe(9);
+      expect(mockScreens.length).toBe(8);
     });
   });
 

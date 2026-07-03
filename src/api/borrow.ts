@@ -1,9 +1,33 @@
 import api from './client';
 import { BorrowResponse, ReturnResponse, BorrowRecord, Book, BookWithStats, BookImportResponse, StaffPatronActiveBorrowsResponse, CreateBorrowSlipRequest, CreateBorrowSlipResponse, LookupBorrowSlipRequest, LookupBorrowSlipResponse, ConfirmBorrowSlipRequest } from '../types';
 
-export interface BorrowRequest {
-  barcode: string;
+export interface WaitlistEntry {
+  id: string;
+  book_id: string;
+  status: string;
+  created_at: string;
+  book: {
+    id: string;
+    isbn: string;
+    title: string;
+    author?: string;
+    cover_url?: string;
+  };
 }
+
+export const getMyWaitlist = async (): Promise<{ items: WaitlistEntry[]; total: number }> => {
+  const response = await api.get<{ items: WaitlistEntry[]; total: number }>('/borrow/waitlist');
+  return response.data;
+};
+
+export const joinWaitlist = async (bookId: string): Promise<{ id: string; book_id: string; status: string }> => {
+  const response = await api.post<{ id: string; book_id: string; status: string }>('/borrow/waitlist', { book_id: bookId });
+  return response.data;
+};
+
+export const leaveWaitlist = async (waitlistId: string): Promise<void> => {
+  await api.delete(`/borrow/waitlist/${waitlistId}`);
+};
 
 export const borrowApi = {
   borrowBook: async (barcode: string): Promise<BorrowResponse> => {
@@ -49,10 +73,11 @@ export const borrowApi = {
   },
 
   getBooks: async (skip = 0, limit = 50): Promise<Book[]> => {
-    const response = await api.get<Book[]>('/borrow/books', {
+    const response = await api.get<{ items: Book[]; total: number } | Book[]>('/borrow/books', {
       params: { skip, limit },
     });
-    return response.data;
+    const data = response.data;
+    return Array.isArray(data) ? data : data.items || [];
   },
 
   getBook: async (isbn: string): Promise<BookWithStats> => {
