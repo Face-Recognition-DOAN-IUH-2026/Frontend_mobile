@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, Button, useTheme, Portal, Modal } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useFocusEffect } from '@react-navigation/native';
-import { borrowApi, reserveBook } from '../../../api/borrow';
+import { borrowApi, joinWaitlist, leaveWaitlist } from '../../../api/borrow';
 import { Book, BookWithStats } from '../../../types';
 import { AppTheme } from '../../../theme/DarkTheme';
 import { devError } from '../../../utils/logger';
@@ -22,7 +22,6 @@ import { SearchField } from '../../../components/SearchField';
 import { LoadingOverlay } from '../../../components/LoadingOverlay';
 import SwipeReserveRow from '../../../components/SwipeReserveRow';
 import { UndoBar } from '../../../components/UndoBar';
-import { cancelReservation } from '../../../api/borrow';
 
 interface BookCatalogScreenProps {
   navigation: any;
@@ -120,18 +119,23 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
 
   const handleReserve = async (bookId: string, title: string) => {
     if (!isOnline) {
-      Alert.alert('Requires Network', 'Reserving books requires an internet connection.');
+      Alert.alert('Yêu cầu mạng', 'Bạn cần kết nối internet để đăng ký nhận thông báo.');
       return;
     }
 
     setReservingId(bookId);
     try {
-      const result = await reserveBook(bookId);
-      setLastReservation({ id: result.reservation.id, title });
+      const result = await joinWaitlist(bookId);
+      setLastReservation({ id: result.id, title });
       setDetailVisible(false);
     } catch (error: any) {
-      const msg = error?.response?.data?.detail || error?.message || 'Không thể đặt chỗ';
-      setSnackMsg(msg);
+      const detail = error?.response?.data?.detail || error?.message || 'Không thể đăng ký nhận thông báo';
+      
+      if (detail.includes('Already on waitlist')) {
+        setSnackMsg('Bạn đã đăng ký nhận thông báo cho sách này rồi');
+      } else {
+        setSnackMsg(detail);
+      }
       setSnackVisible(true);
     } finally {
       setReservingId(null);
@@ -140,17 +144,22 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
 
   const handleSwipeReserve = async (bookId: string, title: string) => {
     if (!isOnline) {
-      Alert.alert('Requires Network', 'Reserving books requires an internet connection.');
+      Alert.alert('Yêu cầu mạng', 'Bạn cần kết nối internet để đăng ký nhận thông báo.');
       return;
     }
 
     setReservingId(bookId);
     try {
-      const result = await reserveBook(bookId);
-      setLastReservation({ id: result.reservation.id, title });
+      const result = await joinWaitlist(bookId);
+      setLastReservation({ id: result.id, title });
     } catch (error: any) {
-      const msg = error?.response?.data?.detail || error?.message || 'Không thể đặt chỗ';
-      setSnackMsg(msg);
+      const detail = error?.response?.data?.detail || error?.message || 'Không thể đăng ký nhận thông báo';
+      
+      if (detail.includes('Already on waitlist')) {
+        setSnackMsg('Bạn đã đăng ký nhận thông báo cho sách này rồi');
+      } else {
+        setSnackMsg(detail);
+      }
       setSnackVisible(true);
     } finally {
       setReservingId(null);
@@ -160,11 +169,11 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
   const handleUndoReserve = async () => {
     if (!lastReservation) return;
     try {
-      await cancelReservation(lastReservation.id);
-      setSnackMsg(`Đã hủy đặt chỗ "${lastReservation.title}"`);
+      await leaveWaitlist(lastReservation.id);
+      setSnackMsg(`Đã hủy nhận thông báo "${lastReservation.title}"`);
       setSnackVisible(true);
     } catch (error: any) {
-      const msg = error?.response?.data?.detail || error?.message || 'Không thể hủy đặt chỗ';
+      const msg = error?.response?.data?.detail || error?.message || 'Không thể hủy nhận thông báo';
       setSnackMsg(msg);
       setSnackVisible(true);
     } finally {
@@ -241,7 +250,7 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
                     disabled={reservingId === book.id}
                     loading={reservingId === book.id}
                   >
-                    {canReserve ? 'Đặt chỗ' : 'Đặt sách'}
+                    {canReserve ? 'Báo khi có sách' : 'Có sẵn tại thư viện'}
                   </Button>
                 </View>
               </SectionCard>
@@ -319,7 +328,7 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
               <View style={styles.detailActions}>
                 {detailBook.available_copies > 0 ? (
                   <Button mode="contained" onPress={() => {}} style={styles.detailBorrowButton} disabled>
-                    Sách có sẵn tại thư viện
+                    Có sẵn tại thư viện
                   </Button>
                 ) : (
                   <Button
@@ -329,7 +338,7 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
                     loading={reservingId === detailBook.id}
                     disabled={reservingId === detailBook.id}
                   >
-                    Đặt chỗ
+                    Báo khi có sách
                   </Button>
                 )}
               </View>
@@ -351,7 +360,7 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
 
       <UndoBar
         visible={!!lastReservation}
-        message={`Đã đặt chỗ "${lastReservation?.title ?? ''}"`}
+        message={`Đã đăng ký "${lastReservation?.title ?? ''}"`}
         onUndo={handleUndoReserve}
         onDismiss={() => setLastReservation(null)}
       />

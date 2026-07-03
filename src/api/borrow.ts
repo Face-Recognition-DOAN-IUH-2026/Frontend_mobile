@@ -1,14 +1,11 @@
 import api from './client';
 import { BorrowResponse, ReturnResponse, BorrowRecord, Book, BookWithStats, BookImportResponse, StaffPatronActiveBorrowsResponse, CreateBorrowSlipRequest, CreateBorrowSlipResponse, LookupBorrowSlipRequest, LookupBorrowSlipResponse, ConfirmBorrowSlipRequest } from '../types';
 
-export interface BookReservation {
+export interface WaitlistEntry {
   id: string;
   book_id: string;
-  patron_id: string;
-  reserved_at: string;
-  expires_at: string;
   status: string;
-  notified_at: string | null;
+  created_at: string;
   book: {
     id: string;
     isbn: string;
@@ -18,18 +15,18 @@ export interface BookReservation {
   };
 }
 
-export const getMyReservations = async (): Promise<{ items: BookReservation[]; total: number }> => {
-  const response = await api.get<{ items: BookReservation[]; total: number }>('/borrow/reservations');
+export const getMyWaitlist = async (): Promise<{ items: WaitlistEntry[]; total: number }> => {
+  const response = await api.get<{ items: WaitlistEntry[]; total: number }>('/borrow/waitlist');
   return response.data;
 };
 
-export const reserveBook = async (bookId: string): Promise<{ message: string; reservation: BookReservation }> => {
-  const response = await api.post<{ message: string; reservation: BookReservation }>('/borrow/reserve', { book_id: bookId });
+export const joinWaitlist = async (bookId: string): Promise<{ id: string; book_id: string; status: string }> => {
+  const response = await api.post<{ id: string; book_id: string; status: string }>('/borrow/waitlist', { book_id: bookId });
   return response.data;
 };
 
-export const cancelReservation = async (reservationId: string): Promise<void> => {
-  await api.delete(`/borrow/reservations/${reservationId}`);
+export const leaveWaitlist = async (waitlistId: string): Promise<void> => {
+  await api.delete(`/borrow/waitlist/${waitlistId}`);
 };
 
 export const borrowApi = {

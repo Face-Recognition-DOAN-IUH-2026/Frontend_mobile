@@ -6,16 +6,16 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AIMessage, AIPendingAction } from '../../../types/ai';
 import { aiApi } from '../../../api/ai';
-import { reserveBook, cancelReservation } from '../../../api/borrow';
+import { joinWaitlist, leaveWaitlist } from '../../../api/borrow';
 import { useAuth } from '../../../context/AuthContext';
 import { AppTheme } from '../../../theme/DarkTheme';
 import { GradientHeader } from '../../../theme/MobileDesignSystem';
 import { GRADIENTS } from '../../../theme/MobileDesignSystem';
-import ChatBubble from '../../../components/ai/ChatBubble';
-import ToolResultCard from '../../../components/ai/ToolResultCard';
-import ConfirmDialog from '../../../components/ai/ConfirmDialog';
-import QuickActions from '../../../components/ai/QuickActions';
-import TypingIndicator from '../../../components/ai/TypingIndicator';
+import ChatBubble from '../components/ChatBubble';
+import ToolResultCard from '../components/ToolResultCard';
+import ConfirmDialog from '../components/ConfirmDialog';
+import QuickActions from '../components/QuickActions';
+import TypingIndicator from '../components/TypingIndicator';
 import { UndoBar } from '../../../components/UndoBar';
 import { useNetwork } from '../../../context/NetworkContext';
 
@@ -180,18 +180,25 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
 
   const handleReserve = async (bookId: string, title: string) => {
     if (!isOnline) {
-      Alert.alert('Requires Network', 'Reserving books requires an internet connection.');
+      Alert.alert('Yêu cầu mạng', 'Bạn cần kết nối internet để đăng ký nhận thông báo.');
       return;
     }
     try {
-      const result = await reserveBook(bookId);
-      setLastReservation({ id: result.reservation.id, bookId, title });
+      const result = await joinWaitlist(bookId);
+      setLastReservation({ id: result.id, bookId, title });
     } catch (error: any) {
-      const msg = error?.response?.data?.detail || error?.message || 'Không thể đặt chỗ';
+      const detail = error?.response?.data?.detail || error?.message || 'Không thể đăng ký nhận thông báo';
+      
+      let errContent: string;
+      if (detail.includes('Already on waitlist')) {
+        errContent = `Bạn đã đăng ký nhận thông báo cho "${title}" rồi.`;
+      } else {
+        errContent = `Lỗi đăng ký: ${detail}`;
+      }
       const errMsg: AIMessage = {
         id: Date.now().toString(),
         role: 'assistant',
-        content: `Lỗi đặt chỗ: ${msg}`,
+        content: errContent,
         timestamp: new Date(),
       };
       addMessage(errMsg);
@@ -201,20 +208,20 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
   const handleUndoReserve = useCallback(async () => {
     if (!lastReservation) return;
     try {
-      await cancelReservation(lastReservation.id);
+      await leaveWaitlist(lastReservation.id);
       const msg: AIMessage = {
         id: Date.now().toString(),
         role: 'assistant',
-        content: `Đã hủy đặt chỗ "${lastReservation.title}"`,
+        content: `Đã hủy nhận thông báo "${lastReservation.title}"`,
         timestamp: new Date(),
       };
       addMessage(msg);
     } catch (error: any) {
-      const msg = error?.response?.data?.detail || error?.message || 'Không thể hủy đặt chỗ';
+      const msg = error?.response?.data?.detail || error?.message || 'Không thể hủy nhận thông báo';
       const errMsg: AIMessage = {
         id: Date.now().toString(),
         role: 'assistant',
-        content: `Lỗi hủy đặt chỗ: ${msg}`,
+        content: `Lỗi hủy: ${msg}`,
         timestamp: new Date(),
       };
       addMessage(errMsg);
@@ -363,7 +370,7 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
 
         <UndoBar
           visible={!!lastReservation}
-          message={`Đã đặt chỗ "${lastReservation?.title ?? ''}"`}
+          message={`Đã đăng ký "${lastReservation?.title ?? ''}"`}
           onUndo={handleUndoReserve}
           onDismiss={() => setLastReservation(null)}
         />

@@ -13,7 +13,7 @@ interface SwipeReserveRowProps {
   reserveLabel?: string;
 }
 
-export default function SwipeReserveRow({ children, onReserve, disabled, reserveLabel = 'Đặt chỗ' }: SwipeReserveRowProps) {
+export default function SwipeReserveRow({ children, onReserve, disabled, reserveLabel = 'Báo khi có sách' }: SwipeReserveRowProps) {
   const theme = useTheme<AppTheme>();
   const c = theme.colors;
   const translateX = useRef(new Animated.Value(0)).current;
