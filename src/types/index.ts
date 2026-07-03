@@ -1,8 +1,10 @@
+export type UserRole = 'admin' | 'staff' | 'patron';
+
 export interface User {
   id: string;
   email: string;
   full_name?: string;
-  role: string;
+  role: UserRole;
   student_code?: string;
   password_auto_generated?: boolean;
   avatar_url?: string;

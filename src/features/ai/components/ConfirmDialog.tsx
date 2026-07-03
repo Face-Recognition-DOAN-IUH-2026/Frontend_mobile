@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
 import { StyleSheet } from 'react-native';
 import { Button, Dialog, Portal, Text, useTheme } from 'react-native-paper';
-import { AIPendingAction } from '../../types/ai';
-import { AppTheme } from '../../theme/DarkTheme';
+import { AIPendingAction } from '../../../types/ai';
+import { AppTheme } from '../../../theme/DarkTheme';
 
 interface ConfirmDialogProps {
   visible: boolean;

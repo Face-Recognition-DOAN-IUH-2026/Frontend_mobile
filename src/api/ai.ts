@@ -2,17 +2,19 @@ import api from './client';
 import {
   AIChatResponse,
   AIConfirmResponse,
-  AIHealthSummary,
+  AICommandCenterSummary,
   AIBookRecommendationResponse,
   AICommandCenterChatResponse,
+  AIInsight,
+  AIInsightExplanation,
+  AIInsightList,
 } from '../types/ai';
 
 export const aiApi = {
   async chat(message: string, sessionId?: string, role?: string, patronId?: string): Promise<AIChatResponse> {
     const endpoint = role === 'patron' ? '/ai/patrons/chat'
                    : role === 'staff' ? '/ai/staff/chat'
-                   : role === 'admin' ? '/ai/admin/chat'
-                   : '/ai/chat'; // fallback to legacy
+                   : '/ai/admin/chat';
     const body: Record<string, any> = { message };
     if (sessionId) body.sessionId = sessionId;
     if (patronId && role !== 'patron') body.patronId = patronId;
@@ -29,7 +31,7 @@ export const aiApi = {
     return data;
   },
 
-  async getHealthSummary(): Promise<AIHealthSummary> {
+  async getHealthSummary(): Promise<AICommandCenterSummary> {
     const { data } = await api.get('/ai/command-center/summary');
     return data;
   },
@@ -41,6 +43,21 @@ export const aiApi = {
 
   async getBookRecommendations(studentCode: string): Promise<AIBookRecommendationResponse> {
     const { data } = await api.get(`/ai/recommendations/patron/${studentCode}`);
+    return data;
+  },
+
+  async getInsights(params?: { status?: string; category?: string; severity?: string }): Promise<AIInsightList> {
+    const { data } = await api.get('/ai/insights', { params });
+    return data;
+  },
+
+  async dismissInsight(id: string): Promise<AIInsight> {
+    const { data } = await api.post(`/ai/insights/${id}/dismiss`);
+    return data;
+  },
+
+  async explainInsight(id: string): Promise<AIInsightExplanation> {
+    const { data } = await api.get(`/ai/insights/${id}/explain`);
     return data;
   },
 };

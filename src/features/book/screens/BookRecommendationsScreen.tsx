@@ -9,10 +9,10 @@ import { AIBookRecommendation } from '../../../types/ai';
 import { aiApi } from '../../../api/ai';
 import { useAuth } from '../../../context/AuthContext';
 import { AppTheme } from '../../../theme/DarkTheme';
-import BookRecommendationCard from '../../../components/ai/BookRecommendationCard';
+import BookRecommendationCard from '../../../shared/ui/ai/BookRecommendationCard';
 import SwipeReserveRow from '../../../components/SwipeReserveRow';
 import { UndoBar } from '../../../components/UndoBar';
-import { reserveBook, cancelReservation } from '../../../api/borrow';
+import { joinWaitlist, leaveWaitlist } from '../../../api/borrow';
 import { useNetwork } from '../../../context/NetworkContext';
 import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
 
@@ -66,17 +66,22 @@ export default function BookRecommendationsScreen({ navigation }: BookRecommenda
 
   const handleSwipeReserve = async (bookId: string, title: string) => {
     if (!isOnline) {
-      Alert.alert('Requires Network', 'Reserving books requires an internet connection.');
+      Alert.alert('Yêu cầu mạng', 'Bạn cần kết nối internet để đăng ký nhận thông báo.');
       return;
     }
 
     setReservingId(bookId);
     try {
-      const result = await reserveBook(bookId);
-      setLastReservation({ id: result.reservation.id, title });
+      const result = await joinWaitlist(bookId);
+      setLastReservation({ id: result.id, title });
     } catch (error: any) {
-      const msg = error?.response?.data?.detail || error?.message || 'Không thể đặt chỗ';
-      setSnackMsg(msg);
+      const detail = error?.response?.data?.detail || error?.message || 'Không thể đăng ký nhận thông báo';
+      
+      if (detail.includes('Already on waitlist')) {
+        setSnackMsg('Bạn đã đăng ký nhận thông báo cho sách này rồi');
+      } else {
+        setSnackMsg(detail);
+      }
       setSnackVisible(true);
     } finally {
       setReservingId(null);
@@ -86,11 +91,11 @@ export default function BookRecommendationsScreen({ navigation }: BookRecommenda
   const handleUndoReserve = async () => {
     if (!lastReservation) return;
     try {
-      await cancelReservation(lastReservation.id);
-      setSnackMsg(`Đã hủy đặt chỗ "${lastReservation.title}"`);
+      await leaveWaitlist(lastReservation.id);
+      setSnackMsg(`Đã hủy nhận thông báo "${lastReservation.title}"`);
       setSnackVisible(true);
     } catch (error: any) {
-      const msg = error?.response?.data?.detail || error?.message || 'Không thể hủy đặt chỗ';
+      const msg = error?.response?.data?.detail || error?.message || 'Không thể hủy nhận thông báo';
       setSnackMsg(msg);
       setSnackVisible(true);
     } finally {
@@ -145,7 +150,7 @@ export default function BookRecommendationsScreen({ navigation }: BookRecommenda
 
       <UndoBar
         visible={!!lastReservation}
-        message={`Đã đặt chỗ "${lastReservation?.title ?? ''}"`}
+        message={`Đã đăng ký "${lastReservation?.title ?? ''}"`}
         onUndo={handleUndoReserve}
         onDismiss={() => setLastReservation(null)}
       />

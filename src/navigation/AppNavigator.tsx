@@ -26,6 +26,7 @@ import ScheduleScreen from '../features/schedule/screens/ScheduleScreen';
 import StaffBorrowScreen from '../features/borrow/screens/StaffBorrowScreen';
 import AIChatScreen from '../features/ai/screens/AIChatScreen';
 import AIHealthScreen from '../features/ai/screens/AIHealthScreen';
+import AIWidget from '../features/ai/components/AIWidget/AIWidget';
 import BookRecommendationsScreen from '../features/book/screens/BookRecommendationsScreen';
 import MyReservationsScreen from '../features/library/screens/MyReservationsScreen';
 import BookCatalogScreen from '../features/book/screens/BookCatalogScreen';
@@ -33,6 +34,7 @@ import EditProfileScreen from '../features/profile/screens/EditProfileScreen';
 import LibraryTourScreen from '../features/library/screens/LibraryTourScreen';
 import ReauthModal from '../components/ReauthModal';
 
+import { isStaffRole, isPatronRole } from './roleGuard';
 import { AuthStackParamList, PatronStackParamList, StaffStackParamList, PatronTabParamList, StaffTabParamList } from './types';
 
 const AuthStack = createStackNavigator<AuthStackParamList>();
@@ -268,6 +270,11 @@ function StaffTabNavigator() {
 
 function PatronStackNavigator() {
   const theme = useTheme();
+  const { user } = useAuth();
+
+  if (user && !isPatronRole(user.role)) {
+    return null;
+  }
 
   return (
     <PatronStack.Navigator
@@ -339,6 +346,10 @@ function PatronStackNavigator() {
 function StaffStackNavigator() {
   const theme = useTheme();
   const { user } = useAuth();
+
+  if (user && !isStaffRole(user.role)) {
+    return null;
+  }
 
   return (
     <StaffStack.Navigator
@@ -447,8 +458,7 @@ export default function AppNavigator() {
     return <LoadingScreen />;
   }
 
-  const role = user?.role || '';
-  const isStaff = role === 'admin' || role === 'staff';
+  const isStaff = isStaffRole(user?.role);
 
   return (
     <>
@@ -463,6 +473,7 @@ export default function AppNavigator() {
           )}
         </RootStack.Navigator>
       </NavigationContainer>
+      {isAuthenticated && <AIWidget />}
       <ReauthModal />
     </>
   );

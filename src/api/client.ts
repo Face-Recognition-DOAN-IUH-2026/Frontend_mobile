@@ -57,7 +57,10 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !(error.config as any).__isRetry) {
       (error.config as any).__isRetry = true;
 
-      // Try refresh first
+      const endpoint = error.config?.url || 'unknown';
+      const method = error.config?.method?.toUpperCase() || 'GET';
+      devError(`[API] 401 received for ${method} ${endpoint}`);
+
       const refreshToken = await getRefreshToken();
       if (refreshToken) {
         try {
@@ -73,14 +76,34 @@ api.interceptors.response.use(
             error.config.headers.Authorization = `Bearer ${access_token}`;
             return api.request(error.config);
           }
-        } catch {
-          // Refresh failed — queue for re-auth
-          await clearTokens();
-          await AsyncStorage.multiRemove(['patronData', 'userData']);
+        } catch (refreshError) {
+          devError(`[API] First refresh failed for ${method} ${endpoint}, retrying...`);
+          // First refresh attempt failed - wait and retry once
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          try {
+            const retryResponse = await axios.post(`${API_BASE_URL}/auth/refresh`, {
+              refresh_token: refreshToken,
+            });
+            const { access_token: newAccessToken, refresh_token: newRefreshToken } = retryResponse.data;
+            await setAccessToken(newAccessToken);
+            if (newRefreshToken) {
+              await setRefreshToken(newRefreshToken);
+            }
+            if (error.config) {
+              error.config.headers.Authorization = `Bearer ${newAccessToken}`;
+              return api.request(error.config);
+            }
+          } catch (retryError) {
+            devError(`[API] Retry refresh failed for ${method} ${endpoint} - showing reauth modal`);
+            // Both refresh attempts failed - clear and show reauth modal
+            await clearTokens();
+            await AsyncStorage.multiRemove(['patronData', 'userData']);
+          }
         }
+      } else {
+        devError(`[API] No refresh token available for ${method} ${endpoint} - showing reauth modal`);
       }
 
-      // Queue the original request for retry after re-auth
       const config = error.config!;
       return new Promise((resolve, reject) => {
         _pendingRequests.push({ config, resolve, reject });

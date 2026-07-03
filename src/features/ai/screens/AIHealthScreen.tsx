@@ -1,13 +1,13 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, TextInput, IconButton, useTheme } from 'react-native-paper';
+import { Chip, Text, TextInput, IconButton, useTheme, SegmentedButtons } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
-import { AIHealthSummary, AIInsight } from '../../../types/ai';
+import { AICommandCenterSummary, AIInsight, AIInsightCategory, AIInsightSeverity, AIInsightExplanation } from '../../../types/ai';
 import { aiApi } from '../../../api/ai';
 import { AppTheme } from '../../../theme/DarkTheme';
-import HealthSummaryCard from '../../../components/ai/HealthSummaryCard';
-import InsightCard from '../../../components/ai/InsightCard';
+import HealthSummaryCard from '../components/HealthSummaryCard';
+import InsightCard from '../components/InsightCard';
 import { LoadingOverlay } from '../../../components/LoadingOverlay';
 import { EmptyState } from '../../../theme/MobileDesignSystem';
 
@@ -15,16 +15,19 @@ interface AIHealthScreenProps {
   navigation: any;
 }
 
+type FilterMode = 'all' | 'open' | 'critical' | 'warning';
+
 export default function AIHealthScreen({ navigation }: AIHealthScreenProps) {
   const theme = useTheme() as AppTheme;
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const [summary, setSummary] = useState<AIHealthSummary | null>(null);
+  const [summary, setSummary] = useState<AICommandCenterSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const [chatAnswer, setChatAnswer] = useState<string | null>(null);
+  const [filterMode, setFilterMode] = useState<FilterMode>('all');
 
   const loadSummary = async () => {
     try {
@@ -66,7 +69,30 @@ export default function AIHealthScreen({ navigation }: AIHealthScreenProps) {
     }
   };
 
-  const insights = summary?.insights || [];
+  const handleDismiss = async (id: string) => {
+    try {
+      await aiApi.dismissInsight(id);
+      loadSummary();
+    } catch {
+    }
+  };
+
+  const handleExplain = async (id: string): Promise<AIInsightExplanation | null> => {
+    try {
+      return await aiApi.explainInsight(id);
+    } catch {
+      return null;
+    }
+  };
+
+  let insights = summary?.insights || [];
+  if (filterMode === 'open') {
+    insights = insights.filter(i => i.status === 'open');
+  } else if (filterMode === 'critical') {
+    insights = insights.filter(i => i.severity === 'critical');
+  } else if (filterMode === 'warning') {
+    insights = insights.filter(i => i.severity === 'warning');
+  }
 
   const listHeader = (
     <View>
@@ -77,6 +103,17 @@ export default function AIHealthScreen({ navigation }: AIHealthScreenProps) {
           <Text variant="bodyMedium">{chatAnswer}</Text>
         </View>
       ) : null}
+
+      <SegmentedButtons
+        value={filterMode}
+        onValueChange={(val) => setFilterMode(val as FilterMode)}
+        buttons={[
+          { value: 'all', label: `Tất cả (${summary?.insights?.length || 0})` },
+          { value: 'open', label: `Mở (${summary?.insights?.filter(i => i.status === 'open').length || 0})` },
+          { value: 'critical', label: `Nghiêm trọng (${summary?.insights?.filter(i => i.severity === 'critical').length || 0})` },
+        ]}
+        style={styles.filterBar}
+      />
 
       {insights.length > 0 ? (
         <Text variant="titleSmall" style={styles.sectionTitle}>AI Insights ({insights.length})</Text>
@@ -101,7 +138,13 @@ export default function AIHealthScreen({ navigation }: AIHealthScreenProps) {
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <FlatList
         data={insights}
-        renderItem={({ item }) => <InsightCard insight={item} />}
+        renderItem={({ item }) => (
+          <InsightCard
+            insight={item}
+            onDismiss={handleDismiss}
+            onExplain={handleExplain}
+          />
+        )}
         keyExtractor={item => item.id}
         ListHeaderComponent={listHeader}
         contentContainerStyle={styles.listContent}
@@ -154,6 +197,10 @@ function createStyles(theme: AppTheme) {
       paddingHorizontal: 16,
       marginTop: 12,
       marginBottom: 4,
+    },
+    filterBar: {
+      marginHorizontal: 16,
+      marginTop: 8,
     },
     chatAnswer: {
       marginHorizontal: 16,

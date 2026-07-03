@@ -2,11 +2,11 @@ import React, { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Card, Text, useTheme } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { AIHealthSummary } from '../../types/ai';
-import { AppTheme } from '../../theme/DarkTheme';
+import { AICommandCenterSummary } from '../../../types/ai';
+import { AppTheme } from '../../../theme/DarkTheme';
 
 interface HealthSummaryCardProps {
-  summary: AIHealthSummary;
+  summary: AICommandCenterSummary;
 }
 
 export default function HealthSummaryCard({ summary }: HealthSummaryCardProps) {

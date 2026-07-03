@@ -2,8 +2,8 @@ import React, { useMemo } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { Text, useTheme } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { AIMessage } from '../../types/ai';
-import { AppTheme } from '../../theme/DarkTheme';
+import { AIMessage } from '../../../types/ai';
+import { AppTheme } from '../../../theme/DarkTheme';
 
 interface ChatBubbleProps {
   message: AIMessage;
