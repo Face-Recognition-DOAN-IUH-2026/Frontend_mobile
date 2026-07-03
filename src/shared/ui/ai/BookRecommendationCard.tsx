@@ -1,7 +1,7 @@
 import React from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { AIBookRecommendation } from '../../types/ai';
+import { AIBookRecommendation } from '../../../types/ai';
 
 interface BookRecommendationCardProps {
   recommendation: AIBookRecommendation;

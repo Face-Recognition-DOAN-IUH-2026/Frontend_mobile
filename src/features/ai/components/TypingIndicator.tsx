@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
 import { useTheme } from 'react-native-paper';
-import { AppTheme } from '../../theme/DarkTheme';
+import { AppTheme } from '../../../theme/DarkTheme';
 
 interface TypingIndicatorProps {
   color?: string;

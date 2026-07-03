@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Modal,
   View,
@@ -9,41 +9,85 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import bus from '../lib/event-bus';
 import { retryPendingRequests, cancelPendingRequests } from '../api/client';
 import { authApi } from '../api/auth';
+import { useAuth } from '../context/AuthContext';
+import { devError } from '../utils/logger';
+
+type ReauthMode = 'staff' | 'patron' | 'face';
 
 export default function ReauthModal() {
   const [visible, setVisible] = useState(false);
+  const [mode, setMode] = useState<ReauthMode>('staff');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [studentCode, setStudentCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const { user, logout } = useAuth();
+  const reauthSucceededRef = useRef(false);
 
   useEffect(() => {
-    const unsub = bus.on('auth:required', () => setVisible(true));
+    const unsub = bus.on('auth:required', () => {
+      reauthSucceededRef.current = false;
+      const role = user?.role;
+      if (role === 'admin' || role === 'staff') {
+        setMode('staff');
+      } else {
+        setMode('patron');
+      }
+      setVisible(true);
+    });
     return () => unsub();
-  }, []);
+  }, [user?.role]);
+
+  useEffect(() => {
+    if (!visible) {
+      setEmail('');
+      setPassword('');
+      setStudentCode('');
+      setError('');
+      if (!reauthSucceededRef.current) {
+        cancelPendingRequests();
+      }
+    }
+  }, [visible]);
 
   useEffect(() => {
     if (!visible) return;
     const timer = setTimeout(() => {
-      cancelPendingRequests();
-      setVisible(false);
-      setPassword('');
-      setError('');
-    }, 30000);
+      handleDismiss();
+    }, 60000);
     return () => clearTimeout(timer);
   }, [visible]);
 
-  const handleReauth = async () => {
+  const handleDismiss = useCallback(() => {
+    setVisible(false);
+  }, []);
+
+  const handleFaceLogin = useCallback(async () => {
+    try {
+      const { faceLogin } = await import('../context/AuthContext').then(m => m.useAuth());
+      // Face login requires camera - emit event to trigger face login flow
+      bus.emit('face:reauth-required');
+      setVisible(false);
+    } catch (err) {
+      devError('[ReauthModal] Face login not available:', err);
+      setError('Đăng nhập khuôn mặt không khả dụng');
+    }
+  }, []);
+
+  const handleReauthStaff = async () => {
     if (!email || !password) return;
     setError('');
     setLoading(true);
     try {
       const res = await authApi.login({ email, password });
       if (res?.access_token) {
+        reauthSucceededRef.current = true;
         retryPendingRequests(res.access_token);
         setVisible(false);
         setPassword('');
@@ -55,15 +99,28 @@ export default function ReauthModal() {
     }
   };
 
-  const handleCancel = () => {
-    cancelPendingRequests();
-    setVisible(false);
-    setPassword('');
+  const handleReauthPatron = async () => {
+    if (!studentCode || !password) return;
     setError('');
+    setLoading(true);
+    try {
+      const res = await authApi.patronLogin({ student_code: studentCode, password });
+      if (res?.access_token) {
+        reauthSucceededRef.current = true;
+        retryPendingRequests(res.access_token);
+        setVisible(false);
+        setPassword('');
+        setStudentCode('');
+      }
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err?.message || 'Đăng nhập thất bại');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleCancel}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleDismiss} presentationStyle="fullScreen" supportedOrientations={['portrait']}>
       <View style={styles.backdrop}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.card}>
@@ -72,17 +129,49 @@ export default function ReauthModal() {
 
             {error ? <Text style={styles.error}>{error}</Text> : null}
 
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="Email"
-              placeholderTextColor="#999"
-              autoCapitalize="none"
-              keyboardType="email-address"
-              autoFocus
-            />
+            <View style={styles.modeTabs}>
+              <TouchableOpacity
+                style={[styles.modeTab, mode === 'staff' && styles.modeTabActive]}
+                onPress={() => setMode('staff')}
+              >
+                <Text style={[styles.modeTabText, mode === 'staff' && styles.modeTabTextActive]}>Nhân viên</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modeTab, mode === 'patron' && styles.modeTabActive]}
+                onPress={() => setMode('patron')}
+              >
+                <Text style={[styles.modeTabText, mode === 'patron' && styles.modeTabTextActive]}>Sinh viên</Text>
+              </TouchableOpacity>
+            </View>
+
+            {mode === 'staff' ? (
+              <>
+                <Text style={styles.label}>Email</Text>
+                <TextInput
+                  style={styles.input}
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="Email"
+                  placeholderTextColor="#999"
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  autoFocus
+                />
+              </>
+            ) : (
+              <>
+                <Text style={styles.label}>Mã sinh viên</Text>
+                <TextInput
+                  style={styles.input}
+                  value={studentCode}
+                  onChangeText={setStudentCode}
+                  placeholder="Mã sinh viên"
+                  placeholderTextColor="#999"
+                  autoCapitalize="none"
+                  autoFocus
+                />
+              </>
+            )}
 
             <Text style={styles.label}>Mật khẩu</Text>
             <TextInput
@@ -96,13 +185,13 @@ export default function ReauthModal() {
 
             <TouchableOpacity
               style={[styles.button, loading && styles.buttonDisabled]}
-              onPress={handleReauth}
-              disabled={loading || !email || !password}
+              onPress={mode === 'staff' ? handleReauthStaff : handleReauthPatron}
+              disabled={loading || (mode === 'staff' ? (!email || !password) : (!studentCode || !password))}
             >
               {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Đăng nhập</Text>}
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
+            <TouchableOpacity style={styles.cancelButton} onPress={handleDismiss}>
               <Text style={styles.cancelText}>Hủy</Text>
             </TouchableOpacity>
           </View>
@@ -182,5 +271,30 @@ const styles = StyleSheet.create({
   cancelText: {
     color: '#666',
     fontSize: 14,
+  },
+  modeTabs: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+    padding: 4,
+  },
+  modeTab: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  modeTabActive: {
+    backgroundColor: '#1976d2',
+  },
+  modeTabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+  },
+  modeTabTextActive: {
+    color: '#fff',
   },
 });

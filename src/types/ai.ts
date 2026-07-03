@@ -1,3 +1,7 @@
+export type AIInsightCategory = 'access' | 'borrow' | 'schedule' | 'inventory' | 'risk';
+export type AIInsightSeverity = 'info' | 'warning' | 'critical';
+export type AIInsightStatus = 'open' | 'dismissed' | 'resolved';
+
 export interface AIMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -33,7 +37,7 @@ export interface AIConfirmResponse {
   message?: string;
 }
 
-export interface AIHealthSummary {
+export interface AICommandCenterSummary {
   generated_at: string;
   model: string;
   headline: string;
@@ -51,15 +55,26 @@ export interface AIHealthSummary {
 
 export interface AIInsight {
   id: string;
-  category: 'access' | 'borrow' | 'schedule' | 'inventory' | 'risk';
-  severity: 'info' | 'warning' | 'critical';
+  category: AIInsightCategory;
+  severity: AIInsightSeverity;
   title: string;
   summary: string;
   evidence: Array<{ label: string; value: string | number }>;
   recommended_actions: string[];
+  reason: string;
   confidence: number;
-  status: 'open' | 'dismissed' | 'resolved';
+  alternatives: string[];
+  status: AIInsightStatus;
   generated_at: string;
+}
+
+export interface AIInsightExplanation extends AIInsight {
+  reasoning_trace: string;
+}
+
+export interface AIInsightList {
+  items: AIInsight[];
+  total: number;
 }
 
 export interface AIBookRecommendation {
