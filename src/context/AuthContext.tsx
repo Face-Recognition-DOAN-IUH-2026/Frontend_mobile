@@ -4,7 +4,7 @@ import { getAccessToken } from '../api/secureStorage';
 import { User } from '../types';
 import { authApi } from '../api/auth';
 import { devError } from '../utils/logger';
-import CacheManager from '../utils/cache/CacheManager';
+import { queryClient } from '../lib/queryClient';
 
 interface AuthContextType {
   user: User | null;
@@ -152,8 +152,7 @@ setUser({
 
   const logout = async () => {
     await authApi.logout();
-    const cache = CacheManager.getInstance();
-    await cache.invalidateAll();
+    queryClient.clear();
     setUser(null);
     setPatron(null);
   };

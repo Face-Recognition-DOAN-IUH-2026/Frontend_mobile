@@ -5,14 +5,13 @@ import { Animated, Dimensions, FlatList, Modal, PanResponder, RefreshControl, Sc
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, useTheme } from 'react-native-paper';
 import * as Location from 'expo-location';
+import { useQuery } from '@tanstack/react-query';
 import { scheduleApi } from '../../../api/schedule';
 import AssignmentCard from '../../../components/AssignmentCard';
 import { StaffScheduleAssignment } from '../../../types';
 import { DAY_LABELS, startOfWeek, toDateInput } from '../../../utils/dateUtils';
 import { AppTheme } from '../../../theme/DarkTheme';
 import { devError } from '../../../utils/logger';
-import CacheManager from '../../../utils/cache/CacheManager';
-import { CACHE_KEYS, CACHE_TTL } from '../../../utils/cache/CacheKeys';
 import { getAssignmentTimeState, AssignmentTimeState } from '../../../utils/assignmentUtils';
 import { GradientHeader, EmptyState, GRADIENTS } from '../../../theme/MobileDesignSystem';
 import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
@@ -127,10 +126,6 @@ export default function ScheduleScreen() {
     shiftSectionTitle: { fontSize: 13, fontWeight: '700', flex: 1 },
   }), [c]);
 
-  const [assignments, setAssignments] = useState<StaffScheduleAssignment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [snackbar, setSnackbar] = useState('');
   const [viewMode, setViewMode] = useState<(typeof VIEW_MODES)[number]>('Ngày');
@@ -150,6 +145,22 @@ export default function ScheduleScreen() {
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
   const currentDate = weekDays[currentIndex];
+
+  const {
+    data: scheduleResult,
+    error: scheduleError,
+    isFetching: scheduleFetching,
+    refetch: refetchSchedule,
+  } = useQuery({
+    queryKey: ['mySchedule', weekRange.from, weekRange.to],
+    queryFn: () => scheduleApi.getMySchedules(weekRange.from, weekRange.to),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const assignments: StaffScheduleAssignment[] = scheduleResult?.items || [];
+  const loading = scheduleFetching && !scheduleResult;
+  const refreshing = scheduleFetching;
+  const error = scheduleError ? getErrorMessage(scheduleError, 'Không thể tải lịch trực') : null;
 
   const groupedByDate = useMemo(() => {
     const map = new Map<string, StaffScheduleAssignment[]>();
@@ -306,53 +317,14 @@ export default function ScheduleScreen() {
     return sections;
   }, [assignments, pickerMonth, pickerYear]);
 
-  const loadSchedules = useCallback(async (isRefresh?: boolean) => {
-    if (!isRefresh) { setLoading(true); }
-    setError(null);
-    
-    const cache = CacheManager.getInstance();
-    const cacheKey = `${CACHE_KEYS.SCHEDULE}_${weekRange.from}_${weekRange.to}`;
-    
-    try {
-      const cached = await cache.get<{ items: StaffScheduleAssignment[] }>(cacheKey);
-      if (cached) {
-        setAssignments(cached.items);
-        setLoading(false);
-      }
-
-      try {
-        const result = await scheduleApi.getMySchedules(weekRange.from, weekRange.to);
-        setAssignments(result.items);
-        await cache.set(cacheKey, result, CACHE_TTL.SCHEDULE);
-      } catch (err: any) {
-        if (!cached) {
-          const msg = getErrorMessage(err, 'Không thể tải lịch trực');
-          devError('[Schedule] loadSchedules error:', msg, err?.response?.status, err?.message);
-          setError(msg);
-        }
-      } finally {
-        if (!isRefresh) { setLoading(false); }
-      }
-    } catch (err: any) {
-      const msg = getErrorMessage(err, 'Không thể tải lịch trực');
-      devError('[Schedule] loadSchedules error:', msg, err?.response?.status, err?.message);
-      setError(msg);
-    } finally {
-      if (!isRefresh) { setLoading(false); }
-    }
-  }, [weekRange.from, weekRange.to]);
-
-  useFocusEffect(useCallback(() => { loadSchedules(); }, [loadSchedules]));
+  useFocusEffect(useCallback(() => { refetchSchedule(); }, [refetchSchedule]));
 
   const onRefresh = async () => {
-    setRefreshing(true);
-    await loadSchedules(true);
-    setRefreshing(false);
+    await refetchSchedule();
   };
 
   const runAttendanceAction = async (id: string, action: 'check-in' | 'check-out') => {
     setActionLoadingId(`${id}:${action}`);
-    setError(null);
     try {
       if (action === 'check-in') {
         let lat: number | undefined;
@@ -373,21 +345,20 @@ export default function ScheduleScreen() {
         await scheduleApi.checkOut(id);
         setSnackbar('Đã check-out thành công');
       }
-      await loadSchedules();
+      await refetchSchedule();
     } catch (err: any) {
-      setError(getErrorMessage(err, action === 'check-in' ? 'Check-in thất bại' : 'Check-out thất bại'));
+      setSnackbar(getErrorMessage(err, action === 'check-in' ? 'Check-in thất bại' : 'Check-out thất bại'));
     } finally { setActionLoadingId(null); }
   };
 
   const handleRequestManualCheckIn = async (assignmentId: string) => {
     setActionLoadingId(`${assignmentId}:manual-checkin`);
-    setError(null);
     try {
       await scheduleApi.requestManualCheckIn(assignmentId);
       setSnackbar('Đã gửi yêu cầu check-in thủ công');
-      await loadSchedules();
+      await refetchSchedule();
     } catch (err: any) {
-      setError(getErrorMessage(err, 'Gửi yêu cầu check-in thủ công thất bại'));
+      setSnackbar(getErrorMessage(err, 'Gửi yêu cầu check-in thủ công thất bại'));
     } finally { setActionLoadingId(null); }
   };
 

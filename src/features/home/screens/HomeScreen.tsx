@@ -1,9 +1,10 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useFocusEffect } from '@react-navigation/native';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { Image, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar, Button, Chip, Surface, Text, useTheme } from 'react-native-paper';
+import { useQuery } from '@tanstack/react-query';
 import { borrowApi } from '../../../api/borrow';
 import { scheduleApi } from '../../../api/schedule';
 import { useAuth } from '../../../context/AuthContext';
@@ -18,8 +19,6 @@ import {
 import { BorrowRecord, StaffScheduleAssignment } from '../../../types';
 import { formatDate, getDaysUntil, isOverdue, toDateInput } from '../../../utils/dateUtils';
 import { getAssignmentTimeState } from '../../../utils/assignmentUtils';
-import CacheManager from '../../../utils/cache/CacheManager';
-import { CACHE_KEYS, CACHE_TTL } from '../../../utils/cache/CacheKeys';
 
 interface HomeScreenProps {
   navigation: any;
@@ -38,66 +37,46 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const { user, patron } = useAuth();
   const isStaffScanner = user?.role === 'admin' || user?.role === 'staff';
-  const [borrows, setBorrows] = useState<BorrowRecord[]>([]);
-  const [todayAssignments, setTodayAssignments] = useState<StaffScheduleAssignment[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const loadBorrows = async () => {
-    if (isStaffScanner) {
-      setLoadError(null);
-      setBorrows([]);
-      return;
-    }
+  const today = toDateInput(new Date());
+  const tomorrow = toDateInput(new Date(Date.now() + 86400000));
 
-    try {
-      setLoadError(null);
+  const {
+    data: borrows = [],
+    error: borrowsError,
+    isFetching: borrowsFetching,
+    refetch: refetchBorrows,
+  } = useQuery<BorrowRecord[], Error>({
+    queryKey: ['activeBorrows'],
+    queryFn: () => borrowApi.getHistory('borrowed'),
+    enabled: !isStaffScanner,
+    staleTime: 5 * 60 * 1000,
+  });
 
-      const cache = CacheManager.getInstance();
-      const cached = await cache.get<BorrowRecord[]>(CACHE_KEYS.ACTIVE_BORROWS);
-      if (cached) {
-        setBorrows(cached);
-      }
+  const {
+    data: scheduleResult,
+    isFetching: scheduleFetching,
+    refetch: refetchSchedule,
+  } = useQuery({
+    queryKey: ['todaySchedule', today],
+    queryFn: () => scheduleApi.getMySchedules(today, tomorrow),
+    enabled: isStaffScanner,
+    staleTime: 5 * 60 * 1000,
+  });
 
-      try {
-        const history = await borrowApi.getHistory('borrowed');
-        setBorrows(history);
-        await cache.set(CACHE_KEYS.ACTIVE_BORROWS, history, CACHE_TTL.ACTIVE_BORROWS);
-      } catch (error: any) {
-        if (!cached) {
-          const message = error?.response?.data?.detail || error?.message || 'Không thể tải danh sách sách đang mượn';
-          setLoadError(message);
-          setBorrows([]);
-        }
-      }
-    } catch (error: any) {
-      const message = error?.response?.data?.detail || error?.message || 'Không thể tải danh sách sách đang mượn';
-      setLoadError(message);
-      setBorrows([]);
-    }
-  };
-
-  const loadTodaySchedule = async () => {
-    if (!isStaffScanner) return;
-    try {
-      const today = toDateInput(new Date());
-      const tomorrow = toDateInput(new Date(Date.now() + 86400000));
-      const result = await scheduleApi.getMySchedules(today, tomorrow);
-      setTodayAssignments(result.items || []);
-    } catch {}
-  };
+  const todayAssignments: StaffScheduleAssignment[] = scheduleResult?.items || [];
+  const loadError = borrowsError?.message || null;
+  const refreshing = borrowsFetching || scheduleFetching;
 
   useFocusEffect(
     useCallback(() => {
-      loadBorrows();
-      loadTodaySchedule();
-    }, [isStaffScanner]),
+      refetchBorrows();
+      refetchSchedule();
+    }, [refetchBorrows, refetchSchedule]),
   );
 
   const onRefresh = async () => {
-    setRefreshing(true);
-    await Promise.all([loadBorrows(), loadTodaySchedule()]);
-    setRefreshing(false);
+    await Promise.all([refetchBorrows(), refetchSchedule()]);
   };
 
   const activeBorrows = borrows.filter((item) => item.status === 'borrowed');
@@ -305,7 +284,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                   <MaterialCommunityIcons name="cloud-off-outline" size={38} color={theme.colors.onSurfaceVariant} />
                   <Text variant="titleSmall" style={styles.cardTitle}>Không thể kết nối server</Text>
                   <Text variant="bodySmall" style={styles.stateDescription} selectable>{loadError}</Text>
-                  <Button mode="outlined" icon="refresh" onPress={loadBorrows}>Thử lại</Button>
+                  <Button mode="outlined" icon="refresh" onPress={() => refetchBorrows()}>Thử lại</Button>
                 </View>
               ) : activeBorrows.length === 0 ? (
                 <EmptyState icon="bookshelf" message="Bạn chưa mượn cuốn sách nào" />

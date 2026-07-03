@@ -4,12 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, Button, useTheme, Portal, Modal } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useFocusEffect } from '@react-navigation/native';
+import { useQuery } from '@tanstack/react-query';
 import { borrowApi, joinWaitlist, leaveWaitlist } from '../../../api/borrow';
 import { Book, BookWithStats } from '../../../types';
 import { AppTheme } from '../../../theme/DarkTheme';
 import { devError } from '../../../utils/logger';
-import CacheManager from '../../../utils/cache/CacheManager';
-import { CACHE_KEYS, CACHE_TTL } from '../../../utils/cache/CacheKeys';
 import { useNetwork } from '../../../context/NetworkContext';
 import {
   GradientHeader,
@@ -41,9 +40,6 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
   const theme = useTheme() as AppTheme;
   const c = theme.colors;
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const [books, setBooks] = useState<Book[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [snackMsg, setSnackMsg] = useState('');
   const [snackVisible, setSnackVisible] = useState(false);
@@ -55,42 +51,28 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
   const [detailBook, setDetailBook] = useState<BookWithStats | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  const loadBooks = useCallback(async () => {
-    try {
-      setLoadError(null);
+  const {
+    data: books = [],
+    error: booksError,
+    isFetching,
+    refetch,
+  } = useQuery<Book[], Error>({
+    queryKey: ['books'],
+    queryFn: () => borrowApi.getBooks(0, 200),
+    staleTime: 5 * 60 * 1000,
+  });
 
-      const cache = CacheManager.getInstance();
-      const cached = await cache.get<Book[]>(CACHE_KEYS.BOOKS);
-      if (cached) {
-        setBooks(cached);
-      }
-
-      try {
-        const data = await borrowApi.getBooks(0, 200);
-        setBooks(data);
-        await cache.set(CACHE_KEYS.BOOKS, data, CACHE_TTL.BOOKS);
-      } catch (error: any) {
-        if (!cached) {
-          devError('Failed to load books:', error);
-          setLoadError(error?.response?.data?.detail || error?.message || 'Không thể tải danh sách sách');
-        }
-      }
-    } catch (error: any) {
-      devError('Failed to load books:', error);
-      setLoadError(error?.response?.data?.detail || error?.message || 'Không thể tải danh sách sách');
-    }
-  }, []);
+  const loadError = booksError?.message || null;
+  const refreshing = isFetching;
 
   useFocusEffect(
     useCallback(() => {
-      loadBooks();
-    }, [loadBooks])
+      refetch();
+    }, [refetch])
   );
 
   const onRefresh = async () => {
-    setRefreshing(true);
-    await loadBooks();
-    setRefreshing(false);
+    await refetch();
   };
 
   const filtered = useMemo(() => {
@@ -205,7 +187,7 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
         {loadError ? (
           <View style={styles.stateWrap}>
             <EmptyState icon="cloud-off-outline" message={loadError} />
-            <Button mode="outlined" onPress={loadBooks} style={styles.stateButton} labelStyle={styles.stateButtonLabel} icon="refresh">
+            <Button mode="outlined" onPress={() => refetch()} style={styles.stateButton} labelStyle={styles.stateButtonLabel} icon="refresh">
               Thử lại
             </Button>
           </View>
