@@ -12,6 +12,7 @@ import { NetworkProvider } from './src/context/NetworkContext';
 import { NotificationProvider } from './src/context/NotificationContext';
 import { MobileThemeProvider, useMobileTheme } from './src/context/ThemeContext';
 import AppNavigator from './src/navigation/AppNavigator';
+import LegacyUpgradeBanner from './src/components/LegacyUpgradeBanner';
 import { queryClient } from './src/lib/queryClient';
 
 class ErrorBoundary extends React.Component<
@@ -95,6 +96,7 @@ function AppContent() {
           <AuthProvider>
             <NotificationProvider>
               <StatusBar style={isDark ? 'light' : 'dark'} />
+              <LegacyUpgradeBanner />
               <AppNavigator />
             </NotificationProvider>
           </AuthProvider>

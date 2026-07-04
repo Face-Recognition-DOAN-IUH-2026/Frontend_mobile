@@ -1,12 +1,14 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { View, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Dimensions, TouchableOpacity, Animated } from 'react-native';
 import { Text, Button, ActivityIndicator, useTheme } from 'react-native-paper';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as FileSystem from 'expo-file-system/legacy';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import TextRecognition from '@react-native-ml-kit/text-recognition';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { AppTheme } from '../theme/DarkTheme';
+import { API_BASE_URL } from '../config/api';
+import { useRadarAnimation } from '../hooks/useRadarAnimation';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH * 0.85;
@@ -29,8 +31,6 @@ interface StudentCardScannerProps {
   onSkip?: () => void;
 }
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:80';
-
 /**
  * Parse raw OCR text into structured card data using the backend LLM endpoint.
  *
@@ -43,7 +43,7 @@ async function parseCardText(rawText: string): Promise<Partial<ScannedCardData>>
   }
 
   try {
-    const token = await AsyncStorage.getItem('accessToken');
+    const token = await SecureStore.getItemAsync('accessToken');
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
@@ -51,7 +51,7 @@ async function parseCardText(rawText: string): Promise<Partial<ScannedCardData>>
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/ai/parse-card-text`, {
+    const response = await fetch(`${API_BASE_URL}/ai/parse-card-text`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ raw_text: rawText }),
@@ -74,8 +74,8 @@ async function parseCardText(rawText: string): Promise<Partial<ScannedCardData>>
       faculty: parsed.faculty || null,
       rawText,
     };
-  } catch (err) {
-    console.warn('Card parsing failed, returning raw text:', err);
+} catch (err: unknown) {
+  console.warn('Card parsing failed, returning raw text:', err);
     return { rawText };
   }
 }
@@ -97,6 +97,7 @@ export default function StudentCardScanner({ onScanned, onError, onSkip }: Stude
     cornerTR: { top: -CORNER_WIDTH, right: -CORNER_WIDTH, borderTopWidth: CORNER_WIDTH, borderRightWidth: CORNER_WIDTH, borderTopRightRadius: FRAME_BORDER_RADIUS + 4 },
     cornerBL: { bottom: -CORNER_WIDTH, left: -CORNER_WIDTH, borderBottomWidth: CORNER_WIDTH, borderLeftWidth: CORNER_WIDTH, borderBottomLeftRadius: FRAME_BORDER_RADIUS + 4 },
     cornerBR: { bottom: -CORNER_WIDTH, right: -CORNER_WIDTH, borderBottomWidth: CORNER_WIDTH, borderRightWidth: CORNER_WIDTH, borderBottomRightRadius: FRAME_BORDER_RADIUS + 4 },
+    scanLine: { position: 'absolute', left: 0, right: 0, height: 2, backgroundColor: c.primary, opacity: 0.8 },
     statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(13, 17, 23, 0.85)', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, position: 'absolute', top: '40%' },
     statusText: { color: c.onSurface, fontSize: 14, fontWeight: '600' },
     bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 80, backgroundColor: c.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingHorizontal: 20, borderTopWidth: 1, borderTopColor: c.outline },
@@ -122,6 +123,7 @@ export default function StudentCardScanner({ onScanned, onError, onSkip }: Stude
   const phaseRef = useRef(phase);
   const detectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [ocrResult, setOcrResult] = useState<Partial<ScannedCardData> | null>(null);
+  const scanLineY = useRadarAnimation(phase === 'processing');
 
   useEffect(() => {
     phaseRef.current = phase;
@@ -354,6 +356,24 @@ export default function StudentCardScanner({ onScanned, onError, onSkip }: Stude
           <View style={[styles.corner, styles.cornerTR]} />
           <View style={[styles.corner, styles.cornerBL]} />
           <View style={[styles.corner, styles.cornerBR]} />
+
+          {phase === 'processing' && (
+            <Animated.View
+              style={[
+                styles.scanLine,
+                {
+                  transform: [
+                    {
+                      translateY: scanLineY.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [-CARD_HEIGHT / 2, CARD_HEIGHT / 2],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            />
+          )}
         </View>
 
         {phase === 'detecting' && (

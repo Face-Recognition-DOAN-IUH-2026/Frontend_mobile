@@ -1,10 +1,13 @@
 module.exports = {
-  testEnvironment: 'node',
-  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
+  ...require('@react-native/jest-preset'),
   testMatch: ['**/__tests__/**/*.test.[jt]s?(x)'],
   transform: {
+    ...require('@react-native/jest-preset').transform,
     '^.+\\.(ts|tsx)$': ['ts-jest', { tsconfig: 'tsconfig.jest.json' }],
   },
+  transformIgnorePatterns: [
+    'node_modules/(?!(react-native|@react-native|@testing-library/react-native|react-native-paper|react-native-vector-icons)/)',
+  ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
   },

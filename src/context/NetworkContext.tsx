@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { API_BASE_URL } from '../config/api';
+import { devError } from '../utils/logger';
 
 interface NetworkContextType {
   isOnline: boolean;
@@ -26,9 +27,10 @@ export const NetworkProvider: React.FC<{ children: ReactNode }> = ({ children })
       try {
         const res = await fetch(`${API_BASE_URL}/../healthz`, { method: 'HEAD', cache: 'no-store' });
         if (mounted) setNetworkState({ isOnline: res.ok, isConnected: true });
-      } catch {
-        if (mounted) setNetworkState({ isOnline: false, isConnected: false });
-      }
+} catch (err) {
+      devError('[Network] Health check failed:', err);
+      if (mounted) setNetworkState({ isOnline: false, isConnected: false });
+    }
     };
 
     check();

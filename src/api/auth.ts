@@ -1,7 +1,8 @@
 import api from './client';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setAccessToken, setRefreshToken, clearTokens } from './secureStorage';
 import { AuthTokens, User } from '../types';
+import { API_BASE_URL } from '../config/api';
+import axios from 'axios';
 
 export interface LoginRequest {
   email: string;
@@ -54,10 +55,6 @@ export const authApi = {
     };
     await setAccessToken(tokens.access_token);
     await setRefreshToken(tokens.refresh_token);
-    if (response.data.user) {
-      await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
-      await AsyncStorage.removeItem('patronData');
-    }
     return response.data;
   },
 
@@ -67,7 +64,6 @@ export const authApi = {
     if (response.data.refresh_token) {
       await setRefreshToken(response.data.refresh_token);
     }
-    await AsyncStorage.setItem('patronData', JSON.stringify(response.data.user));
     return response.data;
   },
 
@@ -154,13 +150,12 @@ export const authApi = {
   },
 
   refreshToken: async (refreshToken: string): Promise<{ access_token: string }> => {
-    const response = await api.post('/auth/refresh', { refresh_token: refreshToken });
+    const response = await axios.post(`${API_BASE_URL}/auth/refresh`, { refresh_token: refreshToken }, { timeout: 15000 });
     return response.data;
   },
 
   logout: async (): Promise<void> => {
     await clearTokens();
-    await AsyncStorage.multiRemove(['patronData', 'userData']);
   },
 
   getCurrentUser: async (): Promise<User> => {

@@ -7,6 +7,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from 'react-native-paper';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
+import { navigationRef } from './navigationRef';
 
 
 import ChangePasswordScreen from '../features/profile/screens/ChangePasswordScreen';
@@ -26,13 +27,11 @@ import ScheduleScreen from '../features/schedule/screens/ScheduleScreen';
 import StaffBorrowScreen from '../features/borrow/screens/StaffBorrowScreen';
 import AIChatScreen from '../features/ai/screens/AIChatScreen';
 import AIHealthScreen from '../features/ai/screens/AIHealthScreen';
-import AIWidget from '../features/ai/components/AIWidget/AIWidget';
 import BookRecommendationsScreen from '../features/book/screens/BookRecommendationsScreen';
 import MyReservationsScreen from '../features/library/screens/MyReservationsScreen';
 import BookCatalogScreen from '../features/book/screens/BookCatalogScreen';
 import EditProfileScreen from '../features/profile/screens/EditProfileScreen';
 import LibraryTourScreen from '../features/library/screens/LibraryTourScreen';
-import ReauthModal from '../components/ReauthModal';
 
 import { isStaffRole, isPatronRole } from './roleGuard';
 import { AuthStackParamList, PatronStackParamList, StaffStackParamList, PatronTabParamList, StaffTabParamList } from './types';
@@ -462,7 +461,7 @@ export default function AppNavigator() {
 
   return (
     <>
-      <NavigationContainer theme={navigationTheme}>
+      <NavigationContainer ref={navigationRef} theme={navigationTheme}>
         <RootStack.Navigator screenOptions={{ headerShown: false }}>
           {!isAuthenticated ? (
             <RootStack.Screen name="Auth" component={AuthNavigator} />
@@ -473,8 +472,6 @@ export default function AppNavigator() {
           )}
         </RootStack.Navigator>
       </NavigationContainer>
-      {isAuthenticated && <AIWidget />}
-      <ReauthModal />
     </>
   );
 }

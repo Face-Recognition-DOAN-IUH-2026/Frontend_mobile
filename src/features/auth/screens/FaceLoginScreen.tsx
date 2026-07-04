@@ -1,12 +1,13 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import React, { useMemo, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Card, Text, useTheme } from 'react-native-paper';
 import { useAuth } from '../../../context/AuthContext';
 import CameraFallback from '../../../components/CameraFallback';
 import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
 import { AppTheme } from '../../../theme/DarkTheme';
+import { useFaceLoginState } from '../../../hooks/useFaceLoginState';
 
 interface FaceLoginScreenProps {
   navigation: any;
@@ -20,7 +21,15 @@ export default function FaceLoginScreen({ navigation }: FaceLoginScreenProps) {
   const [error, setError] = useState('');
   const [cameraError, setCameraError] = useState(false);
   const cameraRef = useRef<CameraView>(null);
-  const { faceLogin } = useAuth();
+  const { faceLogin, staffLogin } = useAuth();
+  const cameraHeight = useRef(new Animated.Value(1)).current;
+
+  const { faceAttemptCount, faceFailed, showPasswordForm, attemptFaceLogin, switchToPassword, resetFace } =
+    useFaceLoginState(faceLogin);
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
 
   const captureFace = async () => {
     if (!cameraRef.current || isCapturing) return;
@@ -30,7 +39,13 @@ export default function FaceLoginScreen({ navigation }: FaceLoginScreenProps) {
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
       if (photo?.uri) {
-        await faceLogin(photo.uri);
+        const success = await attemptFaceLogin(photo.uri);
+        if (success) {
+          return;
+        }
+        if (!faceFailed && faceAttemptCount < 2) {
+          setError('Không nhận diện được, thử lại');
+        }
       }
     } catch (err: any) {
       const message = err?.response?.data?.detail || err?.message || 'Đăng nhập thất bại';
@@ -39,6 +54,37 @@ export default function FaceLoginScreen({ navigation }: FaceLoginScreenProps) {
       setIsCapturing(false);
     }
   };
+
+  const handlePasswordLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      setError('Vui lòng nhập email và mật khẩu');
+      return;
+    }
+    setLoginLoading(true);
+    setError('');
+    try {
+      await staffLogin(email.trim(), password);
+    } catch (err: any) {
+      const message = err?.response?.data?.detail || err?.message || 'Đăng nhập thất bại';
+      setError(message);
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (faceFailed) {
+      Animated.spring(cameraHeight, {
+        toValue: 0.4,
+        useNativeDriver: false,
+      }).start();
+    } else {
+      Animated.spring(cameraHeight, {
+        toValue: 1,
+        useNativeDriver: false,
+      }).start();
+    }
+  }, [faceFailed, cameraHeight]);
 
   if (!permission) {
     return <SafeAreaView style={styles.container} />;
@@ -83,42 +129,85 @@ export default function FaceLoginScreen({ navigation }: FaceLoginScreenProps) {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      <CameraView
-        ref={cameraRef}
-        style={styles.camera}
-        facing="front"
-        onMountError={() => setCameraError(true)}
-      />
-      <View style={styles.overlay}>
-        <View style={styles.faceGuide}>
-          <View style={[styles.guideCorner, styles.topLeft]} />
-          <View style={[styles.guideCorner, styles.topRight]} />
-          <View style={[styles.guideCorner, styles.bottomLeft]} />
-          <View style={[styles.guideCorner, styles.bottomRight]} />
-        </View>
-        <Text style={styles.instruction}>Đặt khuôn mặt trong khung hình và giữ yên</Text>
-      </View>
-
-      <Card mode="contained" style={styles.controls}>
-        <Card.Content style={styles.controlsContent}>
-          <Text style={styles.hint}>
-            {isCapturing ? 'Đang xử lý...' : 'Nhấn nút để đăng nhập'}
+      <Animated.View style={{ flex: cameraHeight, overflow: 'hidden' }}>
+        <CameraView
+          ref={cameraRef}
+          style={styles.camera}
+          facing="front"
+          onMountError={() => setCameraError(true)}
+        />
+        <View style={styles.overlay}>
+          <View style={[styles.faceGuide, faceFailed && styles.faceGuideSmall]}>
+            <View style={[styles.guideCorner, styles.topLeft]} />
+            <View style={[styles.guideCorner, styles.topRight]} />
+            <View style={[styles.guideCorner, styles.bottomLeft]} />
+            <View style={[styles.guideCorner, styles.bottomRight]} />
+          </View>
+          <Text style={styles.instruction}>
+            {faceFailed ? 'Không nhận diện được khuôn mặt' : 'Đặt khuôn mặt trong khung hình và giữ yên'}
           </Text>
-          <Button
-            mode="contained"
-            onPress={captureFace}
-            loading={isCapturing}
-            disabled={isCapturing}
-            contentStyle={styles.largeButton}
-            icon="face-recognition"
-          >
-            Đăng nhập bằng khuôn mặt
-          </Button>
-          <Button mode="text" onPress={() => navigation.goBack()}>
-            Quay lại đăng nhập bằng mật khẩu
-          </Button>
-        </Card.Content>
-      </Card>
+        </View>
+      </Animated.View>
+
+      {!faceFailed && (
+        <Card mode="contained" style={styles.controls}>
+          <Card.Content style={styles.controlsContent}>
+            <Text style={styles.hint}>
+              {isCapturing ? 'Đang xử lý...' : 'Nhấn nút để đăng nhập'}
+            </Text>
+            <Button
+              mode="contained"
+              onPress={captureFace}
+              loading={isCapturing}
+              disabled={isCapturing}
+              contentStyle={styles.largeButton}
+              icon="face-recognition"
+            >
+              Đăng nhập bằng khuôn mặt
+            </Button>
+            <Button mode="text" onPress={() => navigation.goBack()}>
+              Quay lại đăng nhập bằng mật khẩu
+            </Button>
+          </Card.Content>
+        </Card>
+      )}
+
+      {showPasswordForm && (
+        <Card mode="contained" style={styles.passwordForm}>
+          <Card.Content style={styles.passwordFormContent}>
+            <Text style={styles.passwordFormTitle}>Đăng nhập bằng mật khẩu</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor={theme.colors.onSurfaceVariant}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Mật khẩu"
+              placeholderTextColor={theme.colors.onSurfaceVariant}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
+            <Button
+              mode="contained"
+              onPress={handlePasswordLogin}
+              loading={loginLoading}
+              disabled={loginLoading}
+              contentStyle={styles.largeButton}
+            >
+              Đăng nhập
+            </Button>
+            <Button mode="text" onPress={() => { resetFace(); navigation.goBack(); }}>
+              Quay lại
+            </Button>
+          </Card.Content>
+        </Card>
+      )}
 
       <NoticeSnackbar
         visible={!!error}
@@ -182,6 +271,11 @@ function createStyles(theme: AppTheme) {
       borderColor: theme.colors.primary,
       position: 'relative',
     },
+    faceGuideSmall: {
+      width: 140,
+      height: 180,
+      borderRadius: 90,
+    },
     guideCorner: {
       position: 'absolute',
       width: 42,
@@ -242,6 +336,33 @@ function createStyles(theme: AppTheme) {
     },
     largeButton: {
       minHeight: 52,
+    },
+    passwordForm: {
+      position: 'absolute',
+      left: 12,
+      right: 12,
+      bottom: 12,
+      borderRadius: 18,
+      backgroundColor: theme.colors.surface,
+    },
+    passwordFormContent: {
+      gap: 12,
+    },
+    passwordFormTitle: {
+      color: theme.colors.onSurface,
+      fontWeight: '800',
+      textAlign: 'center',
+      fontSize: 16,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: theme.colors.outlineVariant,
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      color: theme.colors.onSurface,
+      backgroundColor: theme.colors.surface,
+      fontSize: 15,
     },
   });
 }

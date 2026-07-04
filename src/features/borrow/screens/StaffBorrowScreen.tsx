@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { View, StyleSheet, Alert, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, Button, Surface, TextInput, Divider, useTheme } from 'react-native-paper';
@@ -39,10 +39,75 @@ export default function StaffBorrowScreen() {
   const [activeCount, setActiveCount] = useState(0);
   const [overdueCount, setOverdueCount] = useState(0);
   const [activeRecords, setActiveRecords] = useState<BorrowRecord[]>([]);
+  const [borrowConfig, setBorrowConfig] = useState<{ max_borrow_books: number }>({ max_borrow_books: 3 });
+  const [manualIsbn, setManualIsbn] = useState('');
+  const [scanError, setScanError] = useState<string | null>(null);
 
-  const MAX_BORROW = 3;
-  const remaining = MAX_BORROW - activeCount;
+  useEffect(() => {
+    borrowApi.getBorrowConfig().then(setBorrowConfig).catch(() => {});
+  }, []);
+
+  const remaining = borrowConfig.max_borrow_books - activeCount;
   const canBorrow = remaining > 0 && overdueCount === 0;
+
+  const lookupManualIsbn = async () => {
+    const isbn = manualIsbn.trim();
+    if (!isbn || !patronId) return;
+    setScanError(null);
+
+    if (scannedItems.find((item) => item.barcode === isbn)) {
+      setScanToast('Sách này đã có trong danh sách');
+      setManualIsbn('');
+      return;
+    }
+
+    if (scannedItems.length >= remaining) {
+      setScanError(`Chỉ được mượn tối đa ${borrowConfig.max_borrow_books} cuốn`);
+      setManualIsbn('');
+      return;
+    }
+
+    try {
+      const result = await borrowApi.lookupBorrowSlip({
+        patron_id: patronId,
+        items: [{ barcode: isbn, isbn }],
+      });
+      const item = result.items.find((i) => i.barcode === isbn);
+      if (!item || !item.can_borrow) {
+        const msg = item?.reason || 'Sách không thể mượn';
+        const title = item?.book?.title || '';
+        setScanError(title ? `"${title}": ${msg}` : `${msg} (ISBN: ${isbn})`);
+        setManualIsbn('');
+        return;
+      }
+      const book: Book = {
+        id: item.book!.id,
+        isbn: item.book!.isbn,
+        title: item.book!.title,
+        author: item.book!.author || undefined,
+        cover_url: item.book!.cover_url || undefined,
+        shelf_location: item.book!.shelf_location || undefined,
+      };
+      setScannedItems((prev) => [...prev, {
+        barcode: isbn,
+        isbn,
+        copy_id: item.copy?.id || null,
+        copy_barcode: item.copy?.barcode || null,
+        book,
+      }]);
+      setScanToast(`Đã thêm: ${book.title}`);
+      setManualIsbn('');
+    } catch (error: any) {
+      let msg = `Không tìm thấy sách: ${isbn}`;
+      if (error.response?.status === 403) {
+        msg = error.response?.data?.detail || 'Bạn không thể mượn sách lúc này';
+      } else if (error.response?.data?.detail) {
+        msg = error.response.data.detail;
+      }
+      setScanError(msg);
+      setManualIsbn('');
+    }
+  };
 
   const handleBarCodeScanned = useCallback(async (result: BarcodeScanningResult) => {
     if (scanned || !result.data) return;
@@ -61,7 +126,7 @@ export default function StaffBorrowScreen() {
     }
 
     if (scannedItems.length >= remaining) {
-      setScanToast(`Chỉ được mượn tối đa ${MAX_BORROW} cuốn`);
+      setScanToast(`Chỉ được mượn tối đa ${borrowConfig.max_borrow_books} cuốn`);
       setTimeout(() => setScanned(false), 500);
       return;
     }
@@ -96,7 +161,7 @@ export default function StaffBorrowScreen() {
       if (!item || !item.can_borrow) {
         const msg = item?.reason || 'Sách không thể mượn';
         const title = item?.book?.title || '';
-        Alert.alert('Thông báo', title ? `"${title}": ${msg}` : `${msg} (ISBN: ${barcode})`);
+        setScanError(title ? `"${title}": ${msg}` : `${msg} (ISBN: ${barcode})`);
         setTimeout(() => setScanned(false), 500);
         return;
       }
@@ -123,7 +188,7 @@ export default function StaffBorrowScreen() {
       } else if (error.response?.data?.detail) {
         msg = error.response.data.detail;
       }
-      Alert.alert('Thông báo', msg);
+      setScanError(msg);
     }
     setTimeout(() => setScanned(false), 500);
   }, [scanned, scannedItems, remaining, activeRecords, patronId]);
@@ -203,8 +268,8 @@ export default function StaffBorrowScreen() {
       return;
     }
 
-    if (activeCount + validItems.length > MAX_BORROW) {
-      Alert.alert('Vượt quá giới hạn', `Tổng sách mượn sẽ là ${activeCount + validItems.length} cuốn, tối đa ${MAX_BORROW} cuốn`);
+    if (activeCount + validItems.length > borrowConfig.max_borrow_books) {
+      Alert.alert('Vượt quá giới hạn', `Tổng sách mượn sẽ là ${activeCount + validItems.length} cuốn, tối đa ${borrowConfig.max_borrow_books} cuốn`);
       return;
     }
 
@@ -329,7 +394,7 @@ export default function StaffBorrowScreen() {
               value={activeCount}
               icon="book-open-variant"
               gradient={GRADIENTS.blue}
-              pct={(activeCount / MAX_BORROW) * 100}
+              pct={(activeCount / borrowConfig.max_borrow_books) * 100}
             />
           </View>
           <View style={styles.statHalf}>
@@ -384,6 +449,52 @@ export default function StaffBorrowScreen() {
           </View>
         )}
       </View>
+
+      {scanError ? (
+        <View style={styles.scanErrorBox}>
+          <View style={styles.scanErrorRow}>
+            <MaterialCommunityIcons name="alert-circle-outline" size={18} color={c.error} />
+            <Text style={styles.scanErrorText} selectable>{scanError}</Text>
+            <Button mode="text" compact onPress={() => setScanError(null)} textColor={c.error} style={{ minWidth: 0 }}>
+              <MaterialCommunityIcons name="close" size={16} color={c.error} />
+            </Button>
+          </View>
+          <Button
+            mode="outlined"
+            compact
+            onPress={() => { setScanError(null); setManualIsbn(''); }}
+            style={styles.manualEntryButton}
+            textColor={c.primary}
+          >
+            Nhập ISBN thủ công
+          </Button>
+        </View>
+      ) : null}
+
+      {patronId && canBorrow ? (
+        <View style={styles.manualInputRow}>
+          <TextInput
+            value={manualIsbn}
+            onChangeText={setManualIsbn}
+            placeholder="Nhập ISBN thủ công..."
+            mode="outlined"
+            style={styles.manualInput}
+            outlineStyle={styles.inputOutline}
+            activeOutlineColor={c.primary}
+            keyboardType="numeric"
+            onSubmitEditing={lookupManualIsbn}
+          />
+          <Button
+            mode="contained"
+            compact
+            onPress={lookupManualIsbn}
+            disabled={!manualIsbn.trim()}
+            style={styles.manualLookupButton}
+          >
+            Thêm
+          </Button>
+        </View>
+      ) : null}
 
       <SectionCard
         title={`Danh sách mượn (${scannedItems.length} cuốn)`}
@@ -519,6 +630,45 @@ function createStyles(theme: AppTheme) {
     scanText: { color: '#FFFFFF', marginTop: 12, fontSize: 14, textAlign: 'center', fontWeight: '600' },
     cameraPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 10, backgroundColor: c.surfaceVariant },
     cameraPlaceholderText: { color: c.onSurfaceVariant, fontSize: 14, fontWeight: '600' },
+    scanErrorBox: {
+      marginHorizontal: 16,
+      marginBottom: 12,
+      padding: 10,
+      borderRadius: 10,
+      backgroundColor: c.errorContainer,
+      borderWidth: 1,
+      borderColor: c.error,
+    },
+    scanErrorRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+    },
+    scanErrorText: {
+      color: c.error,
+      flex: 1,
+      fontSize: 13,
+    },
+    manualEntryButton: {
+      marginTop: 8,
+      alignSelf: 'flex-start',
+      borderColor: c.primary,
+    },
+    manualInputRow: {
+      flexDirection: 'row',
+      gap: 8,
+      marginHorizontal: 16,
+      marginBottom: 12,
+      alignItems: 'center',
+    },
+    manualInput: {
+      flex: 1,
+      backgroundColor: 'transparent',
+    },
+    manualLookupButton: {
+      borderRadius: 10,
+      height: 40,
+    },
     listSection: { flex: 1, marginHorizontal: 16 },
     list: { flex: 1 },
     itemCard: { marginVertical: 4, marginHorizontal: 16, backgroundColor: c.surface, borderRadius: 14, borderWidth: 0.5, borderColor: c.outlineVariant },

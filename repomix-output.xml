@@ -70,7 +70,6 @@ src/__tests__/App.test.tsx
 src/__tests__/components/CameraFallback.test.ts
 src/__tests__/components/LoadingOverlay.test.ts
 src/__tests__/components/NoticeSnackbar.test.ts
-src/__tests__/components/ReauthModal.test.ts
 src/__tests__/components/SearchField.test.ts
 src/__tests__/components/SwipeReserveRow.test.tsx
 src/__tests__/components/UndoBar.test.ts
@@ -96,7 +95,6 @@ src/components/CodeInput.tsx
 src/components/LoadingOverlay.tsx
 src/components/NoticeSnackbar.tsx
 src/components/OfflineIndicator.tsx
-src/components/ReauthModal.tsx
 src/components/SearchField.tsx
 src/components/StudentCardScanner.tsx
 src/components/SwipeDeleteRow.tsx
@@ -147,6 +145,7 @@ src/lib/queryClient.ts
 src/lib/useStaggeredAnimation.ts
 src/lib/useUndo.ts
 src/navigation/AppNavigator.tsx
+src/navigation/navigationRef.ts
 src/navigation/roleGuard.ts
 src/navigation/types.ts
 src/shared/ui/ai/BookRecommendationCard.tsx
@@ -169,6 +168,12 @@ tsconfig.json
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path="src/navigation/navigationRef.ts">
+import { createNavigationContainerRef } from '@react-navigation/native';
+
+export const navigationRef = createNavigationContainerRef();
+</file>
 
 <file path="e2e/flows/401-handling-flow.yaml">
 appId: com.library.mobile
@@ -1435,202 +1440,6 @@ describe('NoticeSnackbar', () => {
     const output = snackbarOutput({ visible: true, message: 'Dismiss me', onDismiss: dismissFn });
     output.dismiss();
     expect(dismissFn).toHaveBeenCalledTimes(1);
-  });
-});
-</file>
-
-<file path="src/__tests__/components/ReauthModal.test.ts">
-function simulateReauthQueue() {
-  const queue: Array<() => void> = [];
-  let showingReauth = false;
-
-  return {
-    get queueLength() { return queue.length; },
-    get isShowingReauth() { return showingReauth; },
-
-    addRequest() {
-      return new Promise<void>((resolve, reject) => {
-        queue.push(() => { resolve(); });
-        if (!showingReauth) {
-          showingReauth = true;
-        }
-      });
-    },
-
-    retryAll(token: string) {
-      const items = queue.splice(0);
-      showingReauth = false;
-      items.forEach((resolve) => {
-        resolve();
-      });
-    },
-
-    cancelAll() {
-      const count = queue.length;
-      queue.splice(0);
-      showingReauth = false;
-      return count;
-    },
-  };
-}
-
-describe('ReauthModal - request queue logic', () => {
-  it('queues a request when 401 occurs', () => {
-    const q = simulateReauthQueue();
-    const prom = q.addRequest();
-    expect(q.queueLength).toBe(1);
-    expect(q.isShowingReauth).toBe(true);
-  });
-
-  it('queues multiple requests', () => {
-    const q = simulateReauthQueue();
-    q.addRequest();
-    q.addRequest();
-    q.addRequest();
-    expect(q.queueLength).toBe(3);
-  });
-
-  it('retryAll replays queued requests with new token', async () => {
-    const q = simulateReauthQueue();
-    const results: string[] = [];
-
-    const p1 = q.addRequest().then(() => results.push('resolved'));
-    const p2 = q.addRequest().then(() => results.push('resolved'));
-
-    q.retryAll('new-token');
-
-    await Promise.all([p1, p2]);
-    expect(results).toEqual(['resolved', 'resolved']);
-    expect(q.queueLength).toBe(0);
-    expect(q.isShowingReauth).toBe(false);
-  });
-
-  it('cancelAll rejects all queued requests', () => {
-    const q = simulateReauthQueue();
-    q.addRequest();
-    q.addRequest();
-
-    const cancelled = q.cancelAll();
-    expect(cancelled).toBe(2);
-    expect(q.queueLength).toBe(0);
-    expect(q.isShowingReauth).toBe(false);
-  });
-
-  it('handles empty queue gracefully', () => {
-    const q = simulateReauthQueue();
-    expect(() => q.retryAll('x')).not.toThrow();
-    expect(() => q.cancelAll()).not.toThrow();
-  });
-});
-
-describe('ReauthModal - modal state logic', () => {
-  type ReauthState = {
-    visible: boolean;
-    email: string;
-    password: string;
-    loading: boolean;
-    error: string;
-  };
-
-  function initialReauthState(): ReauthState {
-    return { visible: false, email: '', password: '', loading: false, error: '' };
-  }
-
-  function openModal(): ReauthState {
-    return { visible: true, email: '', password: '', loading: false, error: '' };
-  }
-
-  function typeEmail(state: ReauthState, email: string): ReauthState {
-    return { ...state, email };
-  }
-
-  function typePassword(state: ReauthState, password: string): ReauthState {
-    return { ...state, password };
-  }
-
-  function submitReauth(state: ReauthState): ReauthState {
-    if (!state.email || !state.password) return state;
-    return { ...state, loading: true, error: '' };
-  }
-
-  function reauthSuccess(state: ReauthState): ReauthState {
-    return { ...state, visible: false, password: '', loading: false, error: '' };
-  }
-
-  function reauthError(state: ReauthState, msg: string): ReauthState {
-    return { ...state, loading: false, error: msg };
-  }
-
-  function closeModal(state: ReauthState): ReauthState {
-    return { ...state, visible: false, password: '', loading: false, error: '' };
-  }
-
-  it('starts invisible with empty fields', () => {
-    const state = initialReauthState();
-    expect(state.visible).toBe(false);
-    expect(state.email).toBe('');
-    expect(state.password).toBe('');
-    expect(state.loading).toBe(false);
-    expect(state.error).toBe('');
-  });
-
-  it('shows modal when auth:required event fires', () => {
-    const state = openModal();
-    expect(state.visible).toBe(true);
-  });
-
-  it('allows typing email and password', () => {
-    let state = openModal();
-    state = typeEmail(state, 'user@test.com');
-    state = typePassword(state, 'mypassword');
-    expect(state.email).toBe('user@test.com');
-    expect(state.password).toBe('mypassword');
-  });
-
-  it('sets loading on submit', () => {
-    let state = openModal();
-    state = typeEmail(state, 'user@test.com');
-    state = typePassword(state, 'mypassword');
-    state = submitReauth(state);
-    expect(state.loading).toBe(true);
-    expect(state.error).toBe('');
-  });
-
-  it('does not submit with empty fields', () => {
-    let state = openModal();
-    state = submitReauth(state);
-    expect(state.loading).toBe(false);
-  });
-
-  it('clears state on successful reauth', () => {
-    let state = openModal();
-    state = typeEmail(state, 'user@test.com');
-    state = typePassword(state, 'mypassword');
-    state = submitReauth(state);
-    state = reauthSuccess(state);
-    expect(state.visible).toBe(false);
-    expect(state.password).toBe('');
-    expect(state.loading).toBe(false);
-  });
-
-  it('shows error message on failed reauth', () => {
-    let state = openModal();
-    state = typeEmail(state, 'user@test.com');
-    state = typePassword(state, 'mypassword');
-    state = submitReauth(state);
-    state = reauthError(state, 'Invalid credentials');
-    expect(state.loading).toBe(false);
-    expect(state.error).toBe('Invalid credentials');
-  });
-
-  it('closes modal and resets on cancel', () => {
-    let state = openModal();
-    state = typeEmail(state, 'user@test.com');
-    state = typePassword(state, 'mypassword');
-    state = closeModal(state);
-    expect(state.visible).toBe(false);
-    expect(state.password).toBe('');
-    expect(state.error).toBe('');
   });
 });
 </file>
@@ -11915,309 +11724,6 @@ export const openLibraryApi = {
 };
 </file>
 
-<file path="src/components/ReauthModal.tsx">
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ActivityIndicator,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-} from 'react-native';
-import bus from '../lib/event-bus';
-import { retryPendingRequests, cancelPendingRequests } from '../api/client';
-import { authApi } from '../api/auth';
-import { useAuth } from '../context/AuthContext';
-import { devError } from '../utils/logger';
-
-type ReauthMode = 'staff' | 'patron' | 'face';
-
-export default function ReauthModal() {
-  const [visible, setVisible] = useState(false);
-  const [mode, setMode] = useState<ReauthMode>('staff');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [studentCode, setStudentCode] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const { user, logout } = useAuth();
-  const reauthSucceededRef = useRef(false);
-
-  useEffect(() => {
-    const unsub = bus.on('auth:required', () => {
-      reauthSucceededRef.current = false;
-      const role = user?.role;
-      if (role === 'admin' || role === 'staff') {
-        setMode('staff');
-      } else {
-        setMode('patron');
-      }
-      setVisible(true);
-    });
-    return () => unsub();
-  }, [user?.role]);
-
-  useEffect(() => {
-    if (!visible) {
-      setEmail('');
-      setPassword('');
-      setStudentCode('');
-      setError('');
-      if (!reauthSucceededRef.current) {
-        cancelPendingRequests();
-      }
-    }
-  }, [visible]);
-
-  useEffect(() => {
-    if (!visible) return;
-    const timer = setTimeout(() => {
-      handleDismiss();
-    }, 60000);
-    return () => clearTimeout(timer);
-  }, [visible]);
-
-  const handleDismiss = useCallback(() => {
-    setVisible(false);
-  }, []);
-
-  const handleFaceLogin = useCallback(async () => {
-    try {
-      const { faceLogin } = await import('../context/AuthContext').then(m => m.useAuth());
-      // Face login requires camera - emit event to trigger face login flow
-      bus.emit('face:reauth-required');
-      setVisible(false);
-    } catch (err) {
-      devError('[ReauthModal] Face login not available:', err);
-      setError('Đăng nhập khuôn mặt không khả dụng');
-    }
-  }, []);
-
-  const handleReauthStaff = async () => {
-    if (!email || !password) return;
-    setError('');
-    setLoading(true);
-    try {
-      const res = await authApi.login({ email, password });
-      if (res?.access_token) {
-        reauthSucceededRef.current = true;
-        retryPendingRequests(res.access_token);
-        setVisible(false);
-        setPassword('');
-      }
-    } catch (err: any) {
-      setError(err?.response?.data?.detail || err?.message || 'Đăng nhập thất bại');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleReauthPatron = async () => {
-    if (!studentCode || !password) return;
-    setError('');
-    setLoading(true);
-    try {
-      const res = await authApi.patronLogin({ student_code: studentCode, password });
-      if (res?.access_token) {
-        reauthSucceededRef.current = true;
-        retryPendingRequests(res.access_token);
-        setVisible(false);
-        setPassword('');
-        setStudentCode('');
-      }
-    } catch (err: any) {
-      setError(err?.response?.data?.error || err?.message || 'Đăng nhập thất bại');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleDismiss} presentationStyle="fullScreen" supportedOrientations={['portrait']}>
-      <View style={styles.backdrop}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={styles.card}>
-            <Text style={styles.title}>Phiên đăng nhập hết hạn</Text>
-            <Text style={styles.subtitle}>Vui lòng đăng nhập lại để tiếp tục</Text>
-
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-
-            <View style={styles.modeTabs}>
-              <TouchableOpacity
-                style={[styles.modeTab, mode === 'staff' && styles.modeTabActive]}
-                onPress={() => setMode('staff')}
-              >
-                <Text style={[styles.modeTabText, mode === 'staff' && styles.modeTabTextActive]}>Nhân viên</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modeTab, mode === 'patron' && styles.modeTabActive]}
-                onPress={() => setMode('patron')}
-              >
-                <Text style={[styles.modeTabText, mode === 'patron' && styles.modeTabTextActive]}>Sinh viên</Text>
-              </TouchableOpacity>
-            </View>
-
-            {mode === 'staff' ? (
-              <>
-                <Text style={styles.label}>Email</Text>
-                <TextInput
-                  style={styles.input}
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder="Email"
-                  placeholderTextColor="#999"
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  autoFocus
-                />
-              </>
-            ) : (
-              <>
-                <Text style={styles.label}>Mã sinh viên</Text>
-                <TextInput
-                  style={styles.input}
-                  value={studentCode}
-                  onChangeText={setStudentCode}
-                  placeholder="Mã sinh viên"
-                  placeholderTextColor="#999"
-                  autoCapitalize="none"
-                  autoFocus
-                />
-              </>
-            )}
-
-            <Text style={styles.label}>Mật khẩu</Text>
-            <TextInput
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              placeholder="Nhập mật khẩu"
-              placeholderTextColor="#999"
-            />
-
-            <TouchableOpacity
-              style={[styles.button, loading && styles.buttonDisabled]}
-              onPress={mode === 'staff' ? handleReauthStaff : handleReauthPatron}
-              disabled={loading || (mode === 'staff' ? (!email || !password) : (!studentCode || !password))}
-            >
-              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Đăng nhập</Text>}
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.cancelButton} onPress={handleDismiss}>
-              <Text style={styles.cancelText}>Hủy</Text>
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
-  );
-}
-
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
-    width: '100%',
-    maxWidth: 360,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  error: {
-    color: '#d32f2f',
-    fontSize: 13,
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 15,
-    marginBottom: 14,
-    backgroundColor: '#fff',
-  },
-  button: {
-    backgroundColor: '#1976d2',
-    borderRadius: 8,
-    padding: 14,
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  cancelButton: {
-    alignItems: 'center',
-    padding: 10,
-  },
-  cancelText: {
-    color: '#666',
-    fontSize: 14,
-  },
-  modeTabs: {
-    flexDirection: 'row',
-    marginBottom: 16,
-    borderRadius: 8,
-    backgroundColor: '#f0f0f0',
-    padding: 4,
-  },
-  modeTab: {
-    flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-  modeTabActive: {
-    backgroundColor: '#1976d2',
-  },
-  modeTabText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#666',
-  },
-  modeTabTextActive: {
-    color: '#fff',
-  },
-});
-</file>
-
 <file path="src/components/SwipeReserveRow.tsx">
 import React, { useRef } from 'react';
 import { Animated, PanResponder, StyleSheet, TouchableOpacity, View } from 'react-native';
@@ -14918,7 +14424,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as FileSystem from 'expo-file-system/legacy';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import TextRecognition from '@react-native-ml-kit/text-recognition';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { AppTheme } from '../theme/DarkTheme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -14956,7 +14462,7 @@ async function parseCardText(rawText: string): Promise<Partial<ScannedCardData>>
   }
 
   try {
-    const token = await AsyncStorage.getItem('accessToken');
+    const token = await SecureStore.getItemAsync('accessToken');
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
@@ -14964,7 +14470,7 @@ async function parseCardText(rawText: string): Promise<Partial<ScannedCardData>>
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/ai/parse-card-text`, {
+    const response = await fetch(`${API_BASE_URL}/ai/parse-card-text`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ raw_text: rawText }),
@@ -17243,13 +16749,21 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   const fetchUnreadCount = useCallback(async () => {
     if (!(await hasToken())) return;
-    try {
-      const count = await notificationApi.getUnreadCount();
-      setUnreadCount(count);
-    } catch (err: any) {
-      if (err.response?.status === 401) return;
-      devError('[Notification] Failed to fetch unread count:', err);
+    let lastErr: any;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const count = await notificationApi.getUnreadCount();
+        setUnreadCount(count);
+        return;
+      } catch (err: any) {
+        lastErr = err;
+        if (err.response?.status === 401) return;
+        if (attempt < 1) {
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+      }
     }
+    devError('[Notification] Failed to fetch unread count:', lastErr);
   }, []);
 
   const fetchNotifications = useCallback(async (unreadOnly = false) => {
@@ -18053,13 +17567,13 @@ function createStyles(theme: AppTheme) {
 #   4. On Windows with Docker Desktop, try restarting Docker and running:
 #      docker compose down && docker compose up -d
 
-EXPO_PUBLIC_API_URL=http://192.168.1.166:80/api
+EXPO_PUBLIC_API_URL=http://192.168.1.52:80/api
 
 # Web frontend URL for 3D tour and other web views
 # Android Emulator: http://10.0.2.2:3000
 # iOS Simulator: http://localhost:3000
 # Real Device (same network): http://<your-pc-ip>:3000
-EXPO_PUBLIC_WEB_URL=http://192.168.1.166:3000
+EXPO_PUBLIC_WEB_URL=http://192.168.1.52:3000
 </file>
 
 <file path="src/api/schedule.ts">
@@ -18298,8 +17812,7 @@ const styles = StyleSheet.create({
 
 <file path="src/api/client.ts">
 import axios, { AxiosInstance, AxiosError, AxiosRequestConfig } from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getAccessToken, getRefreshToken, setAccessToken, setRefreshToken, clearTokens } from './secureStorage';
+import { getAccessToken, getRefreshToken, setAccessToken, clearTokens } from './secureStorage';
 import { devError } from '../utils/logger';
 import { API_BASE_URL } from '../config/api';
 import bus from '../lib/event-bus';
@@ -18310,29 +17823,34 @@ let _pendingRequests: Array<{
   reject: (err: any) => void;
 }> = [];
 
-let _showingReauth = false;
+let _isRefreshing = false;
+let _refreshSubscribers: Array<(token: string) => void> = [];
 
-export function retryPendingRequests(newToken: string) {
-  const queue = [..._pendingRequests];
-  _pendingRequests = [];
-  _showingReauth = false;
-  if (!queue.length) return;
-  queue.forEach(({ config, resolve, reject }) => {
-    config.headers = { ...config.headers, Authorization: `Bearer ${newToken}` };
-    (api as any)(config).then(resolve).catch(reject);
-  });
+function onTokenRefreshed(newToken: string) {
+  _refreshSubscribers.forEach((cb) => cb(newToken));
+  _refreshSubscribers = [];
+}
+
+function addRefreshSubscriber(cb: (token: string) => void) {
+  _refreshSubscribers.push(cb);
 }
 
 export function cancelPendingRequests() {
   const queue = [..._pendingRequests];
   _pendingRequests = [];
-  _showingReauth = false;
+  _isRefreshing = false;
+  _refreshSubscribers = [];
   queue.forEach(({ reject }) => reject(new Error('Session expired')));
 }
 
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
+});
+
+const refreshApi: AxiosInstance = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 15000,
 });
 
 api.interceptors.request.use(
@@ -18353,64 +17871,44 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
-    if (error.response?.status === 401 && !(error.config as any).__isRetry) {
-      (error.config as any).__isRetry = true;
+    const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
 
-      const endpoint = error.config?.url || 'unknown';
-      const method = error.config?.method?.toUpperCase() || 'GET';
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      const endpoint = originalRequest?.url || 'unknown';
+      const method = originalRequest?.method?.toUpperCase() || 'GET';
       devError(`[API] 401 received for ${method} ${endpoint}`);
+
+      if (_isRefreshing) {
+        return new Promise((resolve, reject) => {
+          addRefreshSubscriber((token: string) => {
+            originalRequest.headers = { ...originalRequest.headers, Authorization: `Bearer ${token}` };
+            resolve(api(originalRequest));
+          });
+        });
+      }
+
+      originalRequest._retry = true;
+      _isRefreshing = true;
 
       const refreshToken = await getRefreshToken();
       if (refreshToken) {
         try {
-          const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-            refresh_token: refreshToken,
-          });
-          const { access_token, refresh_token: newRefreshToken } = response.data;
-          await setAccessToken(access_token);
-          if (newRefreshToken) {
-            await setRefreshToken(newRefreshToken);
-          }
-          if (error.config) {
-            error.config.headers.Authorization = `Bearer ${access_token}`;
-            return api.request(error.config);
-          }
-        } catch (refreshError) {
-          devError(`[API] First refresh failed for ${method} ${endpoint}, retrying...`);
-          // First refresh attempt failed - wait and retry once
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-          try {
-            const retryResponse = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-              refresh_token: refreshToken,
-            });
-            const { access_token: newAccessToken, refresh_token: newRefreshToken } = retryResponse.data;
-            await setAccessToken(newAccessToken);
-            if (newRefreshToken) {
-              await setRefreshToken(newRefreshToken);
-            }
-            if (error.config) {
-              error.config.headers.Authorization = `Bearer ${newAccessToken}`;
-              return api.request(error.config);
-            }
-          } catch (retryError) {
-            devError(`[API] Retry refresh failed for ${method} ${endpoint} - showing reauth modal`);
-            // Both refresh attempts failed - clear and show reauth modal
-            await clearTokens();
-            await AsyncStorage.multiRemove(['patronData', 'userData']);
-          }
+          const { data } = await refreshApi.post('/auth/refresh', { refresh_token: refreshToken });
+          const newAccessToken = data.access_token;
+          await setAccessToken(newAccessToken);
+          _isRefreshing = false;
+          onTokenRefreshed(newAccessToken);
+          originalRequest.headers = { ...originalRequest.headers, Authorization: `Bearer ${newAccessToken}` };
+          return api(originalRequest);
+        } catch (refreshErr: any) {
+          devError('[API] Refresh token failed:', refreshErr);
         }
-      } else {
-        devError(`[API] No refresh token available for ${method} ${endpoint} - showing reauth modal`);
       }
 
-      const config = error.config!;
-      return new Promise((resolve, reject) => {
-        _pendingRequests.push({ config, resolve, reject });
-        if (!_showingReauth) {
-          _showingReauth = true;
-          bus.emit('auth:required');
-        }
-      });
+      _isRefreshing = false;
+      cancelPendingRequests();
+      try { await clearTokens(); } catch { /* ignore */ }
+      bus.emit('auth:expired');
     }
     return Promise.reject(error);
   }
@@ -18420,13 +17918,14 @@ export default api;
 </file>
 
 <file path="src/context/AuthContext.tsx">
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getAccessToken } from '../api/secureStorage';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { User } from '../types';
 import { authApi } from '../api/auth';
 import { devError } from '../utils/logger';
 import { queryClient } from '../lib/queryClient';
+import { getAccessToken, getRefreshToken, setAccessToken } from '../api/secureStorage';
+import { cancelPendingRequests } from '../api/client';
+import bus from '../lib/event-bus';
 
 interface AuthContextType {
   user: User | null;
@@ -18437,8 +17936,8 @@ interface AuthContextType {
   patronLogin: (studentCode: string, password: string) => Promise<void>;
   faceLogin: (imageUri: string) => Promise<void>;
   logout: () => Promise<void>;
-  checkAuth: () => Promise<void>;
   updateUser: (patch: Partial<User>) => void;
+  restoreUserFromToken: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -18462,54 +17961,70 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [patron, setPatron] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const checkAuth = async () => {
+  const restoreUserFromToken = useCallback(async () => {
     try {
-      const token = await getAccessToken();
-      const patronDataStr = await AsyncStorage.getItem('patronData');
-      const userDataStr = await AsyncStorage.getItem('userData');
-      if (token && patronDataStr) {
-        const patronData = JSON.parse(patronDataStr);
-        setPatron(patronData);
-        setUser({ id: patronData.id, email: patronData.email || '', full_name: getFullName(patronData), role: 'patron', avatar_url: patronData.avatar_url || patronData.avatarUrl });
-      } else if (token && userDataStr) {
-        const userData = JSON.parse(userDataStr);
-        setPatron(null);
-        setUser({
-    id: userData.id,
-    email: userData.email || '',
-    full_name: getFullName(userData),
-    role: userData.role,
-    avatar_url: userData.avatar_url || userData.avatarUrl,
-  });
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        setIsLoading(false);
+        return;
       }
 
-      if (token) {
-        try {
-          const role = user?.role;
-          if (role === 'admin' || role === 'staff') {
-            const freshData: any = await authApi.getCurrentUser();
-            await AsyncStorage.setItem('userData', JSON.stringify(freshData));
-            setUser((prev) => prev ? { ...prev, avatar_url: freshData.avatar_url || freshData.avatarUrl, full_name: getFullName(freshData) } : prev);
-          } else if (role === 'patron') {
-            const freshData: any = await authApi.getCurrentPatron();
-            await AsyncStorage.setItem('patronData', JSON.stringify(freshData));
-            setPatron(freshData);
-            setUser((prev) => prev ? { ...prev, avatar_url: freshData.avatar_url || freshData.avatarUrl, full_name: getFullName(freshData) } : prev);
-          }
-        } catch {
-          devError('Background refresh failed, using cached data');
-        }
+      const payload = decodeJwtPayload(accessToken);
+      if (!payload) {
+        setIsLoading(false);
+        return;
       }
-    } catch (error) {
-      devError('Auth check failed:', error);
-      await authApi.logout();
+
+      const isExpired = payload.exp && payload.exp * 1000 < Date.now();
+      if (isExpired) {
+        const refreshToken = await getRefreshToken();
+        if (refreshToken) {
+          try {
+            const result = await authApi.refreshToken(refreshToken);
+            await setAccessToken(result.access_token);
+            const newPayload = decodeJwtPayload(result.access_token);
+            if (newPayload) {
+              setUser({
+                id: newPayload.userId || newPayload.sub,
+                email: newPayload.email || '',
+                full_name: newPayload.fullName || newPayload.full_name || '',
+                role: newPayload.roles?.[0] || newPayload.role || 'patron',
+              });
+              setIsLoading(false);
+              return;
+            }
+          } catch {
+            devError('[Auth] Refresh token failed on restore');
+          }
+        }
+        setIsLoading(false);
+        return;
+      }
+
+      setUser({
+        id: payload.userId || payload.sub,
+        email: payload.email || '',
+        full_name: payload.fullName || payload.full_name || '',
+        role: payload.roles?.[0] || payload.role || 'patron',
+      });
+    } catch (err) {
+      devError('[Auth] Failed to restore session:', err);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    checkAuth();
+    restoreUserFromToken();
+  }, [restoreUserFromToken]);
+
+  useEffect(() => {
+    const unsub = bus.on('auth:expired', () => {
+      setUser(null);
+      setPatron(null);
+      queryClient.clear();
+    });
+    return () => unsub();
   }, []);
 
   const patronLogin = async (studentCode: string, password: string) => {
@@ -18533,13 +18048,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error('Tài khoản này không có quyền dùng máy quét trả sách');
       }
       setPatron(null);
-setUser({
-  id: userData.id,
-  email: userData.email || email,
-  full_name: getFullName(userData),
-  role: userData.role,
-  avatar_url: userData.avatar_url,
-});
+      setUser({
+        id: userData.id,
+        email: userData.email || email,
+        full_name: getFullName(userData),
+        role: userData.role,
+        avatar_url: userData.avatar_url,
+      });
     } finally {
       setIsLoading(false);
     }
@@ -18554,13 +18069,10 @@ setUser({
 
       if (role === 'admin' || role === 'staff') {
         const userData = await authApi.getCurrentUser();
-        await AsyncStorage.setItem('userData', JSON.stringify(userData));
-        await AsyncStorage.removeItem('patronData');
         setPatron(null);
         setUser({ id: userData.id, email: userData.email || '', full_name: getFullName(userData), role: userData.role, avatar_url: userData.avatar_url });
       } else {
         const patronData = await authApi.getCurrentPatron();
-        await AsyncStorage.setItem('patronData', JSON.stringify(patronData));
         setPatron(patronData);
         setUser({ id: patronData.id, email: patronData.email || '', full_name: getFullName(patronData), role: 'patron', avatar_url: patronData.avatar_url || patronData.avatarUrl });
       }
@@ -18573,6 +18085,7 @@ setUser({
   };
 
   const logout = async () => {
+    cancelPendingRequests();
     await authApi.logout();
     queryClient.clear();
     setUser(null);
@@ -18580,24 +18093,7 @@ setUser({
   };
 
   const updateUser = (patch: Partial<User>) => {
-    setUser((prev) => {
-      if (!prev) return prev;
-      const next = { ...prev, ...patch };
-      // persist to storage
-      AsyncStorage.getItem('userData').then((raw) => {
-        if (raw) {
-          const stored = JSON.parse(raw);
-          AsyncStorage.setItem('userData', JSON.stringify({ ...stored, ...patch }));
-        }
-      });
-      AsyncStorage.getItem('patronData').then((raw) => {
-        if (raw) {
-          const stored = JSON.parse(raw);
-          AsyncStorage.setItem('patronData', JSON.stringify({ ...stored, ...patch }));
-        }
-      });
-      return next;
-    });
+    setUser((prev) => (prev ? { ...prev, ...patch } : prev));
   };
 
   return (
@@ -18611,8 +18107,8 @@ setUser({
         patronLogin,
         faceLogin,
         logout,
-        checkAuth,
         updateUser,
+        restoreUserFromToken,
       }}
     >
       {children}
@@ -18801,9 +18297,10 @@ export const borrowApi = {
 
 <file path="src/api/auth.ts">
 import api from './client';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setAccessToken, setRefreshToken, clearTokens } from './secureStorage';
 import { AuthTokens, User } from '../types';
+import { API_BASE_URL } from '../config/api';
+import axios from 'axios';
 
 export interface LoginRequest {
   email: string;
@@ -18856,10 +18353,6 @@ export const authApi = {
     };
     await setAccessToken(tokens.access_token);
     await setRefreshToken(tokens.refresh_token);
-    if (response.data.user) {
-      await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
-      await AsyncStorage.removeItem('patronData');
-    }
     return response.data;
   },
 
@@ -18869,7 +18362,6 @@ export const authApi = {
     if (response.data.refresh_token) {
       await setRefreshToken(response.data.refresh_token);
     }
-    await AsyncStorage.setItem('patronData', JSON.stringify(response.data.user));
     return response.data;
   },
 
@@ -18956,13 +18448,12 @@ export const authApi = {
   },
 
   refreshToken: async (refreshToken: string): Promise<{ access_token: string }> => {
-    const response = await api.post('/auth/refresh', { refresh_token: refreshToken });
+    const response = await axios.post(`${API_BASE_URL}/auth/refresh`, { refresh_token: refreshToken }, { timeout: 15000 });
     return response.data;
   },
 
   logout: async (): Promise<void> => {
     await clearTokens();
-    await AsyncStorage.multiRemove(['patronData', 'userData']);
   },
 
   getCurrentUser: async (): Promise<User> => {
@@ -19424,6 +18915,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from 'react-native-paper';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
+import { navigationRef } from './navigationRef';
 
 
 import ChangePasswordScreen from '../features/profile/screens/ChangePasswordScreen';
@@ -19443,13 +18935,11 @@ import ScheduleScreen from '../features/schedule/screens/ScheduleScreen';
 import StaffBorrowScreen from '../features/borrow/screens/StaffBorrowScreen';
 import AIChatScreen from '../features/ai/screens/AIChatScreen';
 import AIHealthScreen from '../features/ai/screens/AIHealthScreen';
-import AIWidget from '../features/ai/components/AIWidget/AIWidget';
 import BookRecommendationsScreen from '../features/book/screens/BookRecommendationsScreen';
 import MyReservationsScreen from '../features/library/screens/MyReservationsScreen';
 import BookCatalogScreen from '../features/book/screens/BookCatalogScreen';
 import EditProfileScreen from '../features/profile/screens/EditProfileScreen';
 import LibraryTourScreen from '../features/library/screens/LibraryTourScreen';
-import ReauthModal from '../components/ReauthModal';
 
 import { isStaffRole, isPatronRole } from './roleGuard';
 import { AuthStackParamList, PatronStackParamList, StaffStackParamList, PatronTabParamList, StaffTabParamList } from './types';
@@ -19879,7 +19369,7 @@ export default function AppNavigator() {
 
   return (
     <>
-      <NavigationContainer theme={navigationTheme}>
+      <NavigationContainer ref={navigationRef} theme={navigationTheme}>
         <RootStack.Navigator screenOptions={{ headerShown: false }}>
           {!isAuthenticated ? (
             <RootStack.Screen name="Auth" component={AuthNavigator} />
@@ -19890,8 +19380,6 @@ export default function AppNavigator() {
           )}
         </RootStack.Navigator>
       </NavigationContainer>
-      {isAuthenticated && <AIWidget />}
-      <ReauthModal />
     </>
   );
 }
