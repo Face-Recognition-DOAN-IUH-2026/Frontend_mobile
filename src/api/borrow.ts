@@ -109,4 +109,9 @@ export const borrowApi = {
     const response = await api.post<CreateBorrowSlipResponse>('/borrow/staff/slip/confirm', data);
     return response.data;
   },
+
+  getBorrowConfig: async (): Promise<{ max_borrow_books: number; max_borrow_books_per_slip: number; max_borrow_days: number }> => {
+    const response = await api.get('/borrow/config');
+    return response.data;
+  },
 };

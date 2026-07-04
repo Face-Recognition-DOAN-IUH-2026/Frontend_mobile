@@ -17,7 +17,7 @@ export function LoadingOverlay({ loading, message, children }: LoadingOverlayPro
 
   return (
     <View style={loStyles.container}>
-      <ActivityIndicator size="large" color={c.primary} />
+      <ActivityIndicator testID="loading-indicator" size="large" color={c.primary} />
       {message ? (
         <Text variant="bodyMedium" style={{ color: c.onSurfaceVariant, marginTop: 12 }}>{message}</Text>
       ) : null}

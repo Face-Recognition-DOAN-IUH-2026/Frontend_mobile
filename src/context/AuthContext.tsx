@@ -1,10 +1,36 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getAccessToken } from '../api/secureStorage';
-import { User } from '../types';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { User, UserRole } from '../types';
 import { authApi } from '../api/auth';
 import { devError } from '../utils/logger';
 import { queryClient } from '../lib/queryClient';
+import { getAccessToken, getRefreshToken, setAccessToken } from '../api/secureStorage';
+import { cancelPendingRequests } from '../api/client';
+import bus from '../lib/event-bus';
+
+interface JwtPayload {
+  sub?: string;
+  email?: string;
+  full_name?: string;
+  fullName?: string;
+  role?: string;
+  roles?: string[];
+  exp?: number;
+  userId?: string;
+}
+
+export interface Patron {
+  id: string;
+  email?: string;
+  full_name?: string;
+  fullName?: string;
+  avatar_url?: string;
+  avatarUrl?: string;
+  permanent_address?: string;
+  faculty?: string;
+  student_code?: string;
+  password_auto_generated?: boolean;
+  role?: string;
+}
 
 interface AuthContextType {
   user: User | null;
@@ -15,21 +41,21 @@ interface AuthContextType {
   patronLogin: (studentCode: string, password: string) => Promise<void>;
   faceLogin: (imageUri: string) => Promise<void>;
   logout: () => Promise<void>;
-  checkAuth: () => Promise<void>;
   updateUser: (patch: Partial<User>) => void;
+  restoreUserFromToken: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function getFullName(data: any): string {
-  return data?.fullName || data?.full_name || '';
+function getFullName(data: User | Patron): string {
+  return (data as any).fullName || (data as any).full_name || '';
 }
 
-function decodeJwtPayload(token: string): any {
+function decodeJwtPayload(token: string): JwtPayload | null {
   try {
     const base64 = token.split('.')[1];
     const json = atob(base64.replace(/-/g, '+').replace(/_/g, '/'));
-    return JSON.parse(json);
+    return JSON.parse(json) as JwtPayload;
   } catch {
     return null;
   }
@@ -37,57 +63,73 @@ function decodeJwtPayload(token: string): any {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [patron, setPatron] = useState<any | null>(null);
+  const [patron, setPatron] = useState<Patron | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const checkAuth = async () => {
+  const restoreUserFromToken = useCallback(async () => {
     try {
-      const token = await getAccessToken();
-      const patronDataStr = await AsyncStorage.getItem('patronData');
-      const userDataStr = await AsyncStorage.getItem('userData');
-      if (token && patronDataStr) {
-        const patronData = JSON.parse(patronDataStr);
-        setPatron(patronData);
-        setUser({ id: patronData.id, email: patronData.email || '', full_name: getFullName(patronData), role: 'patron', avatar_url: patronData.avatar_url || patronData.avatarUrl });
-      } else if (token && userDataStr) {
-        const userData = JSON.parse(userDataStr);
-        setPatron(null);
-        setUser({
-    id: userData.id,
-    email: userData.email || '',
-    full_name: getFullName(userData),
-    role: userData.role,
-    avatar_url: userData.avatar_url || userData.avatarUrl,
-  });
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        setIsLoading(false);
+        return;
       }
 
-      if (token) {
-        try {
-          const role = user?.role;
-          if (role === 'admin' || role === 'staff') {
-            const freshData: any = await authApi.getCurrentUser();
-            await AsyncStorage.setItem('userData', JSON.stringify(freshData));
-            setUser((prev) => prev ? { ...prev, avatar_url: freshData.avatar_url || freshData.avatarUrl, full_name: getFullName(freshData) } : prev);
-          } else if (role === 'patron') {
-            const freshData: any = await authApi.getCurrentPatron();
-            await AsyncStorage.setItem('patronData', JSON.stringify(freshData));
-            setPatron(freshData);
-            setUser((prev) => prev ? { ...prev, avatar_url: freshData.avatar_url || freshData.avatarUrl, full_name: getFullName(freshData) } : prev);
-          }
-        } catch {
-          devError('Background refresh failed, using cached data');
-        }
+      const payload = decodeJwtPayload(accessToken);
+      if (!payload) {
+        setIsLoading(false);
+        return;
       }
-    } catch (error) {
-      devError('Auth check failed:', error);
-      await authApi.logout();
+
+      const isExpired = payload.exp && payload.exp * 1000 < Date.now();
+      if (isExpired) {
+        const refreshToken = await getRefreshToken();
+        if (refreshToken) {
+          try {
+            const result = await authApi.refreshToken(refreshToken);
+            await setAccessToken(result.access_token);
+            const newPayload = decodeJwtPayload(result.access_token);
+            if (newPayload) {
+      setUser({
+        id: (newPayload.userId || newPayload.sub) || '',
+        email: newPayload.email || '',
+        full_name: newPayload.fullName || newPayload.full_name || '',
+        role: (newPayload.roles?.[0] || newPayload.role || 'patron') as UserRole,
+      });
+              setIsLoading(false);
+              return;
+            }
+          } catch {
+            devError('[Auth] Refresh token failed on restore');
+          }
+        }
+        setIsLoading(false);
+        return;
+      }
+
+  setUser({
+    id: (payload.userId || payload.sub) || '',
+    email: payload.email || '',
+    full_name: payload.fullName || payload.full_name || '',
+    role: (payload.roles?.[0] || payload.role || 'patron') as UserRole,
+  });
+    } catch (err: unknown) {
+      devError('[Auth] Failed to restore session:', err);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    checkAuth();
+    restoreUserFromToken();
+  }, [restoreUserFromToken]);
+
+  useEffect(() => {
+    const unsub = bus.on('auth:expired', () => {
+      setUser(null);
+      setPatron(null);
+      queryClient.clear();
+    });
+    return () => unsub();
   }, []);
 
   const patronLogin = async (studentCode: string, password: string) => {
@@ -111,13 +153,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error('Tài khoản này không có quyền dùng máy quét trả sách');
       }
       setPatron(null);
-setUser({
-  id: userData.id,
-  email: userData.email || email,
-  full_name: getFullName(userData),
-  role: userData.role,
-  avatar_url: userData.avatar_url,
-});
+      setUser({
+        id: userData.id,
+        email: userData.email || email,
+        full_name: getFullName(userData),
+        role: userData.role,
+        avatar_url: userData.avatar_url,
+      });
     } finally {
       setIsLoading(false);
     }
@@ -132,13 +174,10 @@ setUser({
 
       if (role === 'admin' || role === 'staff') {
         const userData = await authApi.getCurrentUser();
-        await AsyncStorage.setItem('userData', JSON.stringify(userData));
-        await AsyncStorage.removeItem('patronData');
         setPatron(null);
         setUser({ id: userData.id, email: userData.email || '', full_name: getFullName(userData), role: userData.role, avatar_url: userData.avatar_url });
       } else {
         const patronData = await authApi.getCurrentPatron();
-        await AsyncStorage.setItem('patronData', JSON.stringify(patronData));
         setPatron(patronData);
         setUser({ id: patronData.id, email: patronData.email || '', full_name: getFullName(patronData), role: 'patron', avatar_url: patronData.avatar_url || patronData.avatarUrl });
       }
@@ -151,6 +190,7 @@ setUser({
   };
 
   const logout = async () => {
+    cancelPendingRequests();
     await authApi.logout();
     queryClient.clear();
     setUser(null);
@@ -158,24 +198,7 @@ setUser({
   };
 
   const updateUser = (patch: Partial<User>) => {
-    setUser((prev) => {
-      if (!prev) return prev;
-      const next = { ...prev, ...patch };
-      // persist to storage
-      AsyncStorage.getItem('userData').then((raw) => {
-        if (raw) {
-          const stored = JSON.parse(raw);
-          AsyncStorage.setItem('userData', JSON.stringify({ ...stored, ...patch }));
-        }
-      });
-      AsyncStorage.getItem('patronData').then((raw) => {
-        if (raw) {
-          const stored = JSON.parse(raw);
-          AsyncStorage.setItem('patronData', JSON.stringify({ ...stored, ...patch }));
-        }
-      });
-      return next;
-    });
+    setUser((prev) => (prev ? { ...prev, ...patch } : prev));
   };
 
   return (
@@ -189,8 +212,8 @@ setUser({
         patronLogin,
         faceLogin,
         logout,
-        checkAuth,
         updateUser,
+        restoreUserFromToken,
       }}
     >
       {children}
@@ -205,3 +228,4 @@ export function useAuth() {
   }
   return context;
 }
+

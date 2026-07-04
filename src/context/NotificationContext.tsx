@@ -31,6 +31,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
+  const reconnectAttempts = useRef(0);
 
   const cleanup = useCallback(() => {
     if (reconnectTimer.current) {
@@ -55,6 +56,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         .connectRealtime(
           (notification) => {
             if (!mountedRef.current) return;
+            reconnectAttempts.current = 0;
             setNotifications((prev) => [notification, ...prev]);
             setUnreadCount((prev) => prev + 1);
           },
@@ -63,17 +65,22 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         .then((ws) => {
           if (!mountedRef.current) { ws.close(); return; }
           wsRef.current = ws;
+          reconnectAttempts.current = 0;
           ws.onclose = () => {
             wsRef.current = null;
             if (mountedRef.current) {
-              reconnectTimer.current = setTimeout(connectWs, 5000);
+              const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
+              reconnectAttempts.current++;
+              reconnectTimer.current = setTimeout(connectWs, delay);
             }
           };
           ws.onerror = () => {};
         })
         .catch(() => {
           if (mountedRef.current) {
-            reconnectTimer.current = setTimeout(connectWs, 5000);
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
+            reconnectAttempts.current++;
+            reconnectTimer.current = setTimeout(connectWs, delay);
           }
         });
     });
@@ -81,13 +88,21 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   const fetchUnreadCount = useCallback(async () => {
     if (!(await hasToken())) return;
-    try {
-      const count = await notificationApi.getUnreadCount();
-      setUnreadCount(count);
-    } catch (err: any) {
-      if (err.response?.status === 401) return;
-      devError('[Notification] Failed to fetch unread count:', err);
+    let lastErr: any;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const count = await notificationApi.getUnreadCount();
+        setUnreadCount(count);
+        return;
+      } catch (err: any) {
+        lastErr = err;
+        if (err.response?.status === 401) return;
+        if (attempt < 1) {
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+      }
     }
+    devError('[Notification] Failed to fetch unread count:', lastErr);
   }, []);
 
   const fetchNotifications = useCallback(async (unreadOnly = false) => {
