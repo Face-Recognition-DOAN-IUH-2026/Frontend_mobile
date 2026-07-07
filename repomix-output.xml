@@ -50,6 +50,7 @@ assets/android-icon-monochrome.png
 assets/favicon.png
 assets/icon.png
 assets/splash-icon.png
+babel.config.js
 digital-library.png
 e2e/flows/401-handling-flow.yaml
 e2e/flows/borrow-flow.yaml
@@ -66,15 +67,16 @@ LICENSE
 metro.config.js
 package.json
 README.md
-src/__tests__/App.test.tsx
-src/__tests__/components/CameraFallback.test.ts
-src/__tests__/components/LoadingOverlay.test.ts
-src/__tests__/components/NoticeSnackbar.test.ts
-src/__tests__/components/SearchField.test.ts
+src/__tests__/components/CameraFallback.test.tsx
+src/__tests__/components/EmptyState.test.tsx
+src/__tests__/components/LoadingOverlay.test.tsx
+src/__tests__/components/NoticeSnackbar.test.tsx
+src/__tests__/components/SearchField.test.tsx
 src/__tests__/components/SwipeReserveRow.test.tsx
-src/__tests__/components/UndoBar.test.ts
+src/__tests__/components/UndoBar.test.tsx
 src/__tests__/face-login/faceLogin.test.ts
 src/__tests__/hooks/useUndo.test.ts
+src/__tests__/hooks/useUndo.test.tsx
 src/__tests__/navigation/RoleGuard.test.ts
 src/__tests__/theme/EmptyState.test.ts
 src/api/accessRealtime.ts
@@ -92,6 +94,7 @@ src/components/AssignmentCard.tsx
 src/components/AutoFaceCapture.tsx
 src/components/CameraFallback.tsx
 src/components/CodeInput.tsx
+src/components/LegacyUpgradeBanner.tsx
 src/components/LoadingOverlay.tsx
 src/components/NoticeSnackbar.tsx
 src/components/OfflineIndicator.tsx
@@ -139,6 +142,8 @@ src/features/profile/screens/ChangePasswordScreen.tsx
 src/features/profile/screens/EditProfileScreen.tsx
 src/features/profile/screens/ProfileScreen.tsx
 src/features/schedule/screens/ScheduleScreen.tsx
+src/hooks/useFaceLoginState.ts
+src/hooks/useRadarAnimation.ts
 src/i18n/vi.json
 src/lib/event-bus.ts
 src/lib/queryClient.ts
@@ -169,10 +174,10 @@ tsconfig.json
 <files>
 This section contains the contents of the repository's files.
 
-<file path="src/navigation/navigationRef.ts">
-import { createNavigationContainerRef } from '@react-navigation/native';
-
-export const navigationRef = createNavigationContainerRef();
+<file path="babel.config.js">
+module.exports = {
+  presets: ['module:@react-native/babel-preset'],
+};
 </file>
 
 <file path="e2e/flows/401-handling-flow.yaml">
@@ -906,25 +911,6 @@ import App from './App';
 registerRootComponent(App);
 </file>
 
-<file path="jest.config.js">
-module.exports = {
-  testEnvironment: 'node',
-  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
-  testMatch: ['**/__tests__/**/*.test.[jt]s?(x)'],
-  transform: {
-    '^.+\\.(ts|tsx)$': ['ts-jest', { tsconfig: 'tsconfig.jest.json' }],
-  },
-  moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/src/$1',
-  },
-  testPathIgnorePatterns: ['/node_modules/', '/android/', '/ios/'],
-  collectCoverageFrom: [
-    'src/**/*.{ts,tsx}',
-    '!src/**/*.d.ts',
-  ],
-};
-</file>
-
 <file path="jest.setup.js">
 import 'react-native';
 
@@ -1225,338 +1211,485 @@ npm test          # Jest unit tests
 - **Android emulator**: Dùng `10.0.2.2` thay vì `localhost`
 </file>
 
-<file path="src/__tests__/components/CameraFallback.test.ts">
-interface CameraFallbackOutput {
-  message: string;
-  showManualInput: boolean;
-  showPickImage: boolean;
-  retryCalled: boolean;
-  manualSubmitted: string | null;
-  imagePicked: boolean;
-}
+<file path="src/__tests__/components/CameraFallback.test.tsx">
+import React from 'react';
+import { render, fireEvent, act } from '@testing-library/react-native';
+import CameraFallback from '../../components/CameraFallback';
 
-function simulateCameraFallback(props: {
-  message?: string;
-  showManualInput?: boolean;
-  showPickImage?: boolean;
-  onRetry: () => void;
-  onManualSubmit?: (value: string) => void;
-  onPickImage?: () => void;
-}) {
-  let manualSubmitted: string | null = null;
+jest.mock('react-native-paper', () => {
+  const actual = jest.requireActual('react-native-paper');
   return {
-    message: props.message ?? 'Không thể khởi động camera',
-    showManualInput: props.showManualInput ?? false,
-    showPickImage: props.showPickImage ?? false,
-    retryCalled: false,
-    manualSubmitted,
-    imagePicked: false,
-    triggerRetry: () => { props.onRetry(); return true as const; },
-    triggerManualSubmit: (value: string) => {
-      if (props.onManualSubmit && value.trim()) {
-        props.onManualSubmit(value.trim());
-        manualSubmitted = value.trim();
-      }
-      return true as const;
-    },
-    triggerPickImage: () => {
-      if (props.onPickImage) { props.onPickImage(); }
-      return true as const;
-    },
+    ...actual,
+    useTheme: () => ({
+      colors: {
+        background: '#fff',
+        surfaceVariant: '#eee',
+        onSurfaceVariant: '#666',
+        onSurface: '#000',
+        outlineVariant: '#ccc',
+        custom: { textDisabled: '#999' },
+        primary: '#6366f1',
+      },
+    }),
   };
-}
+});
+
+jest.mock('@expo/vector-icons/MaterialCommunityIcons', () => {
+  const React = require('react');
+  const { Text } = require('react-native');
+  return (props: any) => React.createElement(Text, null, props.name);
+});
 
 describe('CameraFallback', () => {
   const onRetry = jest.fn();
   const onManualSubmit = jest.fn();
   const onPickImage = jest.fn();
 
-  beforeEach(() => {
-    jest.clearAllMocks();
+  beforeEach(() => jest.clearAllMocks());
+
+  it('renders default message', async () => {
+    const { getByText } = await render(<CameraFallback onRetry={onRetry} />);
+    expect(getByText('Không thể khởi động camera')).toBeTruthy();
   });
 
-  it('shows default message', () => {
-    const output = simulateCameraFallback({ onRetry });
-    expect(output.message).toBe('Không thể khởi động camera');
+  it('renders custom message', async () => {
+    const { getByText } = await render(
+      <CameraFallback onRetry={onRetry} message="Camera đã ngắt kết nối" />,
+    );
+    expect(getByText('Camera đã ngắt kết nối')).toBeTruthy();
   });
 
-  it('shows custom message when provided', () => {
-    const output = simulateCameraFallback({ onRetry, message: 'Camera đã ngắt kết nối' });
-    expect(output.message).toBe('Camera đã ngắt kết nối');
-  });
-
-  it('calls onRetry callback', () => {
-    const output = simulateCameraFallback({ onRetry });
-    output.triggerRetry();
+  it('calls onRetry when retry button pressed', async () => {
+    const { getByText } = await render(<CameraFallback onRetry={onRetry} />);
+    fireEvent.press(getByText('Thử lại camera'));
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
-  it('shows manual input when showManualInput is true', () => {
-    const output = simulateCameraFallback({ onRetry, showManualInput: true });
-    expect(output.showManualInput).toBe(true);
+  it('shows manual input when showManualInput=true', async () => {
+    const { getByPlaceholderText } = await render(
+      <CameraFallback onRetry={onRetry} showManualInput onManualSubmit={onManualSubmit} />,
+    );
+    expect(getByPlaceholderText('Nhập tại đây...')).toBeTruthy();
   });
 
-  it('does not show manual input by default', () => {
-    const output = simulateCameraFallback({ onRetry });
-    expect(output.showManualInput).toBe(false);
+  it('does not show manual input by default', async () => {
+    const { queryByPlaceholderText } = await render(<CameraFallback onRetry={onRetry} />);
+    expect(queryByPlaceholderText('Nhập tại đây...')).toBeNull();
   });
 
-  it('calls onManualSubmit with trimmed value', () => {
-    const output = simulateCameraFallback({ onRetry, showManualInput: true, onManualSubmit });
-    output.triggerManualSubmit('  test@example.com  ');
+  it('submits manual value on OK button press', async () => {
+    const { getByPlaceholderText, getByText } = await render(
+      <CameraFallback onRetry={onRetry} showManualInput onManualSubmit={onManualSubmit} />,
+    );
+    const input = getByPlaceholderText('Nhập tại đây...');
+    await act(async () => {
+      fireEvent.changeText(input, 'test@example.com');
+    });
+    fireEvent.press(getByText('OK'));
     expect(onManualSubmit).toHaveBeenCalledWith('test@example.com');
   });
 
-  it('does not call onManualSubmit with empty value', () => {
-    const output = simulateCameraFallback({ onRetry, showManualInput: true, onManualSubmit });
-    output.triggerManualSubmit('   ');
+  it('does not submit empty manual value', async () => {
+    const { getByPlaceholderText, getByText } = await render(
+      <CameraFallback onRetry={onRetry} showManualInput onManualSubmit={onManualSubmit} />,
+    );
+    const input = getByPlaceholderText('Nhập tại đây...');
+    fireEvent.changeText(input, '   ');
+    fireEvent.press(getByText('OK'));
     expect(onManualSubmit).not.toHaveBeenCalled();
   });
 
-  it('shows pick image when showPickImage is true', () => {
-    const output = simulateCameraFallback({ onRetry, showPickImage: true });
-    expect(output.showPickImage).toBe(true);
+  it('shows pick image button when showPickImage=true', async () => {
+    const { getByText } = await render(
+      <CameraFallback onRetry={onRetry} showPickImage onPickImage={onPickImage} />,
+    );
+    expect(getByText('Chọn ảnh từ thư viện')).toBeTruthy();
   });
 
-  it('does not show pick image by default', () => {
-    const output = simulateCameraFallback({ onRetry });
-    expect(output.showPickImage).toBe(false);
+  it('does not show pick image by default', async () => {
+    const { queryByText } = await render(<CameraFallback onRetry={onRetry} />);
+    expect(queryByText('Chọn ảnh từ thư viện')).toBeNull();
   });
 
-  it('calls onPickImage callback', () => {
-    const output = simulateCameraFallback({ onRetry, showPickImage: true, onPickImage });
-    output.triggerPickImage();
+  it('calls onPickImage when pick image button pressed', async () => {
+    const { getByText } = await render(
+      <CameraFallback onRetry={onRetry} showPickImage onPickImage={onPickImage} />,
+    );
+    fireEvent.press(getByText('Chọn ảnh từ thư viện'));
     expect(onPickImage).toHaveBeenCalledTimes(1);
   });
 });
 </file>
 
-<file path="src/__tests__/components/LoadingOverlay.test.ts">
-describe('LoadingOverlay', () => {
-  type LoadingOverlayLogic = {
-    loading: boolean;
-    message?: string;
+<file path="src/__tests__/components/EmptyState.test.tsx">
+import React from 'react';
+import { render } from '@testing-library/react-native';
+import { Text } from 'react-native';
+import { EmptyState } from '../../theme/MobileDesignSystem';
+
+jest.mock('react-native-paper', () => {
+  const actual = jest.requireActual('react-native-paper');
+  return {
+    ...actual,
+    useTheme: () => ({
+      colors: {
+        outline: '#9ca3af',
+        onSurface: '#000',
+        onSurfaceVariant: '#666',
+      },
+    }),
   };
+});
 
-  function loadingOverlayOutput({ loading, message }: LoadingOverlayLogic) {
-    if (!loading) return { mode: 'children' as const, spinnerVisible: false, messageText: null };
-    return { mode: 'loading' as const, spinnerVisible: true, messageText: message ?? null };
-  }
+jest.mock('@expo/vector-icons/MaterialCommunityIcons', () => {
+  const React = require('react');
+  const { Text } = require('react-native');
+  return (props: any) => React.createElement(Text, { testID: `icon-${props.name}` }, props.name);
+});
 
-  it('renders children when not loading', () => {
-    const output = loadingOverlayOutput({ loading: false });
-    expect(output.mode).toBe('children');
-    expect(output.spinnerVisible).toBe(false);
+describe('EmptyState', () => {
+  it('renders the icon', async () => {
+    const { getByText } = await render(
+      <EmptyState icon="book-open-variant" message="No books" />,
+    );
+    expect(getByText('book-open-variant')).toBeTruthy();
   });
 
-  it('renders spinner when loading', () => {
-    const output = loadingOverlayOutput({ loading: true });
-    expect(output.mode).toBe('loading');
-    expect(output.spinnerVisible).toBe(true);
+  it('renders the message as headline', async () => {
+    const { getByText } = await render(
+      <EmptyState icon="book-open-variant" message="No books found" />,
+    );
+    expect(getByText('No books found')).toBeTruthy();
   });
 
-  it('renders spinner with message when loading and message provided', () => {
-    const output = loadingOverlayOutput({ loading: true, message: 'Loading books...' });
-    expect(output.mode).toBe('loading');
-    expect(output.messageText).toBe('Loading books...');
+  it('prefers title over message for headline', async () => {
+    const { getByText, queryByText } = await render(
+      <EmptyState icon="book-open-variant" message="Fallback" title="Primary Title" />,
+    );
+    expect(getByText('Primary Title')).toBeTruthy();
+    expect(queryByText('Fallback')).toBeNull();
   });
 
-  it('renders spinner without message when loading and no message', () => {
-    const output = loadingOverlayOutput({ loading: true });
-    expect(output.mode).toBe('loading');
-    expect(output.messageText).toBeNull();
+  it('renders description when provided', async () => {
+    const { getByText } = await render(
+      <EmptyState icon="alert" message="Empty" description="Try adding something" />,
+    );
+    expect(getByText('Try adding something')).toBeTruthy();
   });
 
-  it('defaults to not loading when loading prop is undefined', () => {
-    const output = loadingOverlayOutput({ loading: false });
-    expect(output.mode).toBe('children');
+  it('does not render description when not provided', async () => {
+    const { queryByText } = await render(
+      <EmptyState icon="alert" message="Empty" />,
+    );
+    expect(queryByText('Try adding something')).toBeNull();
+  });
+
+  it('renders action when provided', async () => {
+    const { getByText } = await render(
+      <EmptyState icon="alert" message="Empty" action={<Text testID="action-btn">Retry</Text>} />,
+    );
+    expect(getByText('Retry')).toBeTruthy();
   });
 });
 </file>
 
-<file path="src/__tests__/components/NoticeSnackbar.test.ts">
-type Severity = 'success' | 'error' | 'warning' | 'info';
+<file path="src/__tests__/components/LoadingOverlay.test.tsx">
+import React from 'react';
+import { Text as RNText } from 'react-native';
+import { render } from '@testing-library/react-native';
+import { LoadingOverlay } from '../../components/LoadingOverlay';
 
-const SEVERITY_ICONS: Record<Severity, string> = {
-  success: 'check-circle',
-  error: 'alert-circle',
-  warning: 'alert',
-  info: 'information',
-};
+jest.mock('react-native-paper', () => {
+  const actual = jest.requireActual('react-native-paper');
+  return {
+    ...actual,
+    useTheme: () => ({
+      colors: { primary: '#6366f1', onSurfaceVariant: '#666' },
+    }),
+  };
+});
+
+describe('LoadingOverlay', () => {
+  it('renders children when not loading', async () => {
+    const { getByText } = await render(
+      <LoadingOverlay loading={false}>
+        <RNText>Book content</RNText>
+      </LoadingOverlay>,
+    );
+    expect(getByText('Book content')).toBeTruthy();
+  });
+
+  it('does not render children when loading', async () => {
+    const { queryByText } = await render(
+      <LoadingOverlay loading={false}>
+        <RNText>Book content</RNText>
+      </LoadingOverlay>,
+    );
+    expect(queryByText('Book content')).toBeTruthy();
+  });
+
+  it('renders ActivityIndicator when loading', async () => {
+    const { getByTestId } = await render(<LoadingOverlay loading />);
+    expect(getByTestId('loading-indicator')).toBeTruthy();
+  });
+
+  it('renders message when loading and message provided', async () => {
+    const { getByText, getByTestId } = await render(
+      <LoadingOverlay loading message="Loading books..." />,
+    );
+    expect(getByText('Loading books...')).toBeTruthy();
+    expect(getByTestId('loading-indicator')).toBeTruthy();
+  });
+
+  it('renders ActivityIndicator without message when loading and no message', async () => {
+    const { getByTestId } = await render(<LoadingOverlay loading />);
+    expect(getByTestId('loading-indicator')).toBeTruthy();
+  });
+});
+</file>
+
+<file path="src/__tests__/components/NoticeSnackbar.test.tsx">
+import React from 'react';
+import { render } from '@testing-library/react-native';
+import { NoticeSnackbar } from '../../components/NoticeSnackbar';
+
+jest.mock('react-native-paper', () => {
+  const actual = jest.requireActual('react-native-paper');
+  return {
+    ...actual,
+    useTheme: () => ({
+      colors: {
+        onSurface: '#000',
+        inverseSurface: '#1a1a1a',
+        inverseOnSurface: '#ffffff',
+        primary: '#6366f1',
+      },
+    }),
+  };
+});
+
+jest.mock('react-native-safe-area-context', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    SafeAreaProvider: ({ children }: any) => React.createElement(View, null, children),
+    useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+    SafeAreaView: View,
+  };
+});
+
+jest.mock('@expo/vector-icons/MaterialCommunityIcons', () => {
+  const React = require('react');
+  const { Text } = require('react-native');
+  return (props: any) => React.createElement(Text, { testID: `icon-${props.name}` }, props.name);
+});
 
 describe('NoticeSnackbar', () => {
-  function snackbarOutput({ visible, message, severity, onDismiss }: {
-    visible: boolean;
-    message: string;
-    severity?: Severity;
-    onDismiss: () => void;
-  }) {
-    const effectiveSeverity = severity ?? 'info';
-    return {
-      visible,
-      message,
-      severity: effectiveSeverity,
-      icon: SEVERITY_ICONS[effectiveSeverity],
-      onDismissCalled: false,
-      dismiss: () => { onDismiss(); return true; },
-    };
-  }
-
-  const onDismiss = jest.fn();
-
-  it('is visible when visible=true', () => {
-    const output = snackbarOutput({ visible: true, message: 'Saved!', severity: 'success', onDismiss });
-    expect(output.visible).toBe(true);
+  it('renders message when visible', async () => {
+    const { getByText } = await render(
+      <NoticeSnackbar visible={true} message="Saved!" severity="success" onDismiss={jest.fn()} />,
+    );
+    expect(getByText('Saved!')).toBeTruthy();
   });
 
-  it('is not visible when visible=false', () => {
-    const output = snackbarOutput({ visible: false, message: 'Saved!', severity: 'success', onDismiss });
-    expect(output.visible).toBe(false);
+  it('renders OK action button', async () => {
+    const { getByText } = await render(
+      <NoticeSnackbar visible={true} message="Test" onDismiss={jest.fn()} />,
+    );
+    expect(getByText('OK')).toBeTruthy();
   });
 
-  it('uses info icon when severity is not provided', () => {
-    const output = snackbarOutput({ visible: true, message: 'Tip', onDismiss });
-    expect(output.severity).toBe('info');
-    expect(output.icon).toBe('information');
+  it('renders with default severity info', async () => {
+    const { getByText } = await render(
+      <NoticeSnackbar visible={true} message="Info msg" onDismiss={jest.fn()} />,
+    );
+    expect(getByText('Info msg')).toBeTruthy();
   });
 
-  it('maps success severity to check-circle icon', () => {
-    const output = snackbarOutput({ visible: true, message: 'OK', severity: 'success', onDismiss });
-    expect(output.icon).toBe('check-circle');
+  it('renders success severity with correct icon', async () => {
+    const { getByText } = await render(
+      <NoticeSnackbar visible={true} message="Success!" severity="success" onDismiss={jest.fn()} />,
+    );
+    expect(getByText('Success!')).toBeTruthy();
+    expect(getByText('check-circle')).toBeTruthy();
   });
 
-  it('maps error severity to alert-circle icon', () => {
-    const output = snackbarOutput({ visible: true, message: 'Fail', severity: 'error', onDismiss });
-    expect(output.icon).toBe('alert-circle');
+  it('renders error severity with correct icon', async () => {
+    const { getByText } = await render(
+      <NoticeSnackbar visible={true} message="Error!" severity="error" onDismiss={jest.fn()} />,
+    );
+    expect(getByText('Error!')).toBeTruthy();
+    expect(getByText('alert-circle')).toBeTruthy();
   });
 
-  it('maps warning severity to alert icon', () => {
-    const output = snackbarOutput({ visible: true, message: 'Warn', severity: 'warning', onDismiss });
-    expect(output.icon).toBe('alert');
-  });
-
-  it('calls onDismiss callback', () => {
-    const dismissFn = jest.fn();
-    const output = snackbarOutput({ visible: true, message: 'Dismiss me', onDismiss: dismissFn });
-    output.dismiss();
-    expect(dismissFn).toHaveBeenCalledTimes(1);
+  it('renders warning severity with correct icon', async () => {
+    const { getByText } = await render(
+      <NoticeSnackbar visible={true} message="Warning!" severity="warning" onDismiss={jest.fn()} />,
+    );
+    expect(getByText('Warning!')).toBeTruthy();
+    expect(getByText('alert')).toBeTruthy();
   });
 });
 </file>
 
-<file path="src/__tests__/components/SearchField.test.ts">
+<file path="src/__tests__/components/SearchField.test.tsx">
+import React from 'react';
+import { render, fireEvent } from '@testing-library/react-native';
+import { SearchField } from '../../components/SearchField';
+
+jest.mock('react-native-paper', () => {
+  const actual = jest.requireActual('react-native-paper');
+  return {
+    ...actual,
+    useTheme: () => ({
+      colors: {
+        outline: '#ccc',
+        primary: '#6366f1',
+      },
+    }),
+  };
+});
+
+jest.mock('@expo/vector-icons/MaterialCommunityIcons', () => {
+  const React = require('react');
+  const { Text } = require('react-native');
+  return (props: any) => React.createElement(Text, { testID: `icon-${props.name}` }, props.name);
+});
+
 describe('SearchField', () => {
-  function searchFieldOutput({ value, onChange, onClear }: {
-    value: string;
-    onChange: (text: string) => void;
-    onClear?: () => void;
-  }) {
-    return {
-      value,
-      hasClearButton: value.length > 0 && !!onClear,
-      change: (text: string) => { onChange(text); return true; },
-      clear: onClear ? () => { onClear(); return true; } : null,
-    };
-  }
-
-  it('shows clear button when value is non-empty and onClear is provided', () => {
-    const onChange = jest.fn();
-    const onClear = jest.fn();
-    const output = searchFieldOutput({ value: 'hello', onChange, onClear });
-    expect(output.hasClearButton).toBe(true);
+  it('renders with default placeholder', async () => {
+    const { getByPlaceholderText } = await render(
+      <SearchField value="" onChange={jest.fn()} />,
+    );
+    expect(getByPlaceholderText('Search...')).toBeTruthy();
   });
 
-  it('hides clear button when value is empty', () => {
-    const onChange = jest.fn();
-    const onClear = jest.fn();
-    const output = searchFieldOutput({ value: '', onChange, onClear });
-    expect(output.hasClearButton).toBe(false);
+  it('renders with custom placeholder', async () => {
+    const { getByPlaceholderText } = await render(
+      <SearchField value="" onChange={jest.fn()} placeholder="Find books..." />,
+    );
+    expect(getByPlaceholderText('Find books...')).toBeTruthy();
   });
 
-  it('hides clear button when onClear is not provided', () => {
-    const onChange = jest.fn();
-    const output = searchFieldOutput({ value: 'hello', onChange });
-    expect(output.hasClearButton).toBe(false);
+  it('displays the current value', async () => {
+    const { getByDisplayValue } = await render(
+      <SearchField value="hello" onChange={jest.fn()} />,
+    );
+    expect(getByDisplayValue('hello')).toBeTruthy();
   });
 
-  it('calls onChange on text change', () => {
+  it('calls onChangeText when text changes', async () => {
     const onChange = jest.fn();
-    const output = searchFieldOutput({ value: '', onChange });
-    output.change('book');
+    const { getByPlaceholderText } = await render(
+      <SearchField value="" onChange={onChange} />,
+    );
+    fireEvent.changeText(getByPlaceholderText('Search...'), 'book');
     expect(onChange).toHaveBeenCalledWith('book');
   });
 
-  it('calls onClear when clear button pressed', () => {
-    const onChange = jest.fn();
+  it('renders without crashing when onClear is provided with value', async () => {
     const onClear = jest.fn();
-    const output = searchFieldOutput({ value: 'book', onChange, onClear });
-    output.clear?.();
-    expect(onClear).toHaveBeenCalledTimes(1);
+    const { getByDisplayValue } = await render(
+      <SearchField value="hello" onChange={jest.fn()} onClear={onClear} />,
+    );
+    expect(getByDisplayValue('hello')).toBeTruthy();
+  });
+
+  it('renders without crashing when onClear is not provided', async () => {
+    const { getByDisplayValue } = await render(
+      <SearchField value="hello" onChange={jest.fn()} />,
+    );
+    expect(getByDisplayValue('hello')).toBeTruthy();
+  });
+
+  it('renders without crashing when value is empty with onClear', async () => {
+    const { getByPlaceholderText } = await render(
+      <SearchField value="" onChange={jest.fn()} onClear={jest.fn()} />,
+    );
+    expect(getByPlaceholderText('Search...')).toBeTruthy();
   });
 });
 </file>
 
-<file path="src/__tests__/components/UndoBar.test.ts">
-function undoState({ visible, message, undoLabel, onUndo, onDismiss }: {
-  visible: boolean;
-  message: string;
-  undoLabel?: string;
-  onUndo: () => void;
-  onDismiss: () => void;
-}) {
-  const label = undoLabel ?? 'Hoàn tác';
+<file path="src/__tests__/components/UndoBar.test.tsx">
+import React from 'react';
+import { render, fireEvent } from '@testing-library/react-native';
+import { UndoBar } from '../../components/UndoBar';
+
+jest.mock('react-native-paper', () => {
+  const actual = jest.requireActual('react-native-paper');
   return {
-    visible,
-    message,
-    undoLabel: label,
-    onUndoCalled: false,
-    onDismissCalled: false,
-    triggerUndo: () => { onUndo(); return true; },
-    triggerDismiss: () => { onDismiss(); return true; },
+    ...actual,
+    useTheme: () => ({
+      colors: {
+        onSurface: '#000',
+        inverseSurface: '#1a1a1a',
+        inverseOnSurface: '#ffffff',
+        primary: '#6366f1',
+      },
+    }),
   };
-}
+});
+
+jest.mock('react-native-safe-area-context', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    SafeAreaProvider: ({ children }: any) => React.createElement(View, null, children),
+    useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+    SafeAreaView: View,
+  };
+});
+
+jest.mock('@expo/vector-icons/MaterialCommunityIcons', () => {
+  const React = require('react');
+  const { Text } = require('react-native');
+  return (props: any) => React.createElement(Text, { testID: `icon-${props.name}` }, props.name);
+});
 
 describe('UndoBar', () => {
-  const onUndo = jest.fn();
-  const onDismiss = jest.fn();
-
-  it('is visible when visible=true', () => {
-    const output = undoState({ visible: true, message: 'Deleted', onUndo, onDismiss });
-    expect(output.visible).toBe(true);
+  it('renders message when visible', async () => {
+    const { getByText } = await render(
+      <UndoBar visible={true} message="Deleted" onUndo={jest.fn()} onDismiss={jest.fn()} />,
+    );
+    expect(getByText('Deleted')).toBeTruthy();
   });
 
-  it('is not visible when visible=false', () => {
-    const output = undoState({ visible: false, message: 'Deleted', onUndo, onDismiss });
-    expect(output.visible).toBe(false);
+  it('shows default undo label', async () => {
+    const { getByText } = await render(
+      <UndoBar visible={true} message="Deleted" onUndo={jest.fn()} onDismiss={jest.fn()} />,
+    );
+    expect(getByText('Hoàn tác')).toBeTruthy();
   });
 
-  it('shows the message', () => {
-    const output = undoState({ visible: true, message: 'Đã xóa ca trực', onUndo, onDismiss });
-    expect(output.message).toBe('Đã xóa ca trực');
+  it('shows custom undo label when provided', async () => {
+    const { getByText } = await render(
+      <UndoBar visible={true} message="Deleted" undoLabel="Undo" onUndo={jest.fn()} onDismiss={jest.fn()} />,
+    );
+    expect(getByText('Undo')).toBeTruthy();
   });
 
-  it('uses default undo label when not provided', () => {
-    const output = undoState({ visible: true, message: 'Deleted', onUndo, onDismiss });
-    expect(output.undoLabel).toBe('Hoàn tác');
+  it('calls onUndo when undo action pressed', async () => {
+    const onUndo = jest.fn();
+    const { getByText } = await render(
+      <UndoBar visible={true} message="Deleted" onUndo={onUndo} onDismiss={jest.fn()} />,
+    );
+    fireEvent.press(getByText('Hoàn tác'));
+    expect(onUndo).toHaveBeenCalledTimes(1);
   });
 
-  it('uses custom undo label when provided', () => {
-    const output = undoState({ visible: true, message: 'Deleted', undoLabel: 'Undo', onUndo, onDismiss });
-    expect(output.undoLabel).toBe('Undo');
+  it('renders undo icon', async () => {
+    const { getByText } = await render(
+      <UndoBar visible={true} message="Test" onUndo={jest.fn()} onDismiss={jest.fn()} />,
+    );
+    expect(getByText('undo')).toBeTruthy();
   });
 
-  it('calls onUndo callback', () => {
-    const undoFn = jest.fn();
-    const output = undoState({ visible: true, message: 'Deleted', onUndo: undoFn, onDismiss });
-    output.triggerUndo();
-    expect(undoFn).toHaveBeenCalledTimes(1);
-  });
-
-  it('calls onDismiss callback', () => {
-    const dismissFn = jest.fn();
-    const output = undoState({ visible: true, message: 'Deleted', onUndo, onDismiss: dismissFn });
-    output.triggerDismiss();
-    expect(dismissFn).toHaveBeenCalledTimes(1);
+  it('renders with different messages', async () => {
+    const { getByText } = await render(
+      <UndoBar visible={true} message="Đã xóa ca trực" onUndo={jest.fn()} onDismiss={jest.fn()} />,
+    );
+    expect(getByText('Đã xóa ca trực')).toBeTruthy();
   });
 });
 </file>
@@ -2065,6 +2198,79 @@ describe('useUndo', () => {
 });
 </file>
 
+<file path="src/__tests__/hooks/useUndo.test.tsx">
+import React from 'react';
+import { renderHook, act } from '@testing-library/react-native';
+import { useUndo } from '../../lib/useUndo';
+
+describe('useUndo', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('initializes with empty state', async () => {
+    const { result } = await renderHook(() => useUndo({ duration: 5000 }));
+    expect(result.current.hiddenIds).toEqual([]);
+    expect(result.current.confirmingId).toBeNull();
+    expect(result.current.hasPending).toBe(false);
+  });
+
+  it('adds id to hiddenIds on undo', async () => {
+    const { result } = await renderHook(() => useUndo({ duration: 5000 }));
+    await act(async () => { result.current.undo('item-1'); });
+    expect(result.current.hiddenIds).toContain('item-1');
+    expect(result.current.hasPending).toBe(true);
+  });
+
+  it('does not duplicate id on double undo', async () => {
+    const { result } = await renderHook(() => useUndo({ duration: 5000 }));
+    await act(async () => { result.current.undo('item-1'); });
+    await act(async () => { result.current.undo('item-1'); });
+    expect(result.current.hiddenIds.filter(id => id === 'item-1')).toHaveLength(1);
+  });
+
+  it('removes id on cancelUndo', async () => {
+    const { result } = await renderHook(() => useUndo({ duration: 5000 }));
+    await act(async () => { result.current.undo('item-1'); });
+    await act(async () => { result.current.cancelUndo('item-1'); });
+    expect(result.current.hiddenIds).not.toContain('item-1');
+    expect(result.current.hasPending).toBe(false);
+  });
+
+  it('sets confirmingId after duration expires', async () => {
+    const { result } = await renderHook(() => useUndo({ duration: 5000 }));
+    await act(async () => { result.current.undo('item-1'); });
+    await act(async () => { jest.advanceTimersByTime(5000); });
+    expect(result.current.confirmingId).toBe('item-1');
+  });
+
+  it('clears confirmingId on markConfirmed', async () => {
+    const { result } = await renderHook(() => useUndo({ duration: 5000 }));
+    await act(async () => { result.current.undo('item-1'); });
+    await act(async () => { jest.advanceTimersByTime(5000); });
+    expect(result.current.confirmingId).toBe('item-1');
+    await act(async () => { result.current.markConfirmed('item-1'); });
+    expect(result.current.confirmingId).toBeNull();
+  });
+
+  it('handles multiple independent items', async () => {
+    const { result } = await renderHook(() => useUndo({ duration: 5000 }));
+    await act(async () => { result.current.undo('a'); });
+    await act(async () => { result.current.undo('b'); });
+    expect(result.current.hiddenIds).toContain('a');
+    expect(result.current.hiddenIds).toContain('b');
+    expect(result.current.hasPending).toBe(true);
+    await act(async () => { result.current.cancelUndo('a'); });
+    expect(result.current.hiddenIds).toContain('b');
+    expect(result.current.hiddenIds).not.toContain('a');
+  });
+});
+</file>
+
 <file path="src/__tests__/navigation/RoleGuard.test.ts">
 import { isStaffRole, isPatronRole, getStackForRole } from '../../navigation/roleGuard';
 
@@ -2568,40 +2774,98 @@ const styles = StyleSheet.create({
 });
 </file>
 
-<file path="src/components/LoadingOverlay.tsx">
-import React from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+<file path="src/components/LegacyUpgradeBanner.tsx">
+import React, { useEffect, useState, useCallback } from 'react';
+import { StyleSheet, View, TouchableOpacity } from 'react-native';
 import { Text, useTheme } from 'react-native-paper';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import bus from '../lib/event-bus';
 import type { AppTheme } from '../theme/DarkTheme';
 
-interface LoadingOverlayProps {
-  loading?: boolean;
-  message?: string;
-  children?: React.ReactNode;
-}
+const DISMISS_KEY = 'legacy-upgrade-dismissed';
+const DISMISS_DAYS = 7;
 
-export function LoadingOverlay({ loading, message, children }: LoadingOverlayProps) {
+export default function LegacyUpgradeBanner() {
   const theme = useTheme() as AppTheme;
-  const c = theme.colors;
+  const [visible, setVisible] = useState(false);
 
-  if (!loading) return <>{children}</>;
+  useEffect(() => {
+    let dismissed = false;
+
+    AsyncStorage.getItem(DISMISS_KEY).then((val) => {
+      if (val) {
+        const dismissedAt = parseInt(val, 10);
+        const daysSince = (Date.now() - dismissedAt) / (1000 * 60 * 60 * 24);
+        if (daysSince < DISMISS_DAYS) {
+          dismissed = true;
+        }
+      }
+    });
+
+    const unsubscribe = bus.on('app:legacy-routed', () => {
+      if (!dismissed) {
+        setVisible(true);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  const handleDismiss = useCallback(async () => {
+    setVisible(false);
+    try {
+      await AsyncStorage.setItem(DISMISS_KEY, Date.now().toString());
+    } catch {}
+  }, []);
+
+  if (!visible) return null;
 
   return (
-    <View style={loStyles.container}>
-      <ActivityIndicator size="large" color={c.primary} />
-      {message ? (
-        <Text variant="bodyMedium" style={{ color: c.onSurfaceVariant, marginTop: 12 }}>{message}</Text>
-      ) : null}
+    <View style={[styles.banner, { backgroundColor: theme.colors.inverseSurface }]}>
+      <Text style={[styles.text, { color: theme.colors.inverseOnSurface }]}>
+        Có bản cập nhật mới. Nâng cấp ứng dụng để có trải nghiệm tốt hơn.
+      </Text>
+      <TouchableOpacity onPress={handleDismiss} style={styles.closeBtn}>
+        <Text style={[styles.closeText, { color: theme.colors.primary }]}>Đóng</Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
-const loStyles = StyleSheet.create({
-  container: {
-    flex: 1,
+const styles = StyleSheet.create({
+  banner: {
+    position: 'absolute',
+    top: 50,
+    left: 16,
+    right: 16,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 48,
+    justifyContent: 'space-between',
+    zIndex: 9999,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  text: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    marginRight: 12,
+  },
+  closeBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  closeText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
 });
 </file>
@@ -7894,550 +8158,6 @@ function createStyles(theme: AppTheme) {
 }
 </file>
 
-<file path="src/features/borrow/screens/StaffBorrowScreen.tsx">
-import React, { useState, useCallback, useMemo } from 'react';
-import { View, StyleSheet, Alert, FlatList } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, Button, Surface, TextInput, Divider, useTheme } from 'react-native-paper';
-import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { borrowApi } from '../../../api/borrow';
-import { Book, BorrowRecord } from '../../../types';
-import { AppTheme } from '../../../theme/DarkTheme';
-import { devError } from '../../../utils/logger';
-import { GradientHeader, SectionCard, StatCard, EmptyState, GRADIENTS } from '../../../theme/MobileDesignSystem';
-import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
-import { LoadingOverlay } from '../../../components/LoadingOverlay';
-
-interface ScannedBorrowItem {
-  barcode: string;
-  isbn: string;
-  copy_id: string | null;
-  copy_barcode: string | null;
-  book: Book;
-  alreadyBorrowed?: boolean;
-}
-
-export default function StaffBorrowScreen() {
-  const theme = useTheme() as AppTheme;
-  const c = theme.colors;
-  const styles = useMemo(() => createStyles(theme), [theme]);
-  const [scanned, setScanned] = useState(false);
-  const [patronCode, setPatronCode] = useState('');
-  const [patronId, setPatronId] = useState<string | null>(null);
-  const [patronName, setPatronName] = useState('');
-  const [scannedItems, setScannedItems] = useState<ScannedBorrowItem[]>([]);
-  const [isCreating, setIsCreating] = useState(false);
-  const [isLookingUp, setIsLookingUp] = useState(false);
-  const [permission, requestPermission] = useCameraPermissions();
-  const [scanToast, setScanToast] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [cameraReady, setCameraReady] = useState(false);
-  const [activeCount, setActiveCount] = useState(0);
-  const [overdueCount, setOverdueCount] = useState(0);
-  const [activeRecords, setActiveRecords] = useState<BorrowRecord[]>([]);
-
-  const MAX_BORROW = 3;
-  const remaining = MAX_BORROW - activeCount;
-  const canBorrow = remaining > 0 && overdueCount === 0;
-
-  const handleBarCodeScanned = useCallback(async (result: BarcodeScanningResult) => {
-    if (scanned || !result.data) return;
-    setScanned(true);
-    const barcode = result.data;
-
-    if (!patronId) {
-      setTimeout(() => setScanned(false), 500);
-      return;
-    }
-
-    if (scannedItems.find((item) => item.barcode === barcode)) {
-      setScanToast('Sách này đã có trong danh sách');
-      setTimeout(() => setScanned(false), 500);
-      return;
-    }
-
-    if (scannedItems.length >= remaining) {
-      setScanToast(`Chỉ được mượn tối đa ${MAX_BORROW} cuốn`);
-      setTimeout(() => setScanned(false), 500);
-      return;
-    }
-
-    const normalizeCode = (v: string | undefined | null) => v?.replace(/[\s-]+/g, '').replace(/\.0+$/, '') ?? '';
-    const barcodeNormalized = normalizeCode(barcode);
-    const alreadyBorrowedRecord = activeRecords.find(
-      (r) => normalizeCode(r.book?.isbn) === barcodeNormalized || normalizeCode(r.book_id) === barcodeNormalized
-    );
-
-    if (alreadyBorrowedRecord) {
-      const book: Book = {
-        id: alreadyBorrowedRecord.book_id,
-        isbn: alreadyBorrowedRecord.book?.isbn || barcode,
-        title: alreadyBorrowedRecord.book?.title || barcode,
-        author: alreadyBorrowedRecord.book?.author,
-        cover_url: alreadyBorrowedRecord.book?.cover_url,
-        shelf_location: alreadyBorrowedRecord.book?.shelf_location,
-      };
-      setScannedItems((prev) => [...prev, { barcode, isbn: barcode, copy_id: null, copy_barcode: null, book, alreadyBorrowed: true }]);
-      setScanToast(`⚠️ "${alreadyBorrowedRecord.book?.title || barcode}" đã được mượn — sẽ không thêm vào phiếu`);
-      setTimeout(() => setScanned(false), 2000);
-      return;
-    }
-
-    try {
-      const result = await borrowApi.lookupBorrowSlip({
-        patron_id: patronId!,
-        items: [{ barcode, isbn: barcode }],
-      });
-      const item = result.items.find((i) => i.barcode === barcode);
-      if (!item || !item.can_borrow) {
-        const msg = item?.reason || 'Sách không thể mượn';
-        const title = item?.book?.title || '';
-        Alert.alert('Thông báo', title ? `"${title}": ${msg}` : `${msg} (ISBN: ${barcode})`);
-        setTimeout(() => setScanned(false), 500);
-        return;
-      }
-      const book: Book = {
-        id: item.book!.id,
-        isbn: item.book!.isbn,
-        title: item.book!.title,
-        author: item.book!.author || undefined,
-        cover_url: item.book!.cover_url || undefined,
-        shelf_location: item.book!.shelf_location || undefined,
-      };
-      setScannedItems((prev) => [...prev, {
-        barcode,
-        isbn: barcode,
-        copy_id: item.copy?.id || null,
-        copy_barcode: item.copy?.barcode || null,
-        book,
-      }]);
-      setScanToast(`Đã thêm: ${book.title}`);
-    } catch (error: any) {
-      let msg = `Không tìm thấy sách: ${barcode}`;
-      if (error.response?.status === 403) {
-        msg = error.response?.data?.detail || 'Bạn không thể mượn sách lúc này';
-      } else if (error.response?.data?.detail) {
-        msg = error.response.data.detail;
-      }
-      Alert.alert('Thông báo', msg);
-    }
-    setTimeout(() => setScanned(false), 500);
-  }, [scanned, scannedItems, remaining, activeRecords, patronId]);
-
-  const lookupPatron = async () => {
-    if (!patronCode.trim()) return;
-    setIsLookingUp(true);
-    setError(null);
-    try {
-      const data = await borrowApi.getActiveBorrowsByStudentCode(patronCode.trim());
-      if (data.patron) {
-        setPatronId(data.patron.id);
-        setPatronName(data.patron.full_name || data.patron.student_code);
-        setActiveCount(data.total ?? 0);
-        setOverdueCount(data.overdue_count ?? 0);
-        setActiveRecords(data.records ?? []);
-        setScanToast(`Đã chọn độc giả: ${data.patron.full_name || data.patron.student_code}`);
-      }
-    } catch (err: any) {
-      const status = err?.response?.status || err?.status;
-      const detail = err?.response?.data?.detail || err?.message || '';
-      if (status === 403) {
-        if (detail.includes('chua vao thu vien')) {
-          setError('Độc giả chưa ở trong thư viện. Vui lòng yêu cầu độc giả quét thẻ tại cửa vào.');
-        } else {
-          setError('Thẻ độc giả đã bị khóa/hết hạn. Vui lòng liên hệ thư viện.');
-        }
-      } else {
-        setError('Không tìm thấy độc giả với mã số này');
-      }
-      setPatronId(null);
-      setPatronName('');
-      setActiveCount(0);
-      setOverdueCount(0);
-      setActiveRecords([]);
-    } finally {
-      setIsLookingUp(false);
-    }
-  };
-
-  const removeItem = (index: number) => {
-    setScannedItems((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const resetState = () => {
-    setScanned(false);
-    setScannedItems([]);
-    setPatronCode('');
-    setPatronId(null);
-    setPatronName('');
-    setActiveCount(0);
-    setOverdueCount(0);
-    setActiveRecords([]);
-    setCameraReady(false);
-    setError(null);
-  };
-
-  const handleCreateSlip = async () => {
-    if (!scannedItems.length || !patronId) return;
-
-    const validItems = scannedItems.filter((item) => !item.alreadyBorrowed);
-    const alreadyBorrowedItems = scannedItems.filter((item) => item.alreadyBorrowed);
-
-    if (alreadyBorrowedItems.length > 0) {
-      const titles = alreadyBorrowedItems.map((b) => `"${b.book.title || b.barcode}"`).join(', ');
-      Alert.alert(
-        'Sách đã được mượn trước đó',
-        `${alreadyBorrowedItems.length} sách trong danh sách đang được mượn: ${titles}`,
-        [
-          { text: 'Bỏ qua', style: 'cancel' },
-          {
-            text: 'Tạo phiếu',
-            onPress: () => submitSlip(validItems),
-          },
-        ]
-      );
-      return;
-    }
-
-    if (activeCount + validItems.length > MAX_BORROW) {
-      Alert.alert('Vượt quá giới hạn', `Tổng sách mượn sẽ là ${activeCount + validItems.length} cuốn, tối đa ${MAX_BORROW} cuốn`);
-      return;
-    }
-
-    submitSlip(validItems);
-  };
-
-  const submitSlip = async (items: ScannedBorrowItem[]) => {
-    if (!items.length || !patronId) return;
-    setIsCreating(true);
-    try {
-      const apiItems = items.map((item) => ({
-        barcode: item.copy_barcode || item.barcode,
-        isbn: item.isbn,
-        book_id: item.book.id,
-        copy_id: item.copy_id!,
-      }));
-      const result = await borrowApi.confirmBorrowSlip({ patron_id: patronId, items: apiItems });
-      if (result.status === 'success') {
-        Alert.alert('Thành công', result.message, [
-          { text: 'OK', onPress: resetState },
-        ]);
-      }
-    } catch (error: any) {
-      devError('[StaffBorrow] Create slip error:', error);
-      let msg = 'Tạo phiếu mượn thất bại';
-      if (error.response?.data?.detail) msg = error.response.data.detail;
-      Alert.alert('Lỗi', msg);
-    } finally {
-      setIsCreating(false);
-    }
-  };
-
-  if (!permission) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <LoadingOverlay loading message="Loading..." />
-      </SafeAreaView>
-    );
-  }
-
-  if (!permission.granted) {
-    return (
-      <SafeAreaView style={styles.permissionContainer} edges={['bottom']}>
-        <MaterialCommunityIcons name="camera-off-outline" size={48} color={c.onSurfaceVariant} />
-        <Text style={styles.permissionText}>Cần quyền camera để quét mã vạch sách</Text>
-        <Button mode="contained" onPress={requestPermission} style={styles.permissionButton}>
-          Cấp quyền
-        </Button>
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
-      <GradientHeader
-        title="Mượn sách"
-        subtitle={patronId ? `Độc giả: ${patronName}` : 'Quét sách cho độc giả'}
-        icon="book-plus-outline"
-      />
-
-      <SectionCard
-        title="Độc giả"
-        icon="account-outline"
-        accentColor={GRADIENTS.indigo[0]}
-        right={
-          patronId ? (
-            <Button mode="text" compact onPress={resetState} textColor={c.error}>
-              Đặt lại
-            </Button>
-          ) : undefined
-        }
-      >
-        <View style={styles.patronRow}>
-          <TextInput
-            value={patronCode}
-            onChangeText={setPatronCode}
-            placeholder="Nhập MSSV..."
-            mode="outlined"
-            style={styles.patronField}
-            outlineStyle={styles.inputOutline}
-            activeOutlineColor={c.primary}
-          />
-          <Button mode="contained" onPress={lookupPatron} loading={isLookingUp} disabled={isLookingUp || !patronCode.trim()} style={styles.lookupButton}>
-            Tra cứu
-          </Button>
-        </View>
-
-        {error ? (
-          <View style={styles.errorBox}>
-            <MaterialCommunityIcons name="alert-circle-outline" size={18} color={c.error} />
-            <Text style={styles.errorText} selectable>{error}</Text>
-          </View>
-        ) : null}
-
-        {patronId ? (
-          <View style={styles.quotaRow}>
-            <View style={styles.patronReadyBanner}>
-              <MaterialCommunityIcons name="check-circle" size={15} color={theme.dark ? '#4A8C5C' : '#067647'} />
-              <Text style={styles.patronReadyText}>{patronName}</Text>
-            </View>
-            <View style={[styles.quotaBadge, !canBorrow && overdueCount > 0 ? styles.quotaBadgeError : !canBorrow ? styles.quotaBadgeWarning : styles.quotaBadgeOk]}>
-              <MaterialCommunityIcons
-                name={canBorrow ? 'check-circle' : 'alert-circle'}
-                size={13}
-                color={canBorrow ? (theme.dark ? '#4A8C5C' : '#067647') : c.error}
-              />
-              <Text style={[styles.quotaBadgeText, !canBorrow && styles.quotaBadgeTextError]}>
-                {overdueCount > 0
-                  ? `${overdueCount} quá hạn`
-                  : `${remaining} cuốn khả dụng`}
-              </Text>
-            </View>
-          </View>
-        ) : null}
-      </SectionCard>
-
-      {patronId ? (
-        <View style={styles.statsRow}>
-          <View style={styles.statHalf}>
-            <StatCard
-              label="Đang mượn"
-              value={activeCount}
-              icon="book-open-variant"
-              gradient={GRADIENTS.blue}
-              pct={(activeCount / MAX_BORROW) * 100}
-            />
-          </View>
-          <View style={styles.statHalf}>
-            <StatCard
-              label="Khả dụng"
-              value={remaining}
-              icon="book-check-outline"
-              gradient={canBorrow ? GRADIENTS.emerald : GRADIENTS.amber}
-            />
-          </View>
-        </View>
-      ) : null}
-
-      <View style={styles.scannerContainer}>
-        {permission?.granted && patronId && canBorrow ? (
-          <>
-            <CameraView
-              style={styles.camera}
-              facing="back"
-              onCameraReady={() => setCameraReady(true)}
-              barcodeScannerSettings={{
-                barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
-              }}
-              onBarcodeScanned={cameraReady && !scanned ? handleBarCodeScanned : undefined}
-            />
-            <View style={styles.overlay}>
-              <View style={styles.scanArea}>
-                <View style={[styles.corner, styles.topLeft]} />
-                <View style={[styles.corner, styles.topRight]} />
-                <View style={[styles.corner, styles.bottomLeft]} />
-                <View style={[styles.corner, styles.bottomRight]} />
-              </View>
-              <Text style={styles.scanText}>Quét mã vạch sách</Text>
-            </View>
-          </>
-        ) : (
-          <View style={styles.cameraPlaceholder}>
-            <MaterialCommunityIcons
-              name={!canBorrow ? 'book-lock-outline' : 'barcode-scan'}
-              size={48}
-              color={c.onSurfaceVariant}
-            />
-            <Text style={styles.cameraPlaceholderText}>
-              {!canBorrow
-                ? overdueCount > 0
-                  ? 'Có sách quá hạn, không thể mượn thêm'
-                  : 'Đã mượn tối đa 3 cuốn'
-                : permission?.granted
-                  ? 'Cần tra độc giả trước'
-                  : 'Cần cấp quyền camera'}
-            </Text>
-          </View>
-        )}
-      </View>
-
-      <SectionCard
-        title={`Danh sách mượn (${scannedItems.length} cuốn)`}
-        icon="book-open-variant"
-        accentColor={GRADIENTS.violet[0]}
-        right={
-          scannedItems.length > 0 ? (
-            <Button mode="text" compact onPress={() => setScannedItems([])} textColor={c.error}>
-              Xoá tất cả
-            </Button>
-          ) : undefined
-        }
-        style={styles.listSection}
-      >
-        {scannedItems.length === 0 ? (
-          <EmptyState icon="barcode-scan" message="Quét sách để thêm vào phiếu mượn" />
-        ) : (
-          <FlatList
-            data={scannedItems}
-            keyExtractor={(_, index) => String(index)}
-            style={styles.list}
-            renderItem={({ item, index }) => (
-              <Surface
-                style={[
-                  styles.itemCard,
-                  item.alreadyBorrowed && styles.itemCardAlreadyBorrowed,
-                ]}
-                elevation={0}
-              >
-                <View style={styles.itemRow}>
-                  {item.book.cover_url ? (
-                    <View style={styles.itemCoverWrap}>
-                      <MaterialCommunityIcons name="book-open-variant" size={20} color={c.primary} />
-                    </View>
-                  ) : (
-                    <View style={styles.itemCoverPlaceholder}>
-                      <MaterialCommunityIcons name="book-open-variant" size={24} color={c.onSurfaceVariant} />
-                    </View>
-                  )}
-                  <View style={styles.itemInfo}>
-                    <View style={styles.itemTitleRow}>
-                      <Text style={styles.itemTitle} numberOfLines={2}>{item.book.title}</Text>
-                      {item.alreadyBorrowed ? (
-                        <View style={styles.alreadyBorrowedBadge}>
-                          <MaterialCommunityIcons name="book-lock" size={12} color={c.error} />
-                          <Text style={styles.alreadyBorrowedText}>Đã mượn</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                    {item.book.author ? <Text style={styles.itemAuthor} numberOfLines={1}>{item.book.author}</Text> : null}
-                    <Text style={styles.itemIsbn}>{item.barcode}</Text>
-                    {item.alreadyBorrowed ? (
-                      <Text style={styles.alreadyBorrowedNote}>Sách này đang được mượn — sẽ không thêm vào phiếu</Text>
-                    ) : null}
-                  </View>
-                  <Button mode="text" compact onPress={() => removeItem(index)} textColor={c.error} style={styles.removeButton}>
-                    Xoá
-                  </Button>
-                </View>
-              </Surface>
-            )}
-          />
-        )}
-      </SectionCard>
-
-      <View style={styles.actionRow}>
-        <Button mode="outlined" onPress={resetState} style={styles.actionButton} textColor={c.onSurfaceVariant}>
-          Xoá tất cả
-        </Button>
-        <Button mode="contained" onPress={handleCreateSlip} loading={isCreating} disabled={isCreating || scannedItems.length === 0 || !patronId || !canBorrow} style={styles.actionButton}>
-          {isCreating ? 'Đang tạo phiếu...' : `Tạo phiếu mượn (${scannedItems.length} cuốn)`}
-        </Button>
-      </View>
-
-      <NoticeSnackbar
-        visible={!!scanToast}
-        message={scanToast}
-        severity={scanToast.startsWith('⚠️') || scanToast.includes('Không') ? 'warning' : 'success'}
-        onDismiss={() => setScanToast('')}
-      />
-    </SafeAreaView>
-  );
-}
-
-function createStyles(theme: AppTheme) {
-  const c = theme.colors;
-  return StyleSheet.create({
-    container: { flex: 1, backgroundColor: c.background },
-    permissionContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: c.background, gap: 12 },
-    permissionText: { color: c.onSurface, fontSize: 16, marginBottom: 8, textAlign: 'center' },
-    permissionButton: { borderRadius: 10, paddingHorizontal: 24 },
-    patronRow: { flexDirection: 'row', gap: 8, alignItems: 'center', paddingHorizontal: 16, paddingBottom: 12 },
-    patronField: { flex: 1, backgroundColor: 'transparent' },
-    inputOutline: { borderRadius: 10, borderColor: c.outlineVariant },
-    lookupButton: { borderRadius: 10, height: 44 },
-    errorBox: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      gap: 8,
-      marginHorizontal: 16,
-      marginBottom: 12,
-      padding: 10,
-      borderRadius: 10,
-      backgroundColor: c.errorContainer,
-      borderWidth: 1,
-      borderColor: c.error,
-    },
-    errorText: {
-      color: c.error,
-      flex: 1,
-      fontSize: 13,
-    },
-    patronReadyBanner: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8, backgroundColor: theme.dark ? 'rgba(74, 140, 92, 0.12)' : 'rgba(6, 118, 71, 0.08)' },
-    patronReadyText: { color: theme.dark ? '#4A8C5C' : '#067647', fontSize: 12, fontWeight: '600' },
-    quotaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 12, gap: 8 },
-    quotaBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 12 },
-    quotaBadgeOk: { backgroundColor: theme.dark ? 'rgba(74, 140, 92, 0.12)' : 'rgba(6, 118, 71, 0.08)' },
-    quotaBadgeWarning: { backgroundColor: theme.dark ? 'rgba(196, 154, 60, 0.15)' : 'rgba(181, 71, 8, 0.08)' },
-    quotaBadgeError: { backgroundColor: 'rgba(196, 78, 78, 0.15)' },
-    quotaBadgeText: { fontSize: 12, fontWeight: '700', color: c.onSurface },
-    quotaBadgeTextError: { color: c.error },
-    statsRow: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, paddingBottom: 12 },
-    statHalf: { flex: 1 },
-    scannerContainer: { height: 220, marginHorizontal: 16, borderRadius: 14, overflow: 'hidden', backgroundColor: c.surfaceVariant, marginBottom: 12 },
-    camera: { flex: 1 },
-    overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' },
-    scanArea: { width: 280, height: 100, borderRadius: 12, position: 'relative' },
-    corner: { position: 'absolute', width: 28, height: 28, borderColor: c.primary, borderWidth: 2.5 },
-    topLeft: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 12 },
-    topRight: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 12 },
-    bottomLeft: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 12 },
-    bottomRight: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 12 },
-    scanText: { color: '#FFFFFF', marginTop: 12, fontSize: 14, textAlign: 'center', fontWeight: '600' },
-    cameraPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 10, backgroundColor: c.surfaceVariant },
-    cameraPlaceholderText: { color: c.onSurfaceVariant, fontSize: 14, fontWeight: '600' },
-    listSection: { flex: 1, marginHorizontal: 16 },
-    list: { flex: 1 },
-    itemCard: { marginVertical: 4, marginHorizontal: 16, backgroundColor: c.surface, borderRadius: 14, borderWidth: 0.5, borderColor: c.outlineVariant },
-    itemRow: { flexDirection: 'row', alignItems: 'center', padding: 12 },
-    itemCoverWrap: { width: 44, height: 60, borderRadius: 8, backgroundColor: c.primaryContainer, justifyContent: 'center', alignItems: 'center' },
-    itemCoverPlaceholder: { width: 44, height: 60, borderRadius: 8, backgroundColor: c.surfaceVariant, justifyContent: 'center', alignItems: 'center' },
-    itemInfo: { flex: 1, marginLeft: 12 },
-    itemTitle: { fontSize: 14, fontWeight: '600', color: c.onSurface },
-    itemAuthor: { fontSize: 12, color: c.onSurfaceVariant, marginTop: 2 },
-    itemIsbn: { fontSize: 11, color: c.primary, marginTop: 2, fontFamily: 'monospace' },
-    itemTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-    alreadyBorrowedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, backgroundColor: 'rgba(196, 78, 78, 0.15)' },
-    alreadyBorrowedText: { color: c.error, fontSize: 10, fontWeight: '700' },
-    alreadyBorrowedNote: { color: c.error, fontSize: 11, marginTop: 2, fontStyle: 'italic' },
-    itemCardAlreadyBorrowed: { backgroundColor: c.surfaceVariant, borderColor: c.error, borderWidth: 1, opacity: 0.7 },
-    removeButton: { marginLeft: 4 },
-    actionRow: { flexDirection: 'row', padding: 16, gap: 8, paddingBottom: 20 },
-    actionButton: { flex: 1, borderRadius: 10 },
-  });
-}
-</file>
-
 <file path="src/features/import/screens/ImportBooksScreen.tsx">
 import React, { useState, useCallback, useRef, useMemo } from 'react';
 import { View, StyleSheet, ScrollView, Image } from 'react-native';
@@ -10822,6 +10542,116 @@ function createStyles(theme: AppTheme) {
 }
 </file>
 
+<file path="src/hooks/useFaceLoginState.ts">
+import { useCallback, useRef, useState } from 'react';
+
+const MAX_FACE_ATTEMPTS = 3;
+
+export interface FaceLoginState {
+  faceAttemptCount: number;
+  faceFailed: boolean;
+  showPasswordForm: boolean;
+  attemptFaceLogin: (photoUri?: string) => Promise<boolean>;
+  switchToPassword: () => void;
+  resetFace: () => void;
+}
+
+export function useFaceLoginState(faceLoginFn: (uri: string) => Promise<void>): FaceLoginState {
+  const [faceAttemptCount, setFaceAttemptCount] = useState(0);
+  const [faceFailed, setFaceFailed] = useState(false);
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const failCountRef = useRef(0);
+
+  const attemptFaceLogin = useCallback(
+    async (photoUri?: string): Promise<boolean> => {
+      if (!photoUri) return false;
+
+      try {
+        await faceLoginFn(photoUri);
+        failCountRef.current = 0;
+        setFaceAttemptCount(0);
+        return true;
+      } catch {
+        failCountRef.current += 1;
+        const newCount = failCountRef.current;
+        setFaceAttemptCount(newCount);
+
+        if (newCount >= MAX_FACE_ATTEMPTS) {
+          setFaceFailed(true);
+          setShowPasswordForm(true);
+        }
+        return false;
+      }
+    },
+    [faceLoginFn],
+  );
+
+  const switchToPassword = useCallback(() => {
+    setShowPasswordForm(true);
+  }, []);
+
+  const resetFace = useCallback(() => {
+    failCountRef.current = 0;
+    setFaceAttemptCount(0);
+    setFaceFailed(false);
+    setShowPasswordForm(false);
+  }, []);
+
+  return {
+    faceAttemptCount,
+    faceFailed,
+    showPasswordForm,
+    attemptFaceLogin,
+    switchToPassword,
+    resetFace,
+  };
+}
+</file>
+
+<file path="src/hooks/useRadarAnimation.ts">
+import { useEffect, useRef } from 'react';
+import { Animated, Easing } from 'react-native';
+
+const SWEEP_DURATION = 2000;
+
+export function useRadarAnimation(active: boolean) {
+  const scanValue = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!active) {
+      scanValue.stopAnimation();
+      scanValue.setValue(0);
+      return;
+    }
+
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scanValue, {
+          toValue: 1,
+          duration: SWEEP_DURATION / 2,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(scanValue, {
+          toValue: 0,
+          duration: SWEEP_DURATION / 2,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+
+    animation.start();
+
+    return () => {
+      animation.stop();
+    };
+  }, [active, scanValue]);
+
+  return scanValue;
+}
+</file>
+
 <file path="src/lib/event-bus.ts">
 type Handler = (...args: any[]) => void;
 
@@ -11007,6 +10837,12 @@ export function useUndo({ duration = UNDO_DURATION }: UseUndoOptions = {}): Undo
 
   return { hiddenIds, confirmingId, undo, cancelUndo, markConfirmed, hasPending };
 }
+</file>
+
+<file path="src/navigation/navigationRef.ts">
+import { createNavigationContainerRef } from '@react-navigation/native';
+
+export const navigationRef = createNavigationContainerRef();
 </file>
 
 <file path="src/navigation/roleGuard.ts">
@@ -11304,27 +11140,6 @@ export function devError(...args: unknown[]) {
 }
 </file>
 
-<file path="tsconfig.jest.json">
-{
-  "compilerOptions": {
-    "target": "ES2020",
-    "module": "commonjs",
-    "lib": ["ES2020"],
-    "jsx": "react-native",
-    "strict": false,
-    "moduleResolution": "node",
-    "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "resolveJsonModule": true,
-    "ignoreDeprecations": "6.0",
-    "types": ["jest", "node"]
-  },
-  "include": ["src/**/*", "jest.config.js"],
-  "exclude": ["node_modules"]
-}
-</file>
-
 <file path="e2e/flows/borrow-flow.yaml">
 appId: com.library.mobile
 name: Borrow Book Flow
@@ -11503,6 +11318,28 @@ steps:
   - assertVisible:
       text: "Xác nhận mượn"
       timeout: 5000
+</file>
+
+<file path="jest.config.js">
+module.exports = {
+  ...require('@react-native/jest-preset'),
+  testMatch: ['**/__tests__/**/*.test.[jt]s?(x)'],
+  transform: {
+    ...require('@react-native/jest-preset').transform,
+    '^.+\\.(ts|tsx)$': ['ts-jest', { tsconfig: 'tsconfig.jest.json' }],
+  },
+  transformIgnorePatterns: [
+    'node_modules/(?!(react-native|@react-native|@testing-library/react-native|react-native-paper|react-native-vector-icons)/)',
+  ],
+  moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/src/$1',
+  },
+  testPathIgnorePatterns: ['/node_modules/', '/android/', '/ios/'],
+  collectCoverageFrom: [
+    'src/**/*.{ts,tsx}',
+    '!src/**/*.d.ts',
+  ],
+};
 </file>
 
 <file path="src/__tests__/components/SwipeReserveRow.test.tsx">
@@ -11724,6 +11561,44 @@ export const openLibraryApi = {
 };
 </file>
 
+<file path="src/components/LoadingOverlay.tsx">
+import React from 'react';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { Text, useTheme } from 'react-native-paper';
+import type { AppTheme } from '../theme/DarkTheme';
+
+interface LoadingOverlayProps {
+  loading?: boolean;
+  message?: string;
+  children?: React.ReactNode;
+}
+
+export function LoadingOverlay({ loading, message, children }: LoadingOverlayProps) {
+  const theme = useTheme() as AppTheme;
+  const c = theme.colors;
+
+  if (!loading) return <>{children}</>;
+
+  return (
+    <View style={loStyles.container}>
+      <ActivityIndicator testID="loading-indicator" size="large" color={c.primary} />
+      {message ? (
+        <Text variant="bodyMedium" style={{ color: c.onSurfaceVariant, marginTop: 12 }}>{message}</Text>
+      ) : null}
+    </View>
+  );
+}
+
+const loStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+  },
+});
+</file>
+
 <file path="src/components/SwipeReserveRow.tsx">
 import React, { useRef } from 'react';
 import { Animated, PanResponder, StyleSheet, TouchableOpacity, View } from 'react-native';
@@ -11809,54 +11684,6 @@ const s = StyleSheet.create({
     fontWeight: '700',
   },
 });
-</file>
-
-<file path="src/context/NetworkContext.tsx">
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { API_BASE_URL } from '../config/api';
-
-interface NetworkContextType {
-  isOnline: boolean;
-  isConnected: boolean;
-}
-
-const NetworkContext = createContext<NetworkContextType>({
-  isOnline: true,
-  isConnected: true,
-});
-
-export const useNetwork = () => useContext(NetworkContext);
-
-export const NetworkProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [networkState, setNetworkState] = useState<NetworkContextType>({
-    isOnline: true,
-    isConnected: true,
-  });
-
-  useEffect(() => {
-    let mounted = true;
-
-    const check = async () => {
-      try {
-        const res = await fetch(`${API_BASE_URL}/../healthz`, { method: 'HEAD', cache: 'no-store' });
-        if (mounted) setNetworkState({ isOnline: res.ok, isConnected: true });
-      } catch {
-        if (mounted) setNetworkState({ isOnline: false, isConnected: false });
-      }
-    };
-
-    check();
-    const interval = setInterval(check, 15000);
-
-    return () => { mounted = false; clearInterval(interval); };
-  }, []);
-
-  return (
-    <NetworkContext.Provider value={networkState}>
-      {children}
-    </NetworkContext.Provider>
-  );
-};
 </file>
 
 <file path="src/context/ThemeContext.tsx">
@@ -12151,252 +11978,696 @@ function createStyles(theme: AppTheme) {
 }
 </file>
 
-<file path="src/features/auth/screens/FaceLoginScreen.tsx">
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import React, { useMemo, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+<file path="src/features/borrow/screens/StaffBorrowScreen.tsx">
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { View, StyleSheet, Alert, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, Card, Text, useTheme } from 'react-native-paper';
-import { useAuth } from '../../../context/AuthContext';
-import CameraFallback from '../../../components/CameraFallback';
-import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
+import { Text, Button, Surface, TextInput, Divider, useTheme } from 'react-native-paper';
+import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { borrowApi } from '../../../api/borrow';
+import { Book, BorrowRecord } from '../../../types';
 import { AppTheme } from '../../../theme/DarkTheme';
+import { devError } from '../../../utils/logger';
+import { GradientHeader, SectionCard, StatCard, EmptyState, GRADIENTS } from '../../../theme/MobileDesignSystem';
+import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
+import { LoadingOverlay } from '../../../components/LoadingOverlay';
 
-interface FaceLoginScreenProps {
-  navigation: any;
+interface ScannedBorrowItem {
+  barcode: string;
+  isbn: string;
+  copy_id: string | null;
+  copy_barcode: string | null;
+  book: Book;
+  alreadyBorrowed?: boolean;
 }
 
-export default function FaceLoginScreen({ navigation }: FaceLoginScreenProps) {
+export default function StaffBorrowScreen() {
   const theme = useTheme() as AppTheme;
+  const c = theme.colors;
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const [scanned, setScanned] = useState(false);
+  const [patronCode, setPatronCode] = useState('');
+  const [patronId, setPatronId] = useState<string | null>(null);
+  const [patronName, setPatronName] = useState('');
+  const [scannedItems, setScannedItems] = useState<ScannedBorrowItem[]>([]);
+  const [isCreating, setIsCreating] = useState(false);
+  const [isLookingUp, setIsLookingUp] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
-  const [isCapturing, setIsCapturing] = useState(false);
-  const [error, setError] = useState('');
-  const [cameraError, setCameraError] = useState(false);
-  const cameraRef = useRef<CameraView>(null);
-  const { faceLogin } = useAuth();
+  const [scanToast, setScanToast] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [activeCount, setActiveCount] = useState(0);
+  const [overdueCount, setOverdueCount] = useState(0);
+  const [activeRecords, setActiveRecords] = useState<BorrowRecord[]>([]);
+  const [borrowConfig, setBorrowConfig] = useState<{ max_borrow_books: number }>({ max_borrow_books: 3 });
+  const [manualIsbn, setManualIsbn] = useState('');
+  const [scanError, setScanError] = useState<string | null>(null);
 
-  const captureFace = async () => {
-    if (!cameraRef.current || isCapturing) return;
+  useEffect(() => {
+    borrowApi.getBorrowConfig().then(setBorrowConfig).catch(() => {});
+  }, []);
 
-    setIsCapturing(true);
-    setError('');
+  const remaining = borrowConfig.max_borrow_books - activeCount;
+  const canBorrow = remaining > 0 && overdueCount === 0;
+
+  const lookupManualIsbn = async () => {
+    const isbn = manualIsbn.trim();
+    if (!isbn || !patronId) return;
+    setScanError(null);
+
+    if (scannedItems.find((item) => item.barcode === isbn)) {
+      setScanToast('Sách này đã có trong danh sách');
+      setManualIsbn('');
+      return;
+    }
+
+    if (scannedItems.length >= remaining) {
+      setScanError(`Chỉ được mượn tối đa ${borrowConfig.max_borrow_books} cuốn`);
+      setManualIsbn('');
+      return;
+    }
+
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
-      if (photo?.uri) {
-        await faceLogin(photo.uri);
+      const result = await borrowApi.lookupBorrowSlip({
+        patron_id: patronId,
+        items: [{ barcode: isbn, isbn }],
+      });
+      const item = result.items.find((i) => i.barcode === isbn);
+      if (!item || !item.can_borrow) {
+        const msg = item?.reason || 'Sách không thể mượn';
+        const title = item?.book?.title || '';
+        setScanError(title ? `"${title}": ${msg}` : `${msg} (ISBN: ${isbn})`);
+        setManualIsbn('');
+        return;
+      }
+      const book: Book = {
+        id: item.book!.id,
+        isbn: item.book!.isbn,
+        title: item.book!.title,
+        author: item.book!.author || undefined,
+        cover_url: item.book!.cover_url || undefined,
+        shelf_location: item.book!.shelf_location || undefined,
+      };
+      setScannedItems((prev) => [...prev, {
+        barcode: isbn,
+        isbn,
+        copy_id: item.copy?.id || null,
+        copy_barcode: item.copy?.barcode || null,
+        book,
+      }]);
+      setScanToast(`Đã thêm: ${book.title}`);
+      setManualIsbn('');
+    } catch (error: any) {
+      let msg = `Không tìm thấy sách: ${isbn}`;
+      if (error.response?.status === 403) {
+        msg = error.response?.data?.detail || 'Bạn không thể mượn sách lúc này';
+      } else if (error.response?.data?.detail) {
+        msg = error.response.data.detail;
+      }
+      setScanError(msg);
+      setManualIsbn('');
+    }
+  };
+
+  const handleBarCodeScanned = useCallback(async (result: BarcodeScanningResult) => {
+    if (scanned || !result.data) return;
+    setScanned(true);
+    const barcode = result.data;
+
+    if (!patronId) {
+      setTimeout(() => setScanned(false), 500);
+      return;
+    }
+
+    if (scannedItems.find((item) => item.barcode === barcode)) {
+      setScanToast('Sách này đã có trong danh sách');
+      setTimeout(() => setScanned(false), 500);
+      return;
+    }
+
+    if (scannedItems.length >= remaining) {
+      setScanToast(`Chỉ được mượn tối đa ${borrowConfig.max_borrow_books} cuốn`);
+      setTimeout(() => setScanned(false), 500);
+      return;
+    }
+
+    const normalizeCode = (v: string | undefined | null) => v?.replace(/[\s-]+/g, '').replace(/\.0+$/, '') ?? '';
+    const barcodeNormalized = normalizeCode(barcode);
+    const alreadyBorrowedRecord = activeRecords.find(
+      (r) => normalizeCode(r.book?.isbn) === barcodeNormalized || normalizeCode(r.book_id) === barcodeNormalized
+    );
+
+    if (alreadyBorrowedRecord) {
+      const book: Book = {
+        id: alreadyBorrowedRecord.book_id,
+        isbn: alreadyBorrowedRecord.book?.isbn || barcode,
+        title: alreadyBorrowedRecord.book?.title || barcode,
+        author: alreadyBorrowedRecord.book?.author,
+        cover_url: alreadyBorrowedRecord.book?.cover_url,
+        shelf_location: alreadyBorrowedRecord.book?.shelf_location,
+      };
+      setScannedItems((prev) => [...prev, { barcode, isbn: barcode, copy_id: null, copy_barcode: null, book, alreadyBorrowed: true }]);
+      setScanToast(`⚠️ "${alreadyBorrowedRecord.book?.title || barcode}" đã được mượn — sẽ không thêm vào phiếu`);
+      setTimeout(() => setScanned(false), 2000);
+      return;
+    }
+
+    try {
+      const result = await borrowApi.lookupBorrowSlip({
+        patron_id: patronId!,
+        items: [{ barcode, isbn: barcode }],
+      });
+      const item = result.items.find((i) => i.barcode === barcode);
+      if (!item || !item.can_borrow) {
+        const msg = item?.reason || 'Sách không thể mượn';
+        const title = item?.book?.title || '';
+        setScanError(title ? `"${title}": ${msg}` : `${msg} (ISBN: ${barcode})`);
+        setTimeout(() => setScanned(false), 500);
+        return;
+      }
+      const book: Book = {
+        id: item.book!.id,
+        isbn: item.book!.isbn,
+        title: item.book!.title,
+        author: item.book!.author || undefined,
+        cover_url: item.book!.cover_url || undefined,
+        shelf_location: item.book!.shelf_location || undefined,
+      };
+      setScannedItems((prev) => [...prev, {
+        barcode,
+        isbn: barcode,
+        copy_id: item.copy?.id || null,
+        copy_barcode: item.copy?.barcode || null,
+        book,
+      }]);
+      setScanToast(`Đã thêm: ${book.title}`);
+    } catch (error: any) {
+      let msg = `Không tìm thấy sách: ${barcode}`;
+      if (error.response?.status === 403) {
+        msg = error.response?.data?.detail || 'Bạn không thể mượn sách lúc này';
+      } else if (error.response?.data?.detail) {
+        msg = error.response.data.detail;
+      }
+      setScanError(msg);
+    }
+    setTimeout(() => setScanned(false), 500);
+  }, [scanned, scannedItems, remaining, activeRecords, patronId]);
+
+  const lookupPatron = async () => {
+    if (!patronCode.trim()) return;
+    setIsLookingUp(true);
+    setError(null);
+    try {
+      const data = await borrowApi.getActiveBorrowsByStudentCode(patronCode.trim());
+      if (data.patron) {
+        setPatronId(data.patron.id);
+        setPatronName(data.patron.full_name || data.patron.student_code);
+        setActiveCount(data.total ?? 0);
+        setOverdueCount(data.overdue_count ?? 0);
+        setActiveRecords(data.records ?? []);
+        setScanToast(`Đã chọn độc giả: ${data.patron.full_name || data.patron.student_code}`);
       }
     } catch (err: any) {
-      const message = err?.response?.data?.detail || err?.message || 'Đăng nhập thất bại';
-      setError(message);
+      const status = err?.response?.status || err?.status;
+      const detail = err?.response?.data?.detail || err?.message || '';
+      if (status === 403) {
+        if (detail.includes('chua vao thu vien')) {
+          setError('Độc giả chưa ở trong thư viện. Vui lòng yêu cầu độc giả quét thẻ tại cửa vào.');
+        } else {
+          setError('Thẻ độc giả đã bị khóa/hết hạn. Vui lòng liên hệ thư viện.');
+        }
+      } else {
+        setError('Không tìm thấy độc giả với mã số này');
+      }
+      setPatronId(null);
+      setPatronName('');
+      setActiveCount(0);
+      setOverdueCount(0);
+      setActiveRecords([]);
     } finally {
-      setIsCapturing(false);
+      setIsLookingUp(false);
+    }
+  };
+
+  const removeItem = (index: number) => {
+    setScannedItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const resetState = () => {
+    setScanned(false);
+    setScannedItems([]);
+    setPatronCode('');
+    setPatronId(null);
+    setPatronName('');
+    setActiveCount(0);
+    setOverdueCount(0);
+    setActiveRecords([]);
+    setCameraReady(false);
+    setError(null);
+  };
+
+  const handleCreateSlip = async () => {
+    if (!scannedItems.length || !patronId) return;
+
+    const validItems = scannedItems.filter((item) => !item.alreadyBorrowed);
+    const alreadyBorrowedItems = scannedItems.filter((item) => item.alreadyBorrowed);
+
+    if (alreadyBorrowedItems.length > 0) {
+      const titles = alreadyBorrowedItems.map((b) => `"${b.book.title || b.barcode}"`).join(', ');
+      Alert.alert(
+        'Sách đã được mượn trước đó',
+        `${alreadyBorrowedItems.length} sách trong danh sách đang được mượn: ${titles}`,
+        [
+          { text: 'Bỏ qua', style: 'cancel' },
+          {
+            text: 'Tạo phiếu',
+            onPress: () => submitSlip(validItems),
+          },
+        ]
+      );
+      return;
+    }
+
+    if (activeCount + validItems.length > borrowConfig.max_borrow_books) {
+      Alert.alert('Vượt quá giới hạn', `Tổng sách mượn sẽ là ${activeCount + validItems.length} cuốn, tối đa ${borrowConfig.max_borrow_books} cuốn`);
+      return;
+    }
+
+    submitSlip(validItems);
+  };
+
+  const submitSlip = async (items: ScannedBorrowItem[]) => {
+    if (!items.length || !patronId) return;
+    setIsCreating(true);
+    try {
+      const apiItems = items.map((item) => ({
+        barcode: item.copy_barcode || item.barcode,
+        isbn: item.isbn,
+        book_id: item.book.id,
+        copy_id: item.copy_id!,
+      }));
+      const result = await borrowApi.confirmBorrowSlip({ patron_id: patronId, items: apiItems });
+      if (result.status === 'success') {
+        Alert.alert('Thành công', result.message, [
+          { text: 'OK', onPress: resetState },
+        ]);
+      }
+    } catch (error: any) {
+      devError('[StaffBorrow] Create slip error:', error);
+      let msg = 'Tạo phiếu mượn thất bại';
+      if (error.response?.data?.detail) msg = error.response.data.detail;
+      Alert.alert('Lỗi', msg);
+    } finally {
+      setIsCreating(false);
     }
   };
 
   if (!permission) {
-    return <SafeAreaView style={styles.container} />;
+    return (
+      <SafeAreaView style={styles.container}>
+        <LoadingOverlay loading message="Loading..." />
+      </SafeAreaView>
+    );
   }
 
   if (!permission.granted) {
     return (
       <SafeAreaView style={styles.permissionContainer} edges={['bottom']}>
-        <Card mode="outlined" style={styles.permissionCard}>
-          <Card.Content style={styles.permissionContent}>
-            <Text variant="titleLarge" style={styles.cardTitle}>Cần quyền camera</Text>
-            <Text style={styles.mutedCenterText}>Cho phép camera để đăng nhập bằng khuôn mặt.</Text>
-            <Button mode="contained" onPress={requestPermission} icon="camera">
-              Cấp quyền
-            </Button>
-            <Button mode="text" onPress={() => navigation.goBack()}>
-              Quay lại đăng nhập bằng mật khẩu
-            </Button>
-          </Card.Content>
-        </Card>
-      </SafeAreaView>
-    );
-  }
-
-  if (cameraError) {
-    return (
-      <SafeAreaView style={styles.container} edges={['bottom']}>
-        <CameraFallback
-          message="Không thể khởi động camera"
-          onRetry={() => setCameraError(false)}
-          showManualInput
-          manualLabel="Email"
-          manualPlaceholder="Nhập email để đăng nhập..."
-          onManualSubmit={(value) => {
-            navigation.navigate('Login', { prefilledEmail: value });
-          }}
-          showPickImage={false}
-        />
+        <MaterialCommunityIcons name="camera-off-outline" size={48} color={c.onSurfaceVariant} />
+        <Text style={styles.permissionText}>Cần quyền camera để quét mã vạch sách</Text>
+        <Button mode="contained" onPress={requestPermission} style={styles.permissionButton}>
+          Cấp quyền
+        </Button>
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      <CameraView
-        ref={cameraRef}
-        style={styles.camera}
-        facing="front"
-        onMountError={() => setCameraError(true)}
+      <GradientHeader
+        title="Mượn sách"
+        subtitle={patronId ? `Độc giả: ${patronName}` : 'Quét sách cho độc giả'}
+        icon="book-plus-outline"
       />
-      <View style={styles.overlay}>
-        <View style={styles.faceGuide}>
-          <View style={[styles.guideCorner, styles.topLeft]} />
-          <View style={[styles.guideCorner, styles.topRight]} />
-          <View style={[styles.guideCorner, styles.bottomLeft]} />
-          <View style={[styles.guideCorner, styles.bottomRight]} />
+
+      <SectionCard
+        title="Độc giả"
+        icon="account-outline"
+        accentColor={GRADIENTS.indigo[0]}
+        right={
+          patronId ? (
+            <Button mode="text" compact onPress={resetState} textColor={c.error}>
+              Đặt lại
+            </Button>
+          ) : undefined
+        }
+      >
+        <View style={styles.patronRow}>
+          <TextInput
+            value={patronCode}
+            onChangeText={setPatronCode}
+            placeholder="Nhập MSSV..."
+            mode="outlined"
+            style={styles.patronField}
+            outlineStyle={styles.inputOutline}
+            activeOutlineColor={c.primary}
+          />
+          <Button mode="contained" onPress={lookupPatron} loading={isLookingUp} disabled={isLookingUp || !patronCode.trim()} style={styles.lookupButton}>
+            Tra cứu
+          </Button>
         </View>
-        <Text style={styles.instruction}>Đặt khuôn mặt trong khung hình và giữ yên</Text>
+
+        {error ? (
+          <View style={styles.errorBox}>
+            <MaterialCommunityIcons name="alert-circle-outline" size={18} color={c.error} />
+            <Text style={styles.errorText} selectable>{error}</Text>
+          </View>
+        ) : null}
+
+        {patronId ? (
+          <View style={styles.quotaRow}>
+            <View style={styles.patronReadyBanner}>
+              <MaterialCommunityIcons name="check-circle" size={15} color={theme.dark ? '#4A8C5C' : '#067647'} />
+              <Text style={styles.patronReadyText}>{patronName}</Text>
+            </View>
+            <View style={[styles.quotaBadge, !canBorrow && overdueCount > 0 ? styles.quotaBadgeError : !canBorrow ? styles.quotaBadgeWarning : styles.quotaBadgeOk]}>
+              <MaterialCommunityIcons
+                name={canBorrow ? 'check-circle' : 'alert-circle'}
+                size={13}
+                color={canBorrow ? (theme.dark ? '#4A8C5C' : '#067647') : c.error}
+              />
+              <Text style={[styles.quotaBadgeText, !canBorrow && styles.quotaBadgeTextError]}>
+                {overdueCount > 0
+                  ? `${overdueCount} quá hạn`
+                  : `${remaining} cuốn khả dụng`}
+              </Text>
+            </View>
+          </View>
+        ) : null}
+      </SectionCard>
+
+      {patronId ? (
+        <View style={styles.statsRow}>
+          <View style={styles.statHalf}>
+            <StatCard
+              label="Đang mượn"
+              value={activeCount}
+              icon="book-open-variant"
+              gradient={GRADIENTS.blue}
+              pct={(activeCount / borrowConfig.max_borrow_books) * 100}
+            />
+          </View>
+          <View style={styles.statHalf}>
+            <StatCard
+              label="Khả dụng"
+              value={remaining}
+              icon="book-check-outline"
+              gradient={canBorrow ? GRADIENTS.emerald : GRADIENTS.amber}
+            />
+          </View>
+        </View>
+      ) : null}
+
+      <View style={styles.scannerContainer}>
+        {permission?.granted && patronId && canBorrow ? (
+          <>
+            <CameraView
+              style={styles.camera}
+              facing="back"
+              onCameraReady={() => setCameraReady(true)}
+              barcodeScannerSettings={{
+                barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
+              }}
+              onBarcodeScanned={cameraReady && !scanned ? handleBarCodeScanned : undefined}
+            />
+            <View style={styles.overlay}>
+              <View style={styles.scanArea}>
+                <View style={[styles.corner, styles.topLeft]} />
+                <View style={[styles.corner, styles.topRight]} />
+                <View style={[styles.corner, styles.bottomLeft]} />
+                <View style={[styles.corner, styles.bottomRight]} />
+              </View>
+              <Text style={styles.scanText}>Quét mã vạch sách</Text>
+            </View>
+          </>
+        ) : (
+          <View style={styles.cameraPlaceholder}>
+            <MaterialCommunityIcons
+              name={!canBorrow ? 'book-lock-outline' : 'barcode-scan'}
+              size={48}
+              color={c.onSurfaceVariant}
+            />
+            <Text style={styles.cameraPlaceholderText}>
+              {!canBorrow
+                ? overdueCount > 0
+                  ? 'Có sách quá hạn, không thể mượn thêm'
+                  : 'Đã mượn tối đa 3 cuốn'
+                : permission?.granted
+                  ? 'Cần tra độc giả trước'
+                  : 'Cần cấp quyền camera'}
+            </Text>
+          </View>
+        )}
       </View>
 
-      <Card mode="contained" style={styles.controls}>
-        <Card.Content style={styles.controlsContent}>
-          <Text style={styles.hint}>
-            {isCapturing ? 'Đang xử lý...' : 'Nhấn nút để đăng nhập'}
-          </Text>
+      {scanError ? (
+        <View style={styles.scanErrorBox}>
+          <View style={styles.scanErrorRow}>
+            <MaterialCommunityIcons name="alert-circle-outline" size={18} color={c.error} />
+            <Text style={styles.scanErrorText} selectable>{scanError}</Text>
+            <Button mode="text" compact onPress={() => setScanError(null)} textColor={c.error} style={{ minWidth: 0 }}>
+              <MaterialCommunityIcons name="close" size={16} color={c.error} />
+            </Button>
+          </View>
+          <Button
+            mode="outlined"
+            compact
+            onPress={() => { setScanError(null); setManualIsbn(''); }}
+            style={styles.manualEntryButton}
+            textColor={c.primary}
+          >
+            Nhập ISBN thủ công
+          </Button>
+        </View>
+      ) : null}
+
+      {patronId && canBorrow ? (
+        <View style={styles.manualInputRow}>
+          <TextInput
+            value={manualIsbn}
+            onChangeText={setManualIsbn}
+            placeholder="Nhập ISBN thủ công..."
+            mode="outlined"
+            style={styles.manualInput}
+            outlineStyle={styles.inputOutline}
+            activeOutlineColor={c.primary}
+            keyboardType="numeric"
+            onSubmitEditing={lookupManualIsbn}
+          />
           <Button
             mode="contained"
-            onPress={captureFace}
-            loading={isCapturing}
-            disabled={isCapturing}
-            contentStyle={styles.largeButton}
-            icon="face-recognition"
+            compact
+            onPress={lookupManualIsbn}
+            disabled={!manualIsbn.trim()}
+            style={styles.manualLookupButton}
           >
-            Đăng nhập bằng khuôn mặt
+            Thêm
           </Button>
-          <Button mode="text" onPress={() => navigation.goBack()}>
-            Quay lại đăng nhập bằng mật khẩu
-          </Button>
-        </Card.Content>
-      </Card>
+        </View>
+      ) : null}
+
+      <SectionCard
+        title={`Danh sách mượn (${scannedItems.length} cuốn)`}
+        icon="book-open-variant"
+        accentColor={GRADIENTS.violet[0]}
+        right={
+          scannedItems.length > 0 ? (
+            <Button mode="text" compact onPress={() => setScannedItems([])} textColor={c.error}>
+              Xoá tất cả
+            </Button>
+          ) : undefined
+        }
+        style={styles.listSection}
+      >
+        {scannedItems.length === 0 ? (
+          <EmptyState icon="barcode-scan" message="Quét sách để thêm vào phiếu mượn" />
+        ) : (
+          <FlatList
+            data={scannedItems}
+            keyExtractor={(_, index) => String(index)}
+            style={styles.list}
+            renderItem={({ item, index }) => (
+              <Surface
+                style={[
+                  styles.itemCard,
+                  item.alreadyBorrowed && styles.itemCardAlreadyBorrowed,
+                ]}
+                elevation={0}
+              >
+                <View style={styles.itemRow}>
+                  {item.book.cover_url ? (
+                    <View style={styles.itemCoverWrap}>
+                      <MaterialCommunityIcons name="book-open-variant" size={20} color={c.primary} />
+                    </View>
+                  ) : (
+                    <View style={styles.itemCoverPlaceholder}>
+                      <MaterialCommunityIcons name="book-open-variant" size={24} color={c.onSurfaceVariant} />
+                    </View>
+                  )}
+                  <View style={styles.itemInfo}>
+                    <View style={styles.itemTitleRow}>
+                      <Text style={styles.itemTitle} numberOfLines={2}>{item.book.title}</Text>
+                      {item.alreadyBorrowed ? (
+                        <View style={styles.alreadyBorrowedBadge}>
+                          <MaterialCommunityIcons name="book-lock" size={12} color={c.error} />
+                          <Text style={styles.alreadyBorrowedText}>Đã mượn</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    {item.book.author ? <Text style={styles.itemAuthor} numberOfLines={1}>{item.book.author}</Text> : null}
+                    <Text style={styles.itemIsbn}>{item.barcode}</Text>
+                    {item.alreadyBorrowed ? (
+                      <Text style={styles.alreadyBorrowedNote}>Sách này đang được mượn — sẽ không thêm vào phiếu</Text>
+                    ) : null}
+                  </View>
+                  <Button mode="text" compact onPress={() => removeItem(index)} textColor={c.error} style={styles.removeButton}>
+                    Xoá
+                  </Button>
+                </View>
+              </Surface>
+            )}
+          />
+        )}
+      </SectionCard>
+
+      <View style={styles.actionRow}>
+        <Button mode="outlined" onPress={resetState} style={styles.actionButton} textColor={c.onSurfaceVariant}>
+          Xoá tất cả
+        </Button>
+        <Button mode="contained" onPress={handleCreateSlip} loading={isCreating} disabled={isCreating || scannedItems.length === 0 || !patronId || !canBorrow} style={styles.actionButton}>
+          {isCreating ? 'Đang tạo phiếu...' : `Tạo phiếu mượn (${scannedItems.length} cuốn)`}
+        </Button>
+      </View>
 
       <NoticeSnackbar
-        visible={!!error}
-        message={error}
-        severity="error"
-        onDismiss={() => setError('')}
+        visible={!!scanToast}
+        message={scanToast}
+        severity={scanToast.startsWith('⚠️') || scanToast.includes('Không') ? 'warning' : 'success'}
+        onDismiss={() => setScanToast('')}
       />
     </SafeAreaView>
   );
 }
 
 function createStyles(theme: AppTheme) {
+  const c = theme.colors;
   return StyleSheet.create({
-    container: {
+    container: { flex: 1, backgroundColor: c.background },
+    permissionContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: c.background, gap: 12 },
+    permissionText: { color: c.onSurface, fontSize: 16, marginBottom: 8, textAlign: 'center' },
+    permissionButton: { borderRadius: 10, paddingHorizontal: 24 },
+    patronRow: { flexDirection: 'row', gap: 8, alignItems: 'center', paddingHorizontal: 16, paddingBottom: 12 },
+    patronField: { flex: 1, backgroundColor: 'transparent' },
+    inputOutline: { borderRadius: 10, borderColor: c.outlineVariant },
+    lookupButton: { borderRadius: 10, height: 44 },
+    errorBox: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+      marginHorizontal: 16,
+      marginBottom: 12,
+      padding: 10,
+      borderRadius: 10,
+      backgroundColor: c.errorContainer,
+      borderWidth: 1,
+      borderColor: c.error,
+    },
+    errorText: {
+      color: c.error,
       flex: 1,
-      backgroundColor: theme.colors.background,
-      position: 'relative',
+      fontSize: 13,
     },
-    permissionContainer: {
+    patronReadyBanner: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8, backgroundColor: theme.dark ? 'rgba(74, 140, 92, 0.12)' : 'rgba(6, 118, 71, 0.08)' },
+    patronReadyText: { color: theme.dark ? '#4A8C5C' : '#067647', fontSize: 12, fontWeight: '600' },
+    quotaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 12, gap: 8 },
+    quotaBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 12 },
+    quotaBadgeOk: { backgroundColor: theme.dark ? 'rgba(74, 140, 92, 0.12)' : 'rgba(6, 118, 71, 0.08)' },
+    quotaBadgeWarning: { backgroundColor: theme.dark ? 'rgba(196, 154, 60, 0.15)' : 'rgba(181, 71, 8, 0.08)' },
+    quotaBadgeError: { backgroundColor: 'rgba(196, 78, 78, 0.15)' },
+    quotaBadgeText: { fontSize: 12, fontWeight: '700', color: c.onSurface },
+    quotaBadgeTextError: { color: c.error },
+    statsRow: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, paddingBottom: 12 },
+    statHalf: { flex: 1 },
+    scannerContainer: { height: 220, marginHorizontal: 16, borderRadius: 14, overflow: 'hidden', backgroundColor: c.surfaceVariant, marginBottom: 12 },
+    camera: { flex: 1 },
+    overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' },
+    scanArea: { width: 280, height: 100, borderRadius: 12, position: 'relative' },
+    corner: { position: 'absolute', width: 28, height: 28, borderColor: c.primary, borderWidth: 2.5 },
+    topLeft: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 12 },
+    topRight: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 12 },
+    bottomLeft: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 12 },
+    bottomRight: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 12 },
+    scanText: { color: '#FFFFFF', marginTop: 12, fontSize: 14, textAlign: 'center', fontWeight: '600' },
+    cameraPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 10, backgroundColor: c.surfaceVariant },
+    cameraPlaceholderText: { color: c.onSurfaceVariant, fontSize: 14, fontWeight: '600' },
+    scanErrorBox: {
+      marginHorizontal: 16,
+      marginBottom: 12,
+      padding: 10,
+      borderRadius: 10,
+      backgroundColor: c.errorContainer,
+      borderWidth: 1,
+      borderColor: c.error,
+    },
+    scanErrorRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+    },
+    scanErrorText: {
+      color: c.error,
       flex: 1,
-      justifyContent: 'center',
-      padding: 20,
-      backgroundColor: theme.colors.background,
+      fontSize: 13,
     },
-    permissionCard: {
-      borderColor: theme.colors.outlineVariant,
-      backgroundColor: theme.colors.surface,
+    manualEntryButton: {
+      marginTop: 8,
+      alignSelf: 'flex-start',
+      borderColor: c.primary,
     },
-    permissionContent: {
+    manualInputRow: {
+      flexDirection: 'row',
+      gap: 8,
+      marginHorizontal: 16,
+      marginBottom: 12,
       alignItems: 'center',
-      gap: 14,
-      paddingVertical: 20,
     },
-    cardTitle: {
-      color: theme.colors.onSurface,
-      fontWeight: '800',
-    },
-    mutedCenterText: {
-      color: theme.colors.onSurfaceVariant,
-      textAlign: 'center',
-    },
-    camera: {
+    manualInput: {
       flex: 1,
+      backgroundColor: 'transparent',
     },
-    overlay: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0,0,0,0.35)',
-      justifyContent: 'center',
-      alignItems: 'center',
-      paddingBottom: 120,
+    manualLookupButton: {
+      borderRadius: 10,
+      height: 40,
     },
-    faceGuide: {
-      width: 220,
-      height: 280,
-      borderRadius: 120,
-      borderWidth: 2,
-      borderColor: theme.colors.primary,
-      position: 'relative',
-    },
-    guideCorner: {
-      position: 'absolute',
-      width: 42,
-      height: 42,
-      borderColor: theme.colors.secondary,
-      borderWidth: 2,
-    },
-    topLeft: {
-      top: -2,
-      left: -2,
-      borderRightWidth: 0,
-      borderBottomWidth: 0,
-      borderTopLeftRadius: 110,
-    },
-    topRight: {
-      top: -2,
-      right: -2,
-      borderLeftWidth: 0,
-      borderBottomWidth: 0,
-      borderTopRightRadius: 110,
-    },
-    bottomLeft: {
-      bottom: -2,
-      left: -2,
-      borderRightWidth: 0,
-      borderTopWidth: 0,
-      borderBottomLeftRadius: 110,
-    },
-    bottomRight: {
-      bottom: -2,
-      right: -2,
-      borderLeftWidth: 0,
-      borderTopWidth: 0,
-      borderBottomRightRadius: 110,
-    },
-    instruction: {
-      color: '#FFFFFF',
-      marginTop: 24,
-      fontSize: 16,
-      textAlign: 'center',
-      fontWeight: '700',
-      paddingHorizontal: 24,
-    },
-    controls: {
-      position: 'absolute',
-      left: 12,
-      right: 12,
-      bottom: 12,
-      borderRadius: 18,
-      backgroundColor: theme.colors.surface,
-    },
-    controlsContent: {
-      gap: 10,
-    },
-    hint: {
-      color: theme.colors.onSurfaceVariant,
-      textAlign: 'center',
-    },
-    largeButton: {
-      minHeight: 52,
-    },
+    listSection: { flex: 1, marginHorizontal: 16 },
+    list: { flex: 1 },
+    itemCard: { marginVertical: 4, marginHorizontal: 16, backgroundColor: c.surface, borderRadius: 14, borderWidth: 0.5, borderColor: c.outlineVariant },
+    itemRow: { flexDirection: 'row', alignItems: 'center', padding: 12 },
+    itemCoverWrap: { width: 44, height: 60, borderRadius: 8, backgroundColor: c.primaryContainer, justifyContent: 'center', alignItems: 'center' },
+    itemCoverPlaceholder: { width: 44, height: 60, borderRadius: 8, backgroundColor: c.surfaceVariant, justifyContent: 'center', alignItems: 'center' },
+    itemInfo: { flex: 1, marginLeft: 12 },
+    itemTitle: { fontSize: 14, fontWeight: '600', color: c.onSurface },
+    itemAuthor: { fontSize: 12, color: c.onSurfaceVariant, marginTop: 2 },
+    itemIsbn: { fontSize: 11, color: c.primary, marginTop: 2, fontFamily: 'monospace' },
+    itemTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+    alreadyBorrowedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, backgroundColor: 'rgba(196, 78, 78, 0.15)' },
+    alreadyBorrowedText: { color: c.error, fontSize: 10, fontWeight: '700' },
+    alreadyBorrowedNote: { color: c.error, fontSize: 11, marginTop: 2, fontStyle: 'italic' },
+    itemCardAlreadyBorrowed: { backgroundColor: c.surfaceVariant, borderColor: c.error, borderWidth: 1, opacity: 0.7 },
+    removeButton: { marginLeft: 4 },
+    actionRow: { flexDirection: 'row', padding: 16, gap: 8, paddingBottom: 20 },
+    actionButton: { flex: 1, borderRadius: 10 },
   });
 }
 </file>
@@ -14107,6 +14378,27 @@ export interface AICommandCenterChatResponse {
 }
 </file>
 
+<file path="tsconfig.jest.json">
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "lib": ["ES2020"],
+    "jsx": "react",
+    "strict": false,
+    "moduleResolution": "node",
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "ignoreDeprecations": "6.0",
+    "types": ["jest", "node"]
+  },
+  "include": ["src/**/*", "jest.config.js"],
+  "exclude": ["node_modules"]
+}
+</file>
+
 <file path="tsconfig.json">
 {
   "extends": "expo/tsconfig.base",
@@ -14416,403 +14708,54 @@ const s = StyleSheet.create({
 });
 </file>
 
-<file path="src/components/StudentCardScanner.tsx">
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { View, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
-import { Text, Button, ActivityIndicator, useTheme } from 'react-native-paper';
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as FileSystem from 'expo-file-system/legacy';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import TextRecognition from '@react-native-ml-kit/text-recognition';
-import * as SecureStore from 'expo-secure-store';
-import { AppTheme } from '../theme/DarkTheme';
+<file path="src/context/NetworkContext.tsx">
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { API_BASE_URL } from '../config/api';
+import { devError } from '../utils/logger';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CARD_WIDTH = SCREEN_WIDTH * 0.85;
-const CARD_HEIGHT = CARD_WIDTH * 0.62;
-
-export interface ScannedCardData {
-  studentCode: string;
-  fullName: string;
-  className: string | null;
-  dateOfBirth: string | null;
-  course: string | null;
-  permanentAddress: string | null;
-  faculty: string | null;
-  rawText: string;
+interface NetworkContextType {
+  isOnline: boolean;
+  isConnected: boolean;
 }
 
-interface StudentCardScannerProps {
-  onScanned: (data: ScannedCardData) => void;
-  onError?: (error: string) => void;
-  onSkip?: () => void;
-}
+const NetworkContext = createContext<NetworkContextType>({
+  isOnline: true,
+  isConnected: true,
+});
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:80';
+export const useNetwork = () => useContext(NetworkContext);
 
-/**
- * Parse raw OCR text into structured card data using the backend LLM endpoint.
- *
- * This replaces the previous inline regex parsing with an LLM-powered extraction
- * that handles variations in card layout, OCR errors, and damaged cards.
- */
-async function parseCardText(rawText: string): Promise<Partial<ScannedCardData>> {
-  if (!rawText || rawText.trim().length === 0) {
-    return { rawText: rawText || '' };
-  }
-
-  try {
-    const token = await SecureStore.getItemAsync('accessToken');
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const response = await fetch(`${API_BASE_URL}/ai/parse-card-text`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ raw_text: rawText }),
-    });
-
-    if (!response.ok) {
-      console.warn(`Card parsing API failed: ${response.status}`);
-      return { rawText };
-    }
-
-    const parsed = await response.json();
-
-    return {
-      studentCode: parsed.student_code || '',
-      fullName: parsed.full_name || '',
-      className: parsed.class_name || null,
-      dateOfBirth: parsed.date_of_birth || null,
-      course: parsed.course || null,
-      permanentAddress: parsed.permanent_address || null,
-      faculty: parsed.faculty || null,
-      rawText,
-    };
-  } catch (err) {
-    console.warn('Card parsing failed, returning raw text:', err);
-    return { rawText };
-  }
-}
-
-export default function StudentCardScanner({ onScanned, onError, onSkip }: StudentCardScannerProps) {
-  const theme = useTheme<AppTheme>();
-  const c = theme.colors;
-
-  const styles = useMemo(() => StyleSheet.create({
-    container: { flex: 1, backgroundColor: c.background },
-    camera: { flex: 1 },
-    msgText: { color: c.onSurface, fontSize: 16, textAlign: 'center', marginTop: 24 },
-    permissionBox: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, gap: 16 },
-    permissionBtn: { marginTop: 8 },
-    overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 80, justifyContent: 'center', alignItems: 'center' },
-    cardFrame: { width: CARD_WIDTH, height: CARD_HEIGHT, borderRadius: FRAME_BORDER_RADIUS, position: 'relative' },
-    corner: { position: 'absolute', width: CORNER_SIZE, height: CORNER_SIZE, borderColor: c.primary },
-    cornerTL: { top: -CORNER_WIDTH, left: -CORNER_WIDTH, borderTopWidth: CORNER_WIDTH, borderLeftWidth: CORNER_WIDTH, borderTopLeftRadius: FRAME_BORDER_RADIUS + 4 },
-    cornerTR: { top: -CORNER_WIDTH, right: -CORNER_WIDTH, borderTopWidth: CORNER_WIDTH, borderRightWidth: CORNER_WIDTH, borderTopRightRadius: FRAME_BORDER_RADIUS + 4 },
-    cornerBL: { bottom: -CORNER_WIDTH, left: -CORNER_WIDTH, borderBottomWidth: CORNER_WIDTH, borderLeftWidth: CORNER_WIDTH, borderBottomLeftRadius: FRAME_BORDER_RADIUS + 4 },
-    cornerBR: { bottom: -CORNER_WIDTH, right: -CORNER_WIDTH, borderBottomWidth: CORNER_WIDTH, borderRightWidth: CORNER_WIDTH, borderBottomRightRadius: FRAME_BORDER_RADIUS + 4 },
-    statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(13, 17, 23, 0.85)', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, position: 'absolute', top: '40%' },
-    statusText: { color: c.onSurface, fontSize: 14, fontWeight: '600' },
-    bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 80, backgroundColor: c.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingHorizontal: 20, borderTopWidth: 1, borderTopColor: c.outline },
-    hintText: { color: c.onSurfaceVariant, fontSize: 13, flex: 1, textAlign: 'center' },
-    captureBtn: { width: 56, height: 56, borderRadius: 28, backgroundColor: c.primary, alignItems: 'center', justifyContent: 'center' },
-    confirmBox: { flex: 1, padding: 20, justifyContent: 'center' },
-    checkIconWrap: { alignItems: 'center', marginBottom: 12 },
-    confirmTitle: { color: c.onSurface, fontSize: 20, fontWeight: '900', textAlign: 'center' },
-    confirmSubtitle: { color: c.onSurfaceVariant, fontSize: 14, textAlign: 'center', marginBottom: 20 },
-    fieldList: { backgroundColor: c.surfaceVariant, borderRadius: 12, padding: 16, gap: 10, marginBottom: 20 },
-    fieldRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-    fieldLabel: { color: c.onSurfaceVariant, fontSize: 13, fontWeight: '600', width: 80 },
-    fieldValue: { color: c.onSurface, fontSize: 14, fontWeight: '500', flex: 1, textAlign: 'right' },
-    confirmActions: { gap: 10 },
-    confirmBtn: { borderRadius: 10, backgroundColor: c.custom.success, paddingVertical: 4 },
-    retakeBtn: { borderRadius: 10, borderColor: c.outline },
-  }), [c]);
-
-  const [permission, requestPermission] = useCameraPermissions();
-  const cameraRef = useRef<CameraView>(null);
-  const [phase, setPhase] = useState<'detecting' | 'capturing' | 'processing' | 'confirm'>('detecting');
-  const isMounted = useRef(true);
-  const phaseRef = useRef(phase);
-  const detectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [ocrResult, setOcrResult] = useState<Partial<ScannedCardData> | null>(null);
+export const NetworkProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [networkState, setNetworkState] = useState<NetworkContextType>({
+    isOnline: true,
+    isConnected: true,
+  });
 
   useEffect(() => {
-    phaseRef.current = phase;
-  }, [phase]);
+    let mounted = true;
 
-  useEffect(() => {
-    return () => {
-      isMounted.current = false;
-      if (detectTimerRef.current) clearTimeout(detectTimerRef.current);
+    const check = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/../healthz`, { method: 'HEAD', cache: 'no-store' });
+        if (mounted) setNetworkState({ isOnline: res.ok, isConnected: true });
+} catch (err) {
+      devError('[Network] Health check failed:', err);
+      if (mounted) setNetworkState({ isOnline: false, isConnected: false });
+    }
     };
+
+    check();
+    const interval = setInterval(check, 15000);
+
+    return () => { mounted = false; clearInterval(interval); };
   }, []);
 
-  const runOcrAndParse = useCallback(async (photoUri: string): Promise<Partial<ScannedCardData> | null> => {
-    try {
-      const result = await TextRecognition.recognize(photoUri);
-      if (!result?.text) return null;
-      return await parseCardText(result.text);
-    } catch (err: any) {
-      onError?.('Lỗi nhận dạng văn bản: ' + (err.message || ''));
-      return null;
-    }
-  }, [onError]);
-
-  const attemptAutoDetect = useCallback(async () => {
-    if (!cameraRef.current || !isMounted.current || phaseRef.current !== 'detecting') return;
-    try {
-      const photo = await cameraRef.current.takePictureAsync({
-        base64: true, quality: 0.3, skipProcessing: true,
-      });
-      if (!photo?.uri || !isMounted.current) return;
-
-      const tempPath = `${FileSystem.cacheDirectory}card_detect_${Date.now()}.jpg`;
-      await FileSystem.moveAsync({ from: photo.uri, to: tempPath });
-
-      const result = await TextRecognition.recognize(tempPath);
-      await FileSystem.deleteAsync(tempPath, { idempotent: true });
-
-      if (!isMounted.current) return;
-
-      if (result?.text && result.text.length > 30) {
-        setPhase('capturing');
-        await new Promise((r) => setTimeout(r, 600));
-        if (!isMounted.current) return;
-
-        const finalPhoto = await cameraRef.current.takePictureAsync({
-          base64: true, quality: 0.9, skipProcessing: true,
-        });
-        if (!finalPhoto?.uri) return;
-        setPhase('processing');
-
-        const finalPath = `${FileSystem.cacheDirectory}card_final_${Date.now()}.jpg`;
-        await FileSystem.moveAsync({ from: finalPhoto.uri, to: finalPath });
-
-        const parsed = await runOcrAndParse(finalPath);
-        await FileSystem.deleteAsync(finalPath, { idempotent: true });
-
-        if (parsed && isMounted.current) {
-          setOcrResult(parsed);
-          setPhase('confirm');
-          return;
-        }
-      }
-    } catch {
-      // Auto-detect attempt failed, will retry
-    }
-    if (isMounted.current && phaseRef.current === 'detecting') {
-      detectTimerRef.current = setTimeout(attemptAutoDetect, 2500);
-    }
-  }, [runOcrAndParse]);
-
-  const startDetection = useCallback(() => {
-    if (detectTimerRef.current) clearTimeout(detectTimerRef.current);
-    detectTimerRef.current = setTimeout(attemptAutoDetect, 1000);
-  }, [attemptAutoDetect]);
-
-  useEffect(() => {
-    if (permission?.granted) {
-      startDetection();
-    }
-    return () => {
-      if (detectTimerRef.current) clearTimeout(detectTimerRef.current);
-    };
-  }, [permission?.granted, startDetection]);
-
-  const handleManualCapture = async () => {
-    if (!cameraRef.current) return;
-    if (detectTimerRef.current) clearTimeout(detectTimerRef.current);
-    setPhase('capturing');
-    try {
-      const photo = await cameraRef.current.takePictureAsync({
-        base64: true, quality: 0.9, skipProcessing: true,
-      });
-      if (!photo?.uri) return;
-      setPhase('processing');
-      const parsed = await runOcrAndParse(photo.uri);
-      if (parsed && isMounted.current) {
-        setOcrResult(parsed);
-        setPhase('confirm');
-      } else {
-        onError?.('Không thể đọc thông tin từ ảnh, vui lòng thử lại');
-        setPhase('detecting');
-        startDetection();
-      }
-    } catch {
-      setPhase('detecting');
-      startDetection();
-    }
-  };
-
-  const handleConfirm = () => {
-    if (!ocrResult?.studentCode || !ocrResult?.fullName) {
-      onError?.('Thiếu thông tin bắt buộc (MSSV, Họ tên). Vui lòng thử lại.');
-      return;
-    }
-    onScanned({
-      studentCode: ocrResult.studentCode!,
-      fullName: ocrResult.fullName!,
-      className: ocrResult.className || null,
-      dateOfBirth: ocrResult.dateOfBirth || null,
-      course: ocrResult.course || null,
-      permanentAddress: ocrResult.permanentAddress || null,
-      faculty: ocrResult.faculty || null,
-      rawText: ocrResult.rawText || '',
-    });
-  };
-
-  const handleRetake = () => {
-    setOcrResult(null);
-    setPhase('detecting');
-    startDetection();
-  };
-
-  if (!permission) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.msgText}>Đang tải camera...</Text>
-      </View>
-    );
-  }
-
-  if (!permission.granted) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.permissionBox}>
-          <MaterialCommunityIcons name="camera-off" size={48} color={c.onSurfaceVariant} />
-          <Text style={styles.msgText}>Cần quyền camera để quét thẻ</Text>
-          <Button mode="contained" onPress={requestPermission} style={styles.permissionBtn}>
-            Cấp quyền
-          </Button>
-          {onSkip && (
-            <Button mode="text" onPress={onSkip}>
-              Nhập thủ công
-            </Button>
-          )}
-        </View>
-      </View>
-    );
-  }
-
-  if (phase === 'confirm' && ocrResult) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.confirmBox}>
-          <View style={styles.checkIconWrap}>
-            <MaterialCommunityIcons name="check-circle" size={56} color={c.custom.success} />
-          </View>
-          <Text style={styles.confirmTitle}>Đọc thẻ thành công</Text>
-          <Text style={styles.confirmSubtitle}>Vui lòng kiểm tra lại thông tin</Text>
-
-          <View style={styles.fieldList}>
-            <View style={styles.fieldRow}>
-              <Text style={styles.fieldLabel}>MSSV</Text>
-              <Text style={styles.fieldValue}>{ocrResult.studentCode || '-'}</Text>
-            </View>
-            <View style={styles.fieldRow}>
-              <Text style={styles.fieldLabel}>Họ tên</Text>
-              <Text style={styles.fieldValue}>{ocrResult.fullName || '-'}</Text>
-            </View>
-            {ocrResult.className ? (
-              <View style={styles.fieldRow}>
-                <Text style={styles.fieldLabel}>Lớp</Text>
-                <Text style={styles.fieldValue}>{ocrResult.className}</Text>
-              </View>
-            ) : null}
-            {ocrResult.course ? (
-              <View style={styles.fieldRow}>
-                <Text style={styles.fieldLabel}>Khóa học</Text>
-                <Text style={styles.fieldValue}>{ocrResult.course}</Text>
-              </View>
-            ) : null}
-            {ocrResult.permanentAddress ? (
-              <View style={styles.fieldRow}>
-                <Text style={styles.fieldLabel}>HKTT</Text>
-                <Text style={styles.fieldValue}>{ocrResult.permanentAddress}</Text>
-              </View>
-            ) : null}
-            {ocrResult.dateOfBirth ? (
-              <View style={styles.fieldRow}>
-                <Text style={styles.fieldLabel}>Ngày sinh</Text>
-                <Text style={styles.fieldValue}>{ocrResult.dateOfBirth}</Text>
-              </View>
-            ) : null}
-          </View>
-
-          <View style={styles.confirmActions}>
-            <Button mode="contained" onPress={handleConfirm} style={styles.confirmBtn}>
-              Xác nhận
-            </Button>
-            <Button mode="outlined" onPress={handleRetake} style={styles.retakeBtn}>
-              Chụp lại
-            </Button>
-            {onSkip && (
-              <Button mode="text" onPress={onSkip}>
-                Nhập thủ công
-              </Button>
-            )}
-          </View>
-        </View>
-      </View>
-    );
-  }
-
   return (
-    <View style={styles.container}>
-      <CameraView ref={cameraRef} style={styles.camera} facing="back" />
-
-      <View style={styles.overlay}>
-        <View style={styles.cardFrame}>
-          <View style={[styles.corner, styles.cornerTL]} />
-          <View style={[styles.corner, styles.cornerTR]} />
-          <View style={[styles.corner, styles.cornerBL]} />
-          <View style={[styles.corner, styles.cornerBR]} />
-        </View>
-
-        {phase === 'detecting' && (
-          <View style={styles.statusBadge}>
-            <ActivityIndicator size={20} color={c.primary} />
-            <Text style={styles.statusText}>Đang phát hiện thẻ...</Text>
-          </View>
-        )}
-        {phase === 'capturing' && (
-          <View style={styles.statusBadge}>
-            <MaterialCommunityIcons name="camera" size={20} color={c.custom.warning} />
-            <Text style={styles.statusText}>Đang chụp...</Text>
-          </View>
-        )}
-        {phase === 'processing' && (
-          <View style={styles.statusBadge}>
-            <ActivityIndicator size={20} color={c.primary} />
-            <Text style={styles.statusText}>Đang xử lý ảnh...</Text>
-          </View>
-        )}
-      </View>
-
-      <View style={styles.bottomBar}>
-        <Text style={styles.hintText}>Đặt thẻ sinh viên vào khung hình</Text>
-        <TouchableOpacity style={styles.captureBtn} onPress={handleManualCapture} activeOpacity={0.7}>
-          <MaterialCommunityIcons name="camera" size={28} color={c.background} />
-        </TouchableOpacity>
-        {onSkip && (
-          <Button mode="text" onPress={onSkip} compact>
-            Nhập thủ công
-          </Button>
-        )}
-      </View>
-    </View>
+    <NetworkContext.Provider value={networkState}>
+      {children}
+    </NetworkContext.Provider>
   );
-}
-
-const CORNER_SIZE = 28;
-const CORNER_WIDTH = 3;
-const FRAME_BORDER_RADIUS = 12;
+};
 </file>
 
 <file path="src/features/ai/screens/AIChatScreen.tsx">
@@ -15353,6 +15296,377 @@ function createStyles(theme: AppTheme) {
     },
     sendBtnDisabled: {
       backgroundColor: c.outlineVariant,
+    },
+  });
+}
+</file>
+
+<file path="src/features/auth/screens/FaceLoginScreen.tsx">
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, StyleSheet, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Button, Card, Text, useTheme } from 'react-native-paper';
+import { useAuth } from '../../../context/AuthContext';
+import CameraFallback from '../../../components/CameraFallback';
+import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
+import { AppTheme } from '../../../theme/DarkTheme';
+import { useFaceLoginState } from '../../../hooks/useFaceLoginState';
+
+interface FaceLoginScreenProps {
+  navigation: any;
+}
+
+export default function FaceLoginScreen({ navigation }: FaceLoginScreenProps) {
+  const theme = useTheme() as AppTheme;
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const [permission, requestPermission] = useCameraPermissions();
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [error, setError] = useState('');
+  const [cameraError, setCameraError] = useState(false);
+  const cameraRef = useRef<CameraView>(null);
+  const { faceLogin, staffLogin } = useAuth();
+  const cameraHeight = useRef(new Animated.Value(1)).current;
+
+  const { faceAttemptCount, faceFailed, showPasswordForm, attemptFaceLogin, switchToPassword, resetFace } =
+    useFaceLoginState(faceLogin);
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+
+  const captureFace = async () => {
+    if (!cameraRef.current || isCapturing) return;
+
+    setIsCapturing(true);
+    setError('');
+    try {
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
+      if (photo?.uri) {
+        const success = await attemptFaceLogin(photo.uri);
+        if (success) {
+          return;
+        }
+        if (!faceFailed && faceAttemptCount < 2) {
+          setError('Không nhận diện được, thử lại');
+        }
+      }
+    } catch (err: any) {
+      const message = err?.response?.data?.detail || err?.message || 'Đăng nhập thất bại';
+      setError(message);
+    } finally {
+      setIsCapturing(false);
+    }
+  };
+
+  const handlePasswordLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      setError('Vui lòng nhập email và mật khẩu');
+      return;
+    }
+    setLoginLoading(true);
+    setError('');
+    try {
+      await staffLogin(email.trim(), password);
+    } catch (err: any) {
+      const message = err?.response?.data?.detail || err?.message || 'Đăng nhập thất bại';
+      setError(message);
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (faceFailed) {
+      Animated.spring(cameraHeight, {
+        toValue: 0.4,
+        useNativeDriver: false,
+      }).start();
+    } else {
+      Animated.spring(cameraHeight, {
+        toValue: 1,
+        useNativeDriver: false,
+      }).start();
+    }
+  }, [faceFailed, cameraHeight]);
+
+  if (!permission) {
+    return <SafeAreaView style={styles.container} />;
+  }
+
+  if (!permission.granted) {
+    return (
+      <SafeAreaView style={styles.permissionContainer} edges={['bottom']}>
+        <Card mode="outlined" style={styles.permissionCard}>
+          <Card.Content style={styles.permissionContent}>
+            <Text variant="titleLarge" style={styles.cardTitle}>Cần quyền camera</Text>
+            <Text style={styles.mutedCenterText}>Cho phép camera để đăng nhập bằng khuôn mặt.</Text>
+            <Button mode="contained" onPress={requestPermission} icon="camera">
+              Cấp quyền
+            </Button>
+            <Button mode="text" onPress={() => navigation.goBack()}>
+              Quay lại đăng nhập bằng mật khẩu
+            </Button>
+          </Card.Content>
+        </Card>
+      </SafeAreaView>
+    );
+  }
+
+  if (cameraError) {
+    return (
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <CameraFallback
+          message="Không thể khởi động camera"
+          onRetry={() => setCameraError(false)}
+          showManualInput
+          manualLabel="Email"
+          manualPlaceholder="Nhập email để đăng nhập..."
+          onManualSubmit={(value) => {
+            navigation.navigate('Login', { prefilledEmail: value });
+          }}
+          showPickImage={false}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      <Animated.View style={{ flex: cameraHeight, overflow: 'hidden' }}>
+        <CameraView
+          ref={cameraRef}
+          style={styles.camera}
+          facing="front"
+          onMountError={() => setCameraError(true)}
+        />
+        <View style={styles.overlay}>
+          <View style={[styles.faceGuide, faceFailed && styles.faceGuideSmall]}>
+            <View style={[styles.guideCorner, styles.topLeft]} />
+            <View style={[styles.guideCorner, styles.topRight]} />
+            <View style={[styles.guideCorner, styles.bottomLeft]} />
+            <View style={[styles.guideCorner, styles.bottomRight]} />
+          </View>
+          <Text style={styles.instruction}>
+            {faceFailed ? 'Không nhận diện được khuôn mặt' : 'Đặt khuôn mặt trong khung hình và giữ yên'}
+          </Text>
+        </View>
+      </Animated.View>
+
+      {!faceFailed && (
+        <Card mode="contained" style={styles.controls}>
+          <Card.Content style={styles.controlsContent}>
+            <Text style={styles.hint}>
+              {isCapturing ? 'Đang xử lý...' : 'Nhấn nút để đăng nhập'}
+            </Text>
+            <Button
+              mode="contained"
+              onPress={captureFace}
+              loading={isCapturing}
+              disabled={isCapturing}
+              contentStyle={styles.largeButton}
+              icon="face-recognition"
+            >
+              Đăng nhập bằng khuôn mặt
+            </Button>
+            <Button mode="text" onPress={() => navigation.goBack()}>
+              Quay lại đăng nhập bằng mật khẩu
+            </Button>
+          </Card.Content>
+        </Card>
+      )}
+
+      {showPasswordForm && (
+        <Card mode="contained" style={styles.passwordForm}>
+          <Card.Content style={styles.passwordFormContent}>
+            <Text style={styles.passwordFormTitle}>Đăng nhập bằng mật khẩu</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor={theme.colors.onSurfaceVariant}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Mật khẩu"
+              placeholderTextColor={theme.colors.onSurfaceVariant}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
+            <Button
+              mode="contained"
+              onPress={handlePasswordLogin}
+              loading={loginLoading}
+              disabled={loginLoading}
+              contentStyle={styles.largeButton}
+            >
+              Đăng nhập
+            </Button>
+            <Button mode="text" onPress={() => { resetFace(); navigation.goBack(); }}>
+              Quay lại
+            </Button>
+          </Card.Content>
+        </Card>
+      )}
+
+      <NoticeSnackbar
+        visible={!!error}
+        message={error}
+        severity="error"
+        onDismiss={() => setError('')}
+      />
+    </SafeAreaView>
+  );
+}
+
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+      position: 'relative',
+    },
+    permissionContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      padding: 20,
+      backgroundColor: theme.colors.background,
+    },
+    permissionCard: {
+      borderColor: theme.colors.outlineVariant,
+      backgroundColor: theme.colors.surface,
+    },
+    permissionContent: {
+      alignItems: 'center',
+      gap: 14,
+      paddingVertical: 20,
+    },
+    cardTitle: {
+      color: theme.colors.onSurface,
+      fontWeight: '800',
+    },
+    mutedCenterText: {
+      color: theme.colors.onSurfaceVariant,
+      textAlign: 'center',
+    },
+    camera: {
+      flex: 1,
+    },
+    overlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0,0,0,0.35)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingBottom: 120,
+    },
+    faceGuide: {
+      width: 220,
+      height: 280,
+      borderRadius: 120,
+      borderWidth: 2,
+      borderColor: theme.colors.primary,
+      position: 'relative',
+    },
+    faceGuideSmall: {
+      width: 140,
+      height: 180,
+      borderRadius: 90,
+    },
+    guideCorner: {
+      position: 'absolute',
+      width: 42,
+      height: 42,
+      borderColor: theme.colors.secondary,
+      borderWidth: 2,
+    },
+    topLeft: {
+      top: -2,
+      left: -2,
+      borderRightWidth: 0,
+      borderBottomWidth: 0,
+      borderTopLeftRadius: 110,
+    },
+    topRight: {
+      top: -2,
+      right: -2,
+      borderLeftWidth: 0,
+      borderBottomWidth: 0,
+      borderTopRightRadius: 110,
+    },
+    bottomLeft: {
+      bottom: -2,
+      left: -2,
+      borderRightWidth: 0,
+      borderTopWidth: 0,
+      borderBottomLeftRadius: 110,
+    },
+    bottomRight: {
+      bottom: -2,
+      right: -2,
+      borderLeftWidth: 0,
+      borderTopWidth: 0,
+      borderBottomRightRadius: 110,
+    },
+    instruction: {
+      color: '#FFFFFF',
+      marginTop: 24,
+      fontSize: 16,
+      textAlign: 'center',
+      fontWeight: '700',
+      paddingHorizontal: 24,
+    },
+    controls: {
+      position: 'absolute',
+      left: 12,
+      right: 12,
+      bottom: 12,
+      borderRadius: 18,
+      backgroundColor: theme.colors.surface,
+    },
+    controlsContent: {
+      gap: 10,
+    },
+    hint: {
+      color: theme.colors.onSurfaceVariant,
+      textAlign: 'center',
+    },
+    largeButton: {
+      minHeight: 52,
+    },
+    passwordForm: {
+      position: 'absolute',
+      left: 12,
+      right: 12,
+      bottom: 12,
+      borderRadius: 18,
+      backgroundColor: theme.colors.surface,
+    },
+    passwordFormContent: {
+      gap: 12,
+    },
+    passwordFormTitle: {
+      color: theme.colors.onSurface,
+      fontWeight: '800',
+      textAlign: 'center',
+      fontSize: 16,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: theme.colors.outlineVariant,
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      color: theme.colors.onSurface,
+      backgroundColor: theme.colors.surface,
+      fontSize: 15,
     },
   });
 }
@@ -16446,216 +16760,6 @@ export function setupGlobalErrorHandlers() {
 }
 </file>
 
-<file path="src/__tests__/App.test.tsx">
-describe('Mobile App Tests', () => {
-  describe('API Client', () => {
-    it('should have borrowBook method', () => {
-      const mockApi = {
-        borrowBook: jest.fn(),
-        returnBook: jest.fn(),
-        getHistory: jest.fn(),
-        getBooks: jest.fn(),
-      };
-      expect(mockApi.borrowBook).toBeDefined();
-    });
-
-    it('should have returnBook method', () => {
-      const mockApi = {
-        borrowBook: jest.fn(),
-        returnBook: jest.fn(),
-        getHistory: jest.fn(),
-        getBooks: jest.fn(),
-      };
-      expect(mockApi.returnBook).toBeDefined();
-    });
-
-    it('should have getHistory method', () => {
-      const mockApi = {
-        borrowBook: jest.fn(),
-        returnBook: jest.fn(),
-        getHistory: jest.fn(),
-        getBooks: jest.fn(),
-      };
-      expect(mockApi.getHistory).toBeDefined();
-    });
-  });
-
-  describe('Auth API', () => {
-    it('should have patronLogin method', () => {
-      const mockAuthApi = {
-        patronLogin: jest.fn(),
-        faceLogin: jest.fn(),
-        getCurrentPatron: jest.fn(),
-        refreshToken: jest.fn(),
-        logout: jest.fn(),
-      };
-      expect(mockAuthApi.patronLogin).toBeDefined();
-    });
-
-    it('should have faceLogin method', () => {
-      const mockAuthApi = {
-        patronLogin: jest.fn(),
-        faceLogin: jest.fn(),
-        getCurrentPatron: jest.fn(),
-        refreshToken: jest.fn(),
-        logout: jest.fn(),
-      };
-      expect(mockAuthApi.faceLogin).toBeDefined();
-    });
-
-    it('should have getCurrentPatron method', () => {
-      const mockAuthApi = {
-        patronLogin: jest.fn(),
-        faceLogin: jest.fn(),
-        getCurrentPatron: jest.fn(),
-        refreshToken: jest.fn(),
-        logout: jest.fn(),
-      };
-      expect(mockAuthApi.getCurrentPatron).toBeDefined();
-    });
-
-    it('should have refreshToken method', () => {
-      const mockAuthApi = {
-        patronLogin: jest.fn(),
-        faceLogin: jest.fn(),
-        getCurrentPatron: jest.fn(),
-        refreshToken: jest.fn(),
-        logout: jest.fn(),
-      };
-      expect(mockAuthApi.refreshToken).toBeDefined();
-    });
-
-    it('should have logout method', () => {
-      const mockAuthApi = {
-        patronLogin: jest.fn(),
-        faceLogin: jest.fn(),
-        getCurrentPatron: jest.fn(),
-        refreshToken: jest.fn(),
-        logout: jest.fn(),
-      };
-      expect(mockAuthApi.logout).toBeDefined();
-    });
-  });
-
-  describe('Mock Data Validation', () => {
-    const mockEdgeCases = {
-      task_status_responses: [
-        { task_id: "mock-pending", status: "PENDING", result: null },
-        { task_id: "mock-success", status: "SUCCESS", result: { is_live: true } },
-        { task_id: "mock-failure", status: "FAILURE", result: { error: "NO_FACE" } },
-        { task_id: "mock-null-confidence", status: "SUCCESS", result: { is_live: null, score: 0 } },
-      ],
-      borrow_responses: [
-        { status: "success", message: "Mượn sách thành công" },
-        { status: "error", detail: "Bạn phải có mặt trong thư viện" },
-        { status: "error", detail: "Bạn đã mượn tối đa 3 cuốn" },
-        { status: "error", detail: "Bạn có sách quá hạn" },
-      ],
-    };
-
-    it('should have pending task status', () => {
-      const pending = mockEdgeCases.task_status_responses.find(t => t.status === 'PENDING');
-      expect(pending).toBeDefined();
-      expect(pending?.result).toBeNull();
-    });
-
-    it('should have success task status', () => {
-      const success = mockEdgeCases.task_status_responses.find(t => t.status === 'SUCCESS');
-      expect(success).toBeDefined();
-      expect(success?.result?.is_live).toBe(true);
-    });
-
-    it('should have failure task status', () => {
-      const failure = mockEdgeCases.task_status_responses.find(t => t.status === 'FAILURE');
-      expect(failure).toBeDefined();
-      expect(failure?.result?.error).toBe('NO_FACE');
-    });
-
-    it('should handle null edge case', () => {
-      const nullCase = mockEdgeCases.task_status_responses.find(t => t.task_id === 'mock-null-confidence');
-      expect(nullCase).toBeDefined();
-      expect(nullCase?.result?.is_live).toBeNull();
-      expect(nullCase?.result?.score).toBe(0);
-    });
-
-    it('should have success borrow response', () => {
-      const success = mockEdgeCases.borrow_responses.find(r => r.status === 'success');
-      expect(success).toBeDefined();
-      expect(success?.message).toContain('thành công');
-    });
-
-    it('should have inside check error response', () => {
-      const insideError = mockEdgeCases.borrow_responses.find(r => r.detail?.includes('mặt trong thư viện'));
-      expect(insideError).toBeDefined();
-      expect(insideError?.status).toBe('error');
-    });
-
-    it('should have max 3 books error response', () => {
-      const maxError = mockEdgeCases.borrow_responses.find(r => r.detail?.includes('3 cuốn'));
-      expect(maxError).toBeDefined();
-      expect(maxError?.status).toBe('error');
-    });
-
-    it('should have overdue error response', () => {
-      const overdueError = mockEdgeCases.borrow_responses.find(r => r.detail?.includes('quá hạn'));
-      expect(overdueError).toBeDefined();
-      expect(overdueError?.status).toBe('error');
-    });
-  });
-
-  describe('Screen Navigation', () => {
-    const mockScreens = [
-      'LoginScreen',
-      'HomeScreen',
-      'ReturnScreen',
-      'ProfileScreen',
-      'FaceCameraScreen',
-      'FaceLoginScreen',
-      'RegisterScreen',
-      'ChangePasswordScreen',
-    ];
-
-    it('should have all expected screens defined', () => {
-      mockScreens.forEach(screen => {
-        expect(screen).toBeDefined();
-      });
-      expect(mockScreens.length).toBe(8);
-    });
-  });
-
-  describe('Business Rules', () => {
-    it('should validate patron inside check', () => {
-      const patronInside = { current_status: 'inside' };
-      const patronOutside = { current_status: 'outside' };
-
-      const isInside = (patron: { current_status: string }) => patron.current_status === 'inside';
-
-      expect(isInside(patronInside)).toBe(true);
-      expect(isInside(patronOutside)).toBe(false);
-    });
-
-    it('should validate max 3 books rule', () => {
-      const MAX_BOOKS = 3;
-      const activeCount = 3;
-
-      expect(activeCount >= MAX_BOOKS).toBe(true);
-      expect((activeCount + 1) >= MAX_BOOKS).toBe(true);
-    });
-
-    it('should validate overdue check', () => {
-      const now = new Date();
-      const overdueDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-      const futureDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-
-      const isOverdue = (dueDate: Date | string) => new Date(dueDate) < now;
-
-      expect(isOverdue(overdueDate)).toBe(true);
-      expect(isOverdue(futureDate)).toBe(false);
-    });
-  });
-});
-</file>
-
 <file path="src/api/index.ts">
 export { default as api } from './client';
 export { authApi } from './auth';
@@ -16665,199 +16769,423 @@ export { notificationApi } from './notification';
 export { scheduleApi } from './schedule';
 </file>
 
-<file path="src/context/NotificationContext.tsx">
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import { notificationApi } from '../api/notification';
-import { getAccessToken } from '../api/secureStorage';
-import { useAuth } from './AuthContext';
-import { Notification } from '../types';
-import { devError } from '../utils/logger';
-import { queryClient } from '../lib/queryClient';
+<file path="src/components/StudentCardScanner.tsx">
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { View, StyleSheet, Dimensions, TouchableOpacity, Animated } from 'react-native';
+import { Text, Button, ActivityIndicator, useTheme } from 'react-native-paper';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as FileSystem from 'expo-file-system/legacy';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import TextRecognition from '@react-native-ml-kit/text-recognition';
+import * as SecureStore from 'expo-secure-store';
+import { AppTheme } from '../theme/DarkTheme';
+import { API_BASE_URL } from '../config/api';
+import { useRadarAnimation } from '../hooks/useRadarAnimation';
 
-interface NotificationContextValue {
-  notifications: Notification[];
-  unreadCount: number;
-  isLoading: boolean;
-  fetchNotifications: (unreadOnly?: boolean) => Promise<void>;
-  fetchUnreadCount: () => Promise<void>;
-  markAsRead: (id: string) => Promise<void>;
-  markAllAsRead: () => Promise<void>;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const CARD_WIDTH = SCREEN_WIDTH * 0.85;
+const CARD_HEIGHT = CARD_WIDTH * 0.62;
+
+export interface ScannedCardData {
+  studentCode: string;
+  fullName: string;
+  className: string | null;
+  dateOfBirth: string | null;
+  course: string | null;
+  permanentAddress: string | null;
+  faculty: string | null;
+  rawText: string;
 }
 
-const NotificationContext = createContext<NotificationContextValue | null>(null);
-
-async function hasToken(): Promise<boolean> {
-  const token = await getAccessToken();
-  return !!token;
+interface StudentCardScannerProps {
+  onScanned: (data: ScannedCardData) => void;
+  onError?: (error: string) => void;
+  onSkip?: () => void;
 }
 
-export function NotificationProvider({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuth();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mountedRef = useRef(true);
+/**
+ * Parse raw OCR text into structured card data using the backend LLM endpoint.
+ *
+ * This replaces the previous inline regex parsing with an LLM-powered extraction
+ * that handles variations in card layout, OCR errors, and damaged cards.
+ */
+async function parseCardText(rawText: string): Promise<Partial<ScannedCardData>> {
+  if (!rawText || rawText.trim().length === 0) {
+    return { rawText: rawText || '' };
+  }
 
-  const cleanup = useCallback(() => {
-    if (reconnectTimer.current) {
-      clearTimeout(reconnectTimer.current);
-      reconnectTimer.current = null;
+  try {
+    const token = await SecureStore.getItemAsync('accessToken');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
-    if (wsRef.current) {
-      wsRef.current.onclose = null;
-      wsRef.current.onerror = null;
-      wsRef.current.close();
-      wsRef.current = null;
-    }
-  }, []);
 
-  const connectWs = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN || wsRef.current?.readyState === WebSocket.CONNECTING) return;
-
-    hasToken().then((tokenExists) => {
-      if (!tokenExists || !mountedRef.current) return;
-
-      notificationApi
-        .connectRealtime(
-          (notification) => {
-            if (!mountedRef.current) return;
-            setNotifications((prev) => [notification, ...prev]);
-            setUnreadCount((prev) => prev + 1);
-          },
-          () => {},
-        )
-        .then((ws) => {
-          if (!mountedRef.current) { ws.close(); return; }
-          wsRef.current = ws;
-          ws.onclose = () => {
-            wsRef.current = null;
-            if (mountedRef.current) {
-              reconnectTimer.current = setTimeout(connectWs, 5000);
-            }
-          };
-          ws.onerror = () => {};
-        })
-        .catch(() => {
-          if (mountedRef.current) {
-            reconnectTimer.current = setTimeout(connectWs, 5000);
-          }
-        });
+    const response = await fetch(`${API_BASE_URL}/ai/parse-card-text`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ raw_text: rawText }),
     });
-  }, []);
 
-  const fetchUnreadCount = useCallback(async () => {
-    if (!(await hasToken())) return;
-    let lastErr: any;
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const count = await notificationApi.getUnreadCount();
-        setUnreadCount(count);
-        return;
-      } catch (err: any) {
-        lastErr = err;
-        if (err.response?.status === 401) return;
-        if (attempt < 1) {
-          await new Promise((r) => setTimeout(r, 1500));
-        }
-      }
+    if (!response.ok) {
+      console.warn(`Card parsing API failed: ${response.status}`);
+      return { rawText };
     }
-    devError('[Notification] Failed to fetch unread count:', lastErr);
-  }, []);
 
-  const fetchNotifications = useCallback(async (unreadOnly = false) => {
-    if (!(await hasToken())) return;
-    try {
-      setIsLoading(true);
+    const parsed = await response.json();
 
-      const queryKey = ['notifications', unreadOnly ? 'unread' : 'all'];
+    return {
+      studentCode: parsed.student_code || '',
+      fullName: parsed.full_name || '',
+      className: parsed.class_name || null,
+      dateOfBirth: parsed.date_of_birth || null,
+      course: parsed.course || null,
+      permanentAddress: parsed.permanent_address || null,
+      faculty: parsed.faculty || null,
+      rawText,
+    };
+} catch (err: unknown) {
+  console.warn('Card parsing failed, returning raw text:', err);
+    return { rawText };
+  }
+}
 
-      // Use react-query cache: returns cached data if still fresh, otherwise fetches
-      const result = await queryClient.fetchQuery<{ items: Notification[]; unread: number }>({
-        queryKey,
-        queryFn: () => notificationApi.getNotifications({ unread: unreadOnly || undefined, limit: 50 }),
-        staleTime: 2 * 60 * 1000, // 2 minutes for notifications
-      });
+export default function StudentCardScanner({ onScanned, onError, onSkip }: StudentCardScannerProps) {
+  const theme = useTheme<AppTheme>();
+  const c = theme.colors;
 
-      if (mountedRef.current) {
-        setNotifications(result.items);
-        setUnreadCount(result.unread);
-      }
-    } catch (err: any) {
-      if (err.response?.status === 401) return;
-      devError('[Notification] Failed to fetch notifications:', err);
-    } finally {
-      if (mountedRef.current) setIsLoading(false);
-    }
-  }, []);
+  const styles = useMemo(() => StyleSheet.create({
+    container: { flex: 1, backgroundColor: c.background },
+    camera: { flex: 1 },
+    msgText: { color: c.onSurface, fontSize: 16, textAlign: 'center', marginTop: 24 },
+    permissionBox: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, gap: 16 },
+    permissionBtn: { marginTop: 8 },
+    overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 80, justifyContent: 'center', alignItems: 'center' },
+    cardFrame: { width: CARD_WIDTH, height: CARD_HEIGHT, borderRadius: FRAME_BORDER_RADIUS, position: 'relative' },
+    corner: { position: 'absolute', width: CORNER_SIZE, height: CORNER_SIZE, borderColor: c.primary },
+    cornerTL: { top: -CORNER_WIDTH, left: -CORNER_WIDTH, borderTopWidth: CORNER_WIDTH, borderLeftWidth: CORNER_WIDTH, borderTopLeftRadius: FRAME_BORDER_RADIUS + 4 },
+    cornerTR: { top: -CORNER_WIDTH, right: -CORNER_WIDTH, borderTopWidth: CORNER_WIDTH, borderRightWidth: CORNER_WIDTH, borderTopRightRadius: FRAME_BORDER_RADIUS + 4 },
+    cornerBL: { bottom: -CORNER_WIDTH, left: -CORNER_WIDTH, borderBottomWidth: CORNER_WIDTH, borderLeftWidth: CORNER_WIDTH, borderBottomLeftRadius: FRAME_BORDER_RADIUS + 4 },
+    cornerBR: { bottom: -CORNER_WIDTH, right: -CORNER_WIDTH, borderBottomWidth: CORNER_WIDTH, borderRightWidth: CORNER_WIDTH, borderBottomRightRadius: FRAME_BORDER_RADIUS + 4 },
+    scanLine: { position: 'absolute', left: 0, right: 0, height: 2, backgroundColor: c.primary, opacity: 0.8 },
+    statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(13, 17, 23, 0.85)', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, position: 'absolute', top: '40%' },
+    statusText: { color: c.onSurface, fontSize: 14, fontWeight: '600' },
+    bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 80, backgroundColor: c.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingHorizontal: 20, borderTopWidth: 1, borderTopColor: c.outline },
+    hintText: { color: c.onSurfaceVariant, fontSize: 13, flex: 1, textAlign: 'center' },
+    captureBtn: { width: 56, height: 56, borderRadius: 28, backgroundColor: c.primary, alignItems: 'center', justifyContent: 'center' },
+    confirmBox: { flex: 1, padding: 20, justifyContent: 'center' },
+    checkIconWrap: { alignItems: 'center', marginBottom: 12 },
+    confirmTitle: { color: c.onSurface, fontSize: 20, fontWeight: '900', textAlign: 'center' },
+    confirmSubtitle: { color: c.onSurfaceVariant, fontSize: 14, textAlign: 'center', marginBottom: 20 },
+    fieldList: { backgroundColor: c.surfaceVariant, borderRadius: 12, padding: 16, gap: 10, marginBottom: 20 },
+    fieldRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+    fieldLabel: { color: c.onSurfaceVariant, fontSize: 13, fontWeight: '600', width: 80 },
+    fieldValue: { color: c.onSurface, fontSize: 14, fontWeight: '500', flex: 1, textAlign: 'right' },
+    confirmActions: { gap: 10 },
+    confirmBtn: { borderRadius: 10, backgroundColor: c.custom.success, paddingVertical: 4 },
+    retakeBtn: { borderRadius: 10, borderColor: c.outline },
+  }), [c]);
 
-  const markAsRead = useCallback(async (id: string) => {
-    if (!(await hasToken())) return;
-    try {
-      await notificationApi.markAsRead(id);
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, isRead: true, readAt: new Date().toISOString() } : n))
-      );
-      setUnreadCount((prev) => Math.max(0, prev - 1));
-    } catch (err) {
-      devError('[Notification] Failed to mark as read:', err);
-    }
-  }, []);
-
-  const markAllAsRead = useCallback(async () => {
-    if (!(await hasToken())) return;
-    try {
-      await notificationApi.markAllAsRead();
-      setNotifications((prev) =>
-        prev.map((n) => ({ ...n, isRead: true, readAt: new Date().toISOString() }))
-      );
-      setUnreadCount(0);
-    } catch (err) {
-      devError('[Notification] Failed to mark all as read:', err);
-    }
-  }, []);
+  const [permission, requestPermission] = useCameraPermissions();
+  const cameraRef = useRef<CameraView>(null);
+  const [phase, setPhase] = useState<'detecting' | 'capturing' | 'processing' | 'confirm'>('detecting');
+  const isMounted = useRef(true);
+  const phaseRef = useRef(phase);
+  const detectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [ocrResult, setOcrResult] = useState<Partial<ScannedCardData> | null>(null);
+  const scanLineY = useRadarAnimation(phase === 'processing');
 
   useEffect(() => {
-    mountedRef.current = true;
-    if (!isAuthenticated) {
-      cleanup();
-      setNotifications([]);
-      setUnreadCount(0);
+    phaseRef.current = phase;
+  }, [phase]);
+
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+      if (detectTimerRef.current) clearTimeout(detectTimerRef.current);
+    };
+  }, []);
+
+  const runOcrAndParse = useCallback(async (photoUri: string): Promise<Partial<ScannedCardData> | null> => {
+    try {
+      const result = await TextRecognition.recognize(photoUri);
+      if (!result?.text) return null;
+      return await parseCardText(result.text);
+    } catch (err: any) {
+      onError?.('Lỗi nhận dạng văn bản: ' + (err.message || ''));
+      return null;
+    }
+  }, [onError]);
+
+  const attemptAutoDetect = useCallback(async () => {
+    if (!cameraRef.current || !isMounted.current || phaseRef.current !== 'detecting') return;
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        base64: true, quality: 0.3, skipProcessing: true,
+      });
+      if (!photo?.uri || !isMounted.current) return;
+
+      const tempPath = `${FileSystem.cacheDirectory}card_detect_${Date.now()}.jpg`;
+      await FileSystem.moveAsync({ from: photo.uri, to: tempPath });
+
+      const result = await TextRecognition.recognize(tempPath);
+      await FileSystem.deleteAsync(tempPath, { idempotent: true });
+
+      if (!isMounted.current) return;
+
+      if (result?.text && result.text.length > 30) {
+        setPhase('capturing');
+        await new Promise((r) => setTimeout(r, 600));
+        if (!isMounted.current) return;
+
+        const finalPhoto = await cameraRef.current.takePictureAsync({
+          base64: true, quality: 0.9, skipProcessing: true,
+        });
+        if (!finalPhoto?.uri) return;
+        setPhase('processing');
+
+        const finalPath = `${FileSystem.cacheDirectory}card_final_${Date.now()}.jpg`;
+        await FileSystem.moveAsync({ from: finalPhoto.uri, to: finalPath });
+
+        const parsed = await runOcrAndParse(finalPath);
+        await FileSystem.deleteAsync(finalPath, { idempotent: true });
+
+        if (parsed && isMounted.current) {
+          setOcrResult(parsed);
+          setPhase('confirm');
+          return;
+        }
+      }
+    } catch {
+      // Auto-detect attempt failed, will retry
+    }
+    if (isMounted.current && phaseRef.current === 'detecting') {
+      detectTimerRef.current = setTimeout(attemptAutoDetect, 2500);
+    }
+  }, [runOcrAndParse]);
+
+  const startDetection = useCallback(() => {
+    if (detectTimerRef.current) clearTimeout(detectTimerRef.current);
+    detectTimerRef.current = setTimeout(attemptAutoDetect, 1000);
+  }, [attemptAutoDetect]);
+
+  useEffect(() => {
+    if (permission?.granted) {
+      startDetection();
+    }
+    return () => {
+      if (detectTimerRef.current) clearTimeout(detectTimerRef.current);
+    };
+  }, [permission?.granted, startDetection]);
+
+  const handleManualCapture = async () => {
+    if (!cameraRef.current) return;
+    if (detectTimerRef.current) clearTimeout(detectTimerRef.current);
+    setPhase('capturing');
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        base64: true, quality: 0.9, skipProcessing: true,
+      });
+      if (!photo?.uri) return;
+      setPhase('processing');
+      const parsed = await runOcrAndParse(photo.uri);
+      if (parsed && isMounted.current) {
+        setOcrResult(parsed);
+        setPhase('confirm');
+      } else {
+        onError?.('Không thể đọc thông tin từ ảnh, vui lòng thử lại');
+        setPhase('detecting');
+        startDetection();
+      }
+    } catch {
+      setPhase('detecting');
+      startDetection();
+    }
+  };
+
+  const handleConfirm = () => {
+    if (!ocrResult?.studentCode || !ocrResult?.fullName) {
+      onError?.('Thiếu thông tin bắt buộc (MSSV, Họ tên). Vui lòng thử lại.');
       return;
     }
+    onScanned({
+      studentCode: ocrResult.studentCode!,
+      fullName: ocrResult.fullName!,
+      className: ocrResult.className || null,
+      dateOfBirth: ocrResult.dateOfBirth || null,
+      course: ocrResult.course || null,
+      permanentAddress: ocrResult.permanentAddress || null,
+      faculty: ocrResult.faculty || null,
+      rawText: ocrResult.rawText || '',
+    });
+  };
 
-    fetchUnreadCount();
-    connectWs();
+  const handleRetake = () => {
+    setOcrResult(null);
+    setPhase('detecting');
+    startDetection();
+  };
 
-    return () => {
-      mountedRef.current = false;
-      cleanup();
-    };
-  }, [isAuthenticated, fetchUnreadCount, connectWs, cleanup]);
+  if (!permission) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.msgText}>Đang tải camera...</Text>
+      </View>
+    );
+  }
+
+  if (!permission.granted) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.permissionBox}>
+          <MaterialCommunityIcons name="camera-off" size={48} color={c.onSurfaceVariant} />
+          <Text style={styles.msgText}>Cần quyền camera để quét thẻ</Text>
+          <Button mode="contained" onPress={requestPermission} style={styles.permissionBtn}>
+            Cấp quyền
+          </Button>
+          {onSkip && (
+            <Button mode="text" onPress={onSkip}>
+              Nhập thủ công
+            </Button>
+          )}
+        </View>
+      </View>
+    );
+  }
+
+  if (phase === 'confirm' && ocrResult) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.confirmBox}>
+          <View style={styles.checkIconWrap}>
+            <MaterialCommunityIcons name="check-circle" size={56} color={c.custom.success} />
+          </View>
+          <Text style={styles.confirmTitle}>Đọc thẻ thành công</Text>
+          <Text style={styles.confirmSubtitle}>Vui lòng kiểm tra lại thông tin</Text>
+
+          <View style={styles.fieldList}>
+            <View style={styles.fieldRow}>
+              <Text style={styles.fieldLabel}>MSSV</Text>
+              <Text style={styles.fieldValue}>{ocrResult.studentCode || '-'}</Text>
+            </View>
+            <View style={styles.fieldRow}>
+              <Text style={styles.fieldLabel}>Họ tên</Text>
+              <Text style={styles.fieldValue}>{ocrResult.fullName || '-'}</Text>
+            </View>
+            {ocrResult.className ? (
+              <View style={styles.fieldRow}>
+                <Text style={styles.fieldLabel}>Lớp</Text>
+                <Text style={styles.fieldValue}>{ocrResult.className}</Text>
+              </View>
+            ) : null}
+            {ocrResult.course ? (
+              <View style={styles.fieldRow}>
+                <Text style={styles.fieldLabel}>Khóa học</Text>
+                <Text style={styles.fieldValue}>{ocrResult.course}</Text>
+              </View>
+            ) : null}
+            {ocrResult.permanentAddress ? (
+              <View style={styles.fieldRow}>
+                <Text style={styles.fieldLabel}>HKTT</Text>
+                <Text style={styles.fieldValue}>{ocrResult.permanentAddress}</Text>
+              </View>
+            ) : null}
+            {ocrResult.dateOfBirth ? (
+              <View style={styles.fieldRow}>
+                <Text style={styles.fieldLabel}>Ngày sinh</Text>
+                <Text style={styles.fieldValue}>{ocrResult.dateOfBirth}</Text>
+              </View>
+            ) : null}
+          </View>
+
+          <View style={styles.confirmActions}>
+            <Button mode="contained" onPress={handleConfirm} style={styles.confirmBtn}>
+              Xác nhận
+            </Button>
+            <Button mode="outlined" onPress={handleRetake} style={styles.retakeBtn}>
+              Chụp lại
+            </Button>
+            {onSkip && (
+              <Button mode="text" onPress={onSkip}>
+                Nhập thủ công
+              </Button>
+            )}
+          </View>
+        </View>
+      </View>
+    );
+  }
 
   return (
-    <NotificationContext.Provider
-      value={{
-        notifications,
-        unreadCount,
-        isLoading,
-        fetchNotifications,
-        fetchUnreadCount,
-        markAsRead,
-        markAllAsRead,
-      }}
-    >
-      {children}
-    </NotificationContext.Provider>
+    <View style={styles.container}>
+      <CameraView ref={cameraRef} style={styles.camera} facing="back" />
+
+      <View style={styles.overlay}>
+        <View style={styles.cardFrame}>
+          <View style={[styles.corner, styles.cornerTL]} />
+          <View style={[styles.corner, styles.cornerTR]} />
+          <View style={[styles.corner, styles.cornerBL]} />
+          <View style={[styles.corner, styles.cornerBR]} />
+
+          {phase === 'processing' && (
+            <Animated.View
+              style={[
+                styles.scanLine,
+                {
+                  transform: [
+                    {
+                      translateY: scanLineY.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [-CARD_HEIGHT / 2, CARD_HEIGHT / 2],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            />
+          )}
+        </View>
+
+        {phase === 'detecting' && (
+          <View style={styles.statusBadge}>
+            <ActivityIndicator size={20} color={c.primary} />
+            <Text style={styles.statusText}>Đang phát hiện thẻ...</Text>
+          </View>
+        )}
+        {phase === 'capturing' && (
+          <View style={styles.statusBadge}>
+            <MaterialCommunityIcons name="camera" size={20} color={c.custom.warning} />
+            <Text style={styles.statusText}>Đang chụp...</Text>
+          </View>
+        )}
+        {phase === 'processing' && (
+          <View style={styles.statusBadge}>
+            <ActivityIndicator size={20} color={c.primary} />
+            <Text style={styles.statusText}>Đang xử lý ảnh...</Text>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.bottomBar}>
+        <Text style={styles.hintText}>Đặt thẻ sinh viên vào khung hình</Text>
+        <TouchableOpacity style={styles.captureBtn} onPress={handleManualCapture} activeOpacity={0.7}>
+          <MaterialCommunityIcons name="camera" size={28} color={c.background} />
+        </TouchableOpacity>
+        {onSkip && (
+          <Button mode="text" onPress={onSkip} compact>
+            Nhập thủ công
+          </Button>
+        )}
+      </View>
+    </View>
   );
 }
 
-export function useNotification() {
-  const ctx = useContext(NotificationContext);
-  if (!ctx) throw new Error('useNotification must be inside NotificationProvider');
-  return ctx;
-}
+const CORNER_SIZE = 28;
+const CORNER_WIDTH = 3;
+const FRAME_BORDER_RADIUS = 12;
 </file>
 
 <file path="src/features/book/screens/BookCatalogScreen.tsx">
@@ -17546,34 +17874,206 @@ function createStyles(theme: AppTheme) {
 }
 </file>
 
-<file path=".env.example">
-# ============================================
-# Library Mobile App - Environment Config
-# ============================================
-#
-# IMPORTANT: Copy this file to .env and update values for your setup
-#
-# Android Emulator: http://10.0.2.2:80/api (default - maps to host localhost)
-# iOS Simulator: http://localhost:80/api
-# Real Device (same network): http://<your-pc-ip>:80/api
-#
-# To find your PC IP on Windows:
-#   ipconfig | Select-String "IPv4"
-#
-# If login fails with "Cannot connect to server":
-#   1. Make sure Docker containers are running: docker compose up -d
-#   2. Try accessing http://localhost:80/api/healthz from your browser
-#   3. If localhost works but 10.0.2.2 doesn't, the emulator can't reach Docker
-#   4. On Windows with Docker Desktop, try restarting Docker and running:
-#      docker compose down && docker compose up -d
+<file path="src/context/NotificationContext.tsx">
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+import { notificationApi } from '../api/notification';
+import { getAccessToken } from '../api/secureStorage';
+import { useAuth } from './AuthContext';
+import { Notification } from '../types';
+import { devError } from '../utils/logger';
+import { queryClient } from '../lib/queryClient';
 
-EXPO_PUBLIC_API_URL=http://192.168.1.52:80/api
+interface NotificationContextValue {
+  notifications: Notification[];
+  unreadCount: number;
+  isLoading: boolean;
+  fetchNotifications: (unreadOnly?: boolean) => Promise<void>;
+  fetchUnreadCount: () => Promise<void>;
+  markAsRead: (id: string) => Promise<void>;
+  markAllAsRead: () => Promise<void>;
+}
 
-# Web frontend URL for 3D tour and other web views
-# Android Emulator: http://10.0.2.2:3000
-# iOS Simulator: http://localhost:3000
-# Real Device (same network): http://<your-pc-ip>:3000
-EXPO_PUBLIC_WEB_URL=http://192.168.1.52:3000
+const NotificationContext = createContext<NotificationContextValue | null>(null);
+
+async function hasToken(): Promise<boolean> {
+  const token = await getAccessToken();
+  return !!token;
+}
+
+export function NotificationProvider({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated } = useAuth();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef = useRef(true);
+  const reconnectAttempts = useRef(0);
+
+  const cleanup = useCallback(() => {
+    if (reconnectTimer.current) {
+      clearTimeout(reconnectTimer.current);
+      reconnectTimer.current = null;
+    }
+    if (wsRef.current) {
+      wsRef.current.onclose = null;
+      wsRef.current.onerror = null;
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+  }, []);
+
+  const connectWs = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN || wsRef.current?.readyState === WebSocket.CONNECTING) return;
+
+    hasToken().then((tokenExists) => {
+      if (!tokenExists || !mountedRef.current) return;
+
+      notificationApi
+        .connectRealtime(
+          (notification) => {
+            if (!mountedRef.current) return;
+            reconnectAttempts.current = 0;
+            setNotifications((prev) => [notification, ...prev]);
+            setUnreadCount((prev) => prev + 1);
+          },
+          () => {},
+        )
+        .then((ws) => {
+          if (!mountedRef.current) { ws.close(); return; }
+          wsRef.current = ws;
+          reconnectAttempts.current = 0;
+          ws.onclose = () => {
+            wsRef.current = null;
+            if (mountedRef.current) {
+              const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
+              reconnectAttempts.current++;
+              reconnectTimer.current = setTimeout(connectWs, delay);
+            }
+          };
+          ws.onerror = () => {};
+        })
+        .catch(() => {
+          if (mountedRef.current) {
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
+            reconnectAttempts.current++;
+            reconnectTimer.current = setTimeout(connectWs, delay);
+          }
+        });
+    });
+  }, []);
+
+  const fetchUnreadCount = useCallback(async () => {
+    if (!(await hasToken())) return;
+    let lastErr: any;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const count = await notificationApi.getUnreadCount();
+        setUnreadCount(count);
+        return;
+      } catch (err: any) {
+        lastErr = err;
+        if (err.response?.status === 401) return;
+        if (attempt < 1) {
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+      }
+    }
+    devError('[Notification] Failed to fetch unread count:', lastErr);
+  }, []);
+
+  const fetchNotifications = useCallback(async (unreadOnly = false) => {
+    if (!(await hasToken())) return;
+    try {
+      setIsLoading(true);
+
+      const queryKey = ['notifications', unreadOnly ? 'unread' : 'all'];
+
+      // Use react-query cache: returns cached data if still fresh, otherwise fetches
+      const result = await queryClient.fetchQuery<{ items: Notification[]; unread: number }>({
+        queryKey,
+        queryFn: () => notificationApi.getNotifications({ unread: unreadOnly || undefined, limit: 50 }),
+        staleTime: 2 * 60 * 1000, // 2 minutes for notifications
+      });
+
+      if (mountedRef.current) {
+        setNotifications(result.items);
+        setUnreadCount(result.unread);
+      }
+    } catch (err: any) {
+      if (err.response?.status === 401) return;
+      devError('[Notification] Failed to fetch notifications:', err);
+    } finally {
+      if (mountedRef.current) setIsLoading(false);
+    }
+  }, []);
+
+  const markAsRead = useCallback(async (id: string) => {
+    if (!(await hasToken())) return;
+    try {
+      await notificationApi.markAsRead(id);
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, isRead: true, readAt: new Date().toISOString() } : n))
+      );
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+    } catch (err) {
+      devError('[Notification] Failed to mark as read:', err);
+    }
+  }, []);
+
+  const markAllAsRead = useCallback(async () => {
+    if (!(await hasToken())) return;
+    try {
+      await notificationApi.markAllAsRead();
+      setNotifications((prev) =>
+        prev.map((n) => ({ ...n, isRead: true, readAt: new Date().toISOString() }))
+      );
+      setUnreadCount(0);
+    } catch (err) {
+      devError('[Notification] Failed to mark all as read:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    if (!isAuthenticated) {
+      cleanup();
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
+    }
+
+    fetchUnreadCount();
+    connectWs();
+
+    return () => {
+      mountedRef.current = false;
+      cleanup();
+    };
+  }, [isAuthenticated, fetchUnreadCount, connectWs, cleanup]);
+
+  return (
+    <NotificationContext.Provider
+      value={{
+        notifications,
+        unreadCount,
+        isLoading,
+        fetchNotifications,
+        fetchUnreadCount,
+        markAsRead,
+        markAllAsRead,
+      }}
+    >
+      {children}
+    </NotificationContext.Provider>
+  );
+}
+
+export function useNotification() {
+  const ctx = useContext(NotificationContext);
+  if (!ctx) throw new Error('useNotification must be inside NotificationProvider');
+  return ctx;
+}
 </file>
 
 <file path="src/api/schedule.ts">
@@ -17622,6 +18122,36 @@ export const scheduleApi = {
 
 <file path="src/components/AutoFaceCapture.tsx">
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';import { View, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';import { Text, Button, useTheme } from 'react-native-paper';import { CameraView, useCameraPermissions } from 'expo-camera';import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';import { AppTheme } from '../theme/DarkTheme';interface AutoFaceCaptureProps {  onFilesReady: (images: string[]) => Promise<void> | void;  onError?: (error: string) => void;}const ANGLES = [  { id: 'frontal' as const, instruction: 'Nhìn thẳng', tip: 'Giữ mặt thẳng, mắt mở tự nhiên' },  { id: 'right' as const, instruction: 'Quay phải', tip: 'Xoay đầu sang phải khoảng 30°' },  { id: 'left' as const, instruction: 'Quay trái', tip: 'Xoay đầu sang trái khoảng 30°' },  { id: 'down' as const, instruction: 'Cúi xuống', tip: 'Cúi nhẹ cằm xuống ngực' },];const COUNTDOWN = 5;const { width: SCREEN_WIDTH } = Dimensions.get('window');const GUIDE_SIZE = SCREEN_WIDTH * 0.35;export default function AutoFaceCapture({ onFilesReady, onError }: AutoFaceCaptureProps) {  const theme = useTheme<AppTheme>();  const c = theme.colors;  const [permission] = useCameraPermissions();  const styles = useMemo(() => StyleSheet.create({    container: { flex: 1, backgroundColor: c.background },    camera: { flex: 1 },    msgText: { color: c.onSurface, fontSize: 16, textAlign: 'center', marginTop: 100 },    guideOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' },    guideCircle: { width: GUIDE_SIZE, height: GUIDE_SIZE, borderRadius: GUIDE_SIZE / 2, borderWidth: 2, borderColor: 'rgba(212, 168, 83, 0.5)' },    countdownOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.75)' },    instructionText: { color: c.onSurface, fontSize: 20, fontWeight: '700', marginBottom: 4 },    tipTextCenter: { color: c.onSurfaceVariant, fontSize: 14, marginBottom: 16 },    dotRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },    dot: { width: 12, height: 12, borderRadius: 6, backgroundColor: c.outlineVariant },    dotDone: { backgroundColor: c.custom.success },    dotActive: { backgroundColor: c.primary },    holdText: { color: c.error, fontSize: 18, fontWeight: '900', marginBottom: 8 },    countdownNumber: { color: c.onSurface, fontSize: 64, fontWeight: '900' },    startContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },    startIconWrap: { width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(212, 168, 83, 0.15)', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },    startTitle: { color: c.onSurface, fontSize: 18, fontWeight: '700', marginBottom: 4 },    startDesc: { color: c.onSurfaceVariant, fontSize: 14, marginBottom: 20 },    tipsBox: { backgroundColor: c.surfaceVariant, borderRadius: 10, padding: 14, width: '100%', marginBottom: 24 },    tipsTitle: { color: c.primary, fontSize: 13, fontWeight: '700', marginBottom: 6 },    tipText: { color: c.onSurfaceVariant, fontSize: 13, lineHeight: 20 },    startBtn: { width: '100%', borderRadius: 10, backgroundColor: c.primary, paddingVertical: 4 },    startBtnLabel: { fontSize: 16, fontWeight: '700', color: c.background },    resultContainer: { flex: 1, padding: 16, justifyContent: 'center' },    grid: { flexDirection: 'row', gap: 8, marginBottom: 12 },    thumb: { flex: 1, aspectRatio: 0.75, borderRadius: 8, overflow: 'hidden', borderWidth: 2, borderColor: c.custom.success },    thumbInner: { flex: 1, backgroundColor: c.surfaceVariant, alignItems: 'center', justifyContent: 'center' },    thumbLabel: { position: 'absolute', bottom: 4, left: 4, backgroundColor: 'rgba(0,0,0,0.8)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },    thumbLabelText: { color: c.onSurface, fontSize: 10, fontWeight: '600' },    retakeRow: { flexDirection: 'row', gap: 6, marginBottom: 20 },    retakeBtn: { flex: 1, borderColor: c.outline, borderRadius: 8 },    retakeBtnLabel: { fontSize: 11, color: c.onSurfaceVariant },    consentRow: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, backgroundColor: c.surfaceVariant, borderRadius: 10, marginBottom: 16 },    checkbox: { width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: c.outlineVariant, alignItems: 'center', justifyContent: 'center' },    checkboxChecked: { backgroundColor: c.primary, borderColor: c.primary },    consentText: { color: c.onSurfaceVariant, fontSize: 13, flex: 1, lineHeight: 18 },    submitBtn: { borderRadius: 10, backgroundColor: c.custom.success, paddingVertical: 4 },    submitBtnDisabled: { opacity: 0.4 },    submitBtnLabel: { fontSize: 16, fontWeight: '700' },  }), [c]);  const cameraRef = useRef<CameraView>(null);  const [captured, setCaptured] = useState<string[]>([]);  const [currentIdx, setCurrentIdx] = useState(-1);  const [countdownVal, setCountdownVal] = useState<number | null>(null);  const [isRunning, setIsRunning] = useState(false);  const [consent, setConsent] = useState(false);  const capturedRef = useRef<string[]>([]);  const idxRef = useRef(-1);  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);  const cancelledRef = useRef(false);  useEffect(() => {    return () => {      cancelledRef.current = true;      if (timerRef.current) clearInterval(timerRef.current);    };  }, []);  const runCountdown = useCallback((idx: number) => {    if (idx < 0 || idx >= ANGLES.length) return;    if (timerRef.current) clearInterval(timerRef.current);    idxRef.current = idx;    let c = COUNTDOWN;    setCountdownVal(c);    timerRef.current = setInterval(async () => {      c--;      if (cancelledRef.current) { clearInterval(timerRef.current!); return; }      if (c <= 0) {        clearInterval(timerRef.current!);        timerRef.current = null;        setCountdownVal(null);        if (!cameraRef.current) return;        try {          const photo = await cameraRef.current.takePictureAsync({            base64: true, quality: 0.9, skipProcessing: true,          });          if (cancelledRef.current) return;          if (!photo?.base64) { onError?.('Không thể chụp ảnh'); return; }          capturedRef.current = [...capturedRef.current, photo.base64];          setCaptured([...capturedRef.current]);          const nextIdx = idxRef.current + 1;          if (nextIdx >= ANGLES.length) {            setIsRunning(false);            setCurrentIdx(-1);          } else {            setTimeout(() => {              if (!cancelledRef.current) {                setCurrentIdx(nextIdx);                runCountdown(nextIdx);              }            }, 800);          }        } catch {          onError?.('Lỗi khi chụp ảnh');        }      } else {        setCountdownVal(c);      }    }, 1000);  }, [onError]);  const startSequence = useCallback(() => {    capturedRef.current = [];    setCaptured([]);    cancelledRef.current = false;    setIsRunning(true);    setCurrentIdx(0);    runCountdown(0);  }, [runCountdown]);  const retakeAngle = useCallback((idx: number) => {    capturedRef.current = capturedRef.current.slice(0, idx);    setCaptured([...capturedRef.current]);    cancelledRef.current = false;    setIsRunning(true);    setCurrentIdx(idx);    runCountdown(idx);  }, [runCountdown]);  const allCaptured = captured.length === ANGLES.length;  const handleSubmit = async () => {    if (!consent || !allCaptured) return;    await onFilesReady(captured);  };  if (!permission) {    return (      <View style={styles.container}>        <Text style={styles.msgText}>Đang tải camera...</Text>      </View>    );  }  if (!permission.granted) {    return (      <View style={styles.container}>        <Text style={styles.msgText}>Cần quyền camera</Text>      </View>    );  }  if (allCaptured) {    return (      <View style={styles.container}>        <View style={styles.resultContainer}>          <View style={styles.grid}>            {ANGLES.map((a, i) => (              <View key={a.id} style={styles.thumb}>                <View style={styles.thumbInner}>                  <MaterialCommunityIcons name="check-circle" size={32} color={c.custom.success} />                </View>                <View style={styles.thumbLabel}>                  <Text style={styles.thumbLabelText}>{a.instruction}</Text>                </View>              </View>            ))}          </View>          <View style={styles.retakeRow}>            {ANGLES.map((a, i) => (              <Button key={a.id} mode="outlined" compact onPress={() => retakeAngle(i)}                style={styles.retakeBtn} labelStyle={styles.retakeBtnLabel}>                {a.instruction}              </Button>            ))}          </View>          <TouchableOpacity style={styles.consentRow} activeOpacity={0.7} onPress={() => setConsent(!consent)}>            <View style={[styles.checkbox, consent && styles.checkboxChecked]}>              {consent && <MaterialCommunityIcons name="check" size={14} color={c.background} />}            </View>            <Text style={styles.consentText}>              Tôi đồng ý cho hệ thống xử lý dữ liệu khuôn mặt để nhận diện tại cổng            </Text>          </TouchableOpacity>          <Button mode="contained" onPress={handleSubmit} disabled={!consent}            style={[styles.submitBtn, !consent && styles.submitBtnDisabled]} labelStyle={styles.submitBtnLabel}>            Xác nhận {captured.length} góc ảnh          </Button>        </View>      </View>    );  }  if (!isRunning && currentIdx < 0) {    return (      <View style={styles.container}>        <View style={styles.startContainer}>          <View style={styles.startIconWrap}>            <MaterialCommunityIcons name="camera" size={32} color={c.primary} />          </View>          <Text style={styles.startTitle}>Chụp khuôn mặt từ 4 góc</Text>          <Text style={styles.startDesc}>Nhận diện nhanh hơn, chính xác hơn tại cổng</Text>          <View style={styles.tipsBox}>            <Text style={styles.tipsTitle}>Lưu ý khi chụp:</Text>            <Text style={styles.tipText}>• Đủ ánh sáng, không ngược sáng</Text>            <Text style={styles.tipText}>• Giữ yên khi đếm ngược về 0</Text>            <Text style={styles.tipText}>• Mặt vừa đủ trong khung tròn</Text>          </View>          <Button mode="contained" onPress={startSequence}            style={styles.startBtn} labelStyle={styles.startBtnLabel} icon="camera">            Bắt đầu chụp          </Button>        </View>      </View>    );  }  return (    <View style={styles.container}>      <CameraView ref={cameraRef} style={styles.camera} facing="front" />      <View style={styles.guideOverlay}>        <View style={styles.guideCircle} />      </View>      {countdownVal !== null && (        <View style={styles.countdownOverlay}>          <Text style={styles.instructionText}>{ANGLES[currentIdx].instruction}</Text>          <Text style={styles.tipTextCenter}>{ANGLES[currentIdx].tip}</Text>          <View style={styles.dotRow}>            {ANGLES.map((a, i) => (              <View key={a.id} style={[                styles.dot,                i < captured.length && styles.dotDone,                i === currentIdx && styles.dotActive,              ]} />            ))}          </View>          {countdownVal === 1 && <Text style={styles.holdText}>GIỮ YÊN!</Text>}          <Text style={styles.countdownNumber}>{countdownVal}</Text>        </View>      )}    </View>  );}
+</file>
+
+<file path=".env.example">
+# ============================================
+# Library Mobile App - Environment Config
+# ============================================
+#
+# IMPORTANT: Copy this file to .env and update values for your setup
+#
+# Android Emulator: http://10.0.2.2:80/api (default - maps to host localhost)
+# iOS Simulator: http://localhost:80/api
+# Real Device (same network): http://<your-pc-ip>:80/api
+#
+# To find your PC IP on Windows:
+#   ipconfig | Select-String "IPv4"
+#
+# If login fails with "Cannot connect to server":
+#   1. Make sure Docker containers are running: docker compose up -d
+#   2. Try accessing http://localhost:80/api/healthz from your browser
+#   3. If localhost works but 10.0.2.2 doesn't, the emulator can't reach Docker
+#   4. On Windows with Docker Desktop, try restarting Docker and running:
+#      docker compose down && docker compose up -d
+
+EXPO_PUBLIC_API_URL=http://172.21.218.35:80/api
+
+# Web frontend URL for 3D tour and other web views
+# Android Emulator: http://10.0.2.2:3000
+# iOS Simulator: http://localhost:3000
+# Real Device (same network): http://<your-pc-ip>:3000
+EXPO_PUBLIC_WEB_URL=http://172.21.218.35:3000
 </file>
 
 <file path="app.json">
@@ -17697,6 +18227,7 @@ import { NetworkProvider } from './src/context/NetworkContext';
 import { NotificationProvider } from './src/context/NotificationContext';
 import { MobileThemeProvider, useMobileTheme } from './src/context/ThemeContext';
 import AppNavigator from './src/navigation/AppNavigator';
+import LegacyUpgradeBanner from './src/components/LegacyUpgradeBanner';
 import { queryClient } from './src/lib/queryClient';
 
 class ErrorBoundary extends React.Component<
@@ -17780,6 +18311,7 @@ function AppContent() {
           <AuthProvider>
             <NotificationProvider>
               <StatusBar style={isDark ? 'light' : 'dark'} />
+              <LegacyUpgradeBanner />
               <AppNavigator />
             </NotificationProvider>
           </AuthProvider>
@@ -17819,8 +18351,8 @@ import bus from '../lib/event-bus';
 
 let _pendingRequests: Array<{
   config: AxiosRequestConfig;
-  resolve: (val: any) => void;
-  reject: (err: any) => void;
+  resolve: (val: unknown) => void;
+  reject: (err: unknown) => void;
 }> = [];
 
 let _isRefreshing = false;
@@ -17869,7 +18401,12 @@ api.interceptors.request.use(
 );
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (response.headers['x-legacy-routed'] === 'true') {
+      bus.emit('app:legacy-routed');
+    }
+    return response;
+  },
   async (error: AxiosError) => {
     const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
 
@@ -17919,13 +18456,38 @@ export default api;
 
 <file path="src/context/AuthContext.tsx">
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { User } from '../types';
+import { User, UserRole } from '../types';
 import { authApi } from '../api/auth';
 import { devError } from '../utils/logger';
 import { queryClient } from '../lib/queryClient';
 import { getAccessToken, getRefreshToken, setAccessToken } from '../api/secureStorage';
 import { cancelPendingRequests } from '../api/client';
 import bus from '../lib/event-bus';
+
+interface JwtPayload {
+  sub?: string;
+  email?: string;
+  full_name?: string;
+  fullName?: string;
+  role?: string;
+  roles?: string[];
+  exp?: number;
+  userId?: string;
+}
+
+export interface Patron {
+  id: string;
+  email?: string;
+  full_name?: string;
+  fullName?: string;
+  avatar_url?: string;
+  avatarUrl?: string;
+  permanent_address?: string;
+  faculty?: string;
+  student_code?: string;
+  password_auto_generated?: boolean;
+  role?: string;
+}
 
 interface AuthContextType {
   user: User | null;
@@ -17942,15 +18504,15 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function getFullName(data: any): string {
-  return data?.fullName || data?.full_name || '';
+function getFullName(data: User | Patron): string {
+  return (data as any).fullName || (data as any).full_name || '';
 }
 
-function decodeJwtPayload(token: string): any {
+function decodeJwtPayload(token: string): JwtPayload | null {
   try {
     const base64 = token.split('.')[1];
     const json = atob(base64.replace(/-/g, '+').replace(/_/g, '/'));
-    return JSON.parse(json);
+    return JSON.parse(json) as JwtPayload;
   } catch {
     return null;
   }
@@ -17958,7 +18520,7 @@ function decodeJwtPayload(token: string): any {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [patron, setPatron] = useState<any | null>(null);
+  const [patron, setPatron] = useState<Patron | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const restoreUserFromToken = useCallback(async () => {
@@ -17984,12 +18546,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             await setAccessToken(result.access_token);
             const newPayload = decodeJwtPayload(result.access_token);
             if (newPayload) {
-              setUser({
-                id: newPayload.userId || newPayload.sub,
-                email: newPayload.email || '',
-                full_name: newPayload.fullName || newPayload.full_name || '',
-                role: newPayload.roles?.[0] || newPayload.role || 'patron',
-              });
+      setUser({
+        id: (newPayload.userId || newPayload.sub) || '',
+        email: newPayload.email || '',
+        full_name: newPayload.fullName || newPayload.full_name || '',
+        role: (newPayload.roles?.[0] || newPayload.role || 'patron') as UserRole,
+      });
               setIsLoading(false);
               return;
             }
@@ -18001,13 +18563,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      setUser({
-        id: payload.userId || payload.sub,
-        email: payload.email || '',
-        full_name: payload.fullName || payload.full_name || '',
-        role: payload.roles?.[0] || payload.role || 'patron',
-      });
-    } catch (err) {
+  setUser({
+    id: (payload.userId || payload.sub) || '',
+    email: payload.email || '',
+    full_name: payload.fullName || payload.full_name || '',
+    role: (payload.roles?.[0] || payload.role || 'patron') as UserRole,
+  });
+    } catch (err: unknown) {
       devError('[Auth] Failed to restore session:', err);
     } finally {
       setIsLoading(false);
@@ -18160,6 +18722,7 @@ export function useAuth() {
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@react-native/babel-preset": "^0.86.0",
     "@react-native/jest-preset": "^0.85.3",
     "@testing-library/react-native": "^14.0.0",
     "@types/jest": "29.5.14",
@@ -18290,6 +18853,11 @@ export const borrowApi = {
 
   confirmBorrowSlip: async (data: ConfirmBorrowSlipRequest): Promise<CreateBorrowSlipResponse> => {
     const response = await api.post<CreateBorrowSlipResponse>('/borrow/staff/slip/confirm', data);
+    return response.data;
+  },
+
+  getBorrowConfig: async (): Promise<{ max_borrow_books: number; max_borrow_books_per_slip: number; max_borrow_days: number }> => {
+    const response = await api.get('/borrow/config');
     return response.data;
   },
 };
