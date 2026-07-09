@@ -80,38 +80,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      const role = (payload.roles?.[0] || payload.role || 'patron') as UserRole;
       const isExpired = payload.exp && payload.exp * 1000 < Date.now();
+
       if (isExpired) {
         const refreshToken = await getRefreshToken();
         if (refreshToken) {
           try {
             const result = await authApi.refreshToken(refreshToken);
             await setAccessToken(result.access_token);
-            const newPayload = decodeJwtPayload(result.access_token);
-            if (newPayload) {
-      setUser({
-        id: (newPayload.userId || newPayload.sub) || '',
-        email: newPayload.email || '',
-        full_name: newPayload.fullName || newPayload.full_name || '',
-        role: (newPayload.roles?.[0] || newPayload.role || 'patron') as UserRole,
-      });
-              setIsLoading(false);
-              return;
-            }
           } catch {
             devError('[Auth] Refresh token failed on restore');
+            setIsLoading(false);
+            return;
           }
+        } else {
+          setIsLoading(false);
+          return;
         }
-        setIsLoading(false);
-        return;
       }
 
-  setUser({
-    id: (payload.userId || payload.sub) || '',
-    email: payload.email || '',
-    full_name: payload.fullName || payload.full_name || '',
-    role: (payload.roles?.[0] || payload.role || 'patron') as UserRole,
-  });
+      // Set basic user from token immediately
+      setUser({
+        id: (payload.userId || payload.sub) || '',
+        email: payload.email || '',
+        full_name: payload.fullName || payload.full_name || '',
+        role,
+      });
+
+      // Fetch full profile to get avatar_url and other fields not in JWT
+      try {
+        if (role === 'admin' || role === 'staff') {
+          const userData = await authApi.getCurrentUser();
+          setUser((prev) => prev ? { ...prev, avatar_url: userData.avatar_url || userData.avatarUrl } : null);
+        } else {
+          const patronData = await authApi.getCurrentPatron();
+          setUser((prev) => prev ? { ...prev, avatar_url: patronData.avatar_url || patronData.avatarUrl } : null);
+        }
+      } catch {
+        devError('[Auth] Failed to fetch profile on restore');
+      }
     } catch (err: unknown) {
       devError('[Auth] Failed to restore session:', err);
     } finally {
@@ -158,7 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: userData.email || email,
         full_name: getFullName(userData),
         role: userData.role,
-        avatar_url: userData.avatar_url,
+        avatar_url: userData.avatar_url || userData.avatarUrl,
       });
     } finally {
       setIsLoading(false);
@@ -175,7 +183,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (role === 'admin' || role === 'staff') {
         const userData = await authApi.getCurrentUser();
         setPatron(null);
-        setUser({ id: userData.id, email: userData.email || '', full_name: getFullName(userData), role: userData.role, avatar_url: userData.avatar_url });
+        setUser({ id: userData.id, email: userData.email || '', full_name: getFullName(userData), role: userData.role, avatar_url: userData.avatar_url || userData.avatarUrl });
       } else {
         const patronData = await authApi.getCurrentPatron();
         setPatron(patronData);

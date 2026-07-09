@@ -27,6 +27,7 @@ const statusLabels: Record<string, string> = {
   updated: 'Cập nhật',
   skipped: 'Bỏ qua',
   error: 'Lỗi',
+  warning: 'Thiếu metadata',
 };
 
 export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps) {
@@ -256,6 +257,11 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
     itemAuthor: {
       color: c.onSurfaceVariant,
     },
+    itemMeta: {
+      color: c.onSurfaceVariant,
+      fontSize: 11,
+      marginTop: 1,
+    },
     itemIsbn: {
       color: c.onSurfaceVariant,
       fontSize: 11,
@@ -388,6 +394,14 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
       fontSize: 10,
       fontWeight: '700',
     },
+    resultWarningChip: {
+      backgroundColor: '#C49A3C22',
+    },
+    resultWarningChipText: {
+      color: c.custom.warning,
+      fontSize: 10,
+      fontWeight: '700',
+    },
   }), [c]);
 
   const [permission, requestPermission] = useCameraPermissions();
@@ -404,26 +418,18 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
     const cleanIsbn = isbn.replace(/[-\s]/g, '');
     if (!/^\d{10,13}$/.test(cleanIsbn)) return;
 
-    setScannedIsbns((prev) => {
-      const existing = prev.find((item) => item.isbn === cleanIsbn);
-      if (existing) {
-        return prev.map((item) =>
-          item.isbn === cleanIsbn ? { ...item, quantity: item.quantity + 1 } : item,
-        );
-      }
-      return [...prev, { isbn: cleanIsbn, quantity: 1, lookup: null, loading: true, error: null }];
-    });
-
     try {
       const lookup = await borrowApi.lookupBookByIsbn(cleanIsbn);
-      setScannedIsbns((prev) =>
-        prev.map((item) =>
-          item.isbn === cleanIsbn ? { ...item, lookup, loading: false } : item,
-        ),
-      );
+      setScannedIsbns((prev) => {
+        const existing = prev.find((item) => item.isbn === cleanIsbn);
+        if (existing) {
+          return prev.map((item) =>
+            item.isbn === cleanIsbn ? { ...item, quantity: item.quantity + 1, lookup } : item,
+          );
+        }
+        return [...prev, { isbn: cleanIsbn, quantity: 1, lookup, loading: false, error: null }];
+      });
     } catch (err: any) {
-      setScannedIsbns((prev) => prev.filter((item) => item.isbn !== cleanIsbn));
-      const message = err?.response?.data?.detail || err?.message || 'Không tìm thấy sách';
       setSnackbarMsg(`Không tìm thấy sách: ${cleanIsbn}`);
       devError('[ImportBooks] lookup error:', err);
     }
@@ -470,12 +476,11 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
   };
 
   const handleImport = async () => {
-    const validItems = scannedIsbns.filter((item) => item.lookup && !item.error);
-    if (validItems.length === 0) return;
+    if (scannedIsbns.length === 0) return;
 
     setIsImporting(true);
     try {
-      const items = validItems.map((item) => ({ isbn: item.isbn, quantity: item.quantity }));
+      const items = scannedIsbns.map((item) => ({ isbn: item.isbn, quantity: item.quantity }));
       const result = await borrowApi.batchImportByIsbn(items);
       setImportResult(result);
       setShowResult(true);
@@ -491,7 +496,7 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
     }
   };
 
-  const validCount = scannedIsbns.filter((item) => item.lookup && !item.error).length;
+  const validCount = scannedIsbns.length;
 
   const renderCamera = () => (
     <View style={styles.cameraContainer}>
@@ -588,14 +593,24 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
                   )}
                 </View>
 
-                {!item.loading && !item.error && item.lookup ? (
+                {!item.loading && item.lookup ? (
                   <>
                     {item.lookup.author ? (
                       <Text variant="bodySmall" style={styles.itemAuthor} numberOfLines={1}>
                         {item.lookup.author}
                       </Text>
                     ) : null}
-                    <Text variant="bodySmall" style={styles.itemIsbn}>{item.isbn}</Text>
+                    {item.lookup.publisher || item.lookup.published_date ? (
+                      <Text variant="bodySmall" style={styles.itemMeta} numberOfLines={1}>
+                        {[item.lookup.publisher, item.lookup.published_date?.slice(0, 4)].filter(Boolean).join(' - ')}
+                      </Text>
+                    ) : null}
+                    {item.lookup.page_count ? (
+                      <Text variant="bodySmall" style={styles.itemMeta}>
+                        {item.lookup.page_count} trang
+                      </Text>
+                    ) : null}
+                    <Text variant="bodySmall" style={styles.itemIsbn}>ISBN: {item.isbn}</Text>
                     {item.lookup.total_copies > 0 ? (
                       <Text variant="bodySmall" style={styles.itemStock}>
                         Kho: {item.lookup.total_copies} / Sẵn: {item.lookup.available_copies}
@@ -607,9 +622,11 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
                       </Text>
                     ) : null}
                   </>
+                ) : !item.loading && !item.lookup ? (
+                  <Text variant="bodySmall" style={styles.itemIsbn}>{item.isbn}</Text>
                 ) : null}
 
-                {!item.loading && !item.error ? (
+                {!item.loading ? (
                   <View style={styles.quantityRow}>
                     <IconButton
                       icon="minus"
@@ -718,7 +735,7 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
             </Text>
             {validCount > 0 ? (
               <Text variant="bodySmall" style={styles.bottomBarValid}>
-                {validCount} cuốn hợp lệ
+                {validCount} cuốn
               </Text>
             ) : null}
           </View>
@@ -761,12 +778,24 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
                 <ScrollView style={styles.resultList}>
                   {importResult.results.map((row, idx) => (
                     <View key={idx} style={styles.resultRow}>
-                      <Text variant="bodySmall" style={styles.resultRowIsbn}>{row.isbn}</Text>
-                      <Text variant="bodySmall" style={styles.resultRowTitle} numberOfLines={1}>{row.title}</Text>
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <Text variant="bodySmall" style={styles.resultRowIsbn}>{row.isbn}</Text>
+                        <Text variant="bodySmall" style={styles.resultRowTitle} numberOfLines={1}>{row.title}</Text>
+                        {row.quantity > 0 ? (
+                          <Text style={{ color: c.custom.textDisabled, fontSize: 10 }}>
+                            SL: {row.quantity} | Mã vạch: {row.barcodes?.length || 0}
+                          </Text>
+                        ) : null}
+                        {row.message ? (
+                          <Text style={{ color: c.custom.textDisabled, fontSize: 10 }} numberOfLines={1}>
+                            {row.message}
+                          </Text>
+                        ) : null}
+                      </View>
                       <Chip
                         compact
-                        style={row.status === 'imported' || row.status === 'updated' ? styles.resultSuccessChip : styles.resultErrorChip}
-                        textStyle={row.status === 'imported' || row.status === 'updated' ? styles.resultSuccessChipText : styles.resultErrorChipText}
+                        style={row.status === 'imported' || row.status === 'updated' ? styles.resultSuccessChip : row.status === 'warning' ? styles.resultWarningChip : styles.resultErrorChip}
+                        textStyle={row.status === 'imported' || row.status === 'updated' ? styles.resultSuccessChipText : row.status === 'warning' ? styles.resultWarningChipText : styles.resultErrorChipText}
                       >
                         {statusLabels[row.status] || row.status}
                       </Chip>

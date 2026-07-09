@@ -137,8 +137,8 @@ export default function NotificationScreen({ navigation }: NotificationScreenPro
         right={
           unreadCount > 0 ? (
             <TouchableOpacity activeOpacity={0.7} onPress={markAllAsRead} style={styles.markAllBtn}>
-              <MaterialCommunityIcons name="check-all" size={18} color={c.primary} />
-              <Text style={[styles.markAllText, { color: c.primary }]}>Đọc tất cả</Text>
+              <MaterialCommunityIcons name="check-all" size={18} color="#e0e7ff" />
+              <Text style={[styles.markAllText, { color: "#e0e7ff" }]}>Đọc tất cả</Text>
             </TouchableOpacity>
           ) : null
         }
@@ -180,6 +180,7 @@ function createStyles(theme: AppTheme) {
       paddingVertical: 5,
       borderRadius: 8,
       borderWidth: 0.5,
+      borderColor: 'rgba(255,255,255,0.3)',
     },
     markAllText: { fontSize: 12, fontWeight: '600' },
     filterRow: {

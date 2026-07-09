@@ -44,7 +44,7 @@ export default function StaffBorrowScreen() {
   const [scanError, setScanError] = useState<string | null>(null);
 
   useEffect(() => {
-    borrowApi.getBorrowConfig().then(setBorrowConfig).catch(() => {});
+    borrowApi.getBorrowConfig().then(setBorrowConfig).catch(() => setScanToast('Không thể tải cấu hình mượn sách, dùng mặc định'));
   }, []);
 
   const remaining = borrowConfig.max_borrow_books - activeCount;

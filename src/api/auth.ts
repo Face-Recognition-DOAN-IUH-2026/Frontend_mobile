@@ -175,12 +175,14 @@ export const authApi = {
     });
   },
 
-  uploadAvatar: async (imageUri: string): Promise<{ avatarUrl: string }> => {
+  uploadAvatar: async (imageUri: string, mimeType?: string): Promise<{ avatarUrl: string }> => {
+    const ext = imageUri.split('.').pop()?.toLowerCase() || 'jpg';
+    const mime = mimeType || (ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg');
     const formData = new FormData();
     formData.append('avatar', {
       uri: imageUri,
-      type: 'image/jpeg',
-      name: 'avatar.jpg',
+      type: mime,
+      name: `avatar.${ext === 'png' ? 'png' : ext === 'webp' ? 'webp' : 'jpg'}`,
     } as any);
     const response = await api.post<{ avatarUrl: string }>('/users/me/avatar', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
