@@ -94,6 +94,8 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
       setDetailBook(detail);
     } catch {
       setDetailBook(null);
+      setSnackMsg('Không thể tải thông tin sách');
+      setSnackVisible(true);
     } finally {
       setDetailLoading(false);
     }

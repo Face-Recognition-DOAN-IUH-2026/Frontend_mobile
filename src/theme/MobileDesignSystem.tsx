@@ -24,14 +24,14 @@ export function GradientHeader({
   return (
     <Surface style={[dhStyles.header, { backgroundColor: c.primary }]} elevation={0}>
       {/* decorative circles */}
-      <View style={[dhStyles.circle, { top: -30, right: -30, width: 120, height: 120, backgroundColor: 'rgba(255,255,255,0.08)' }]} />
-      <View style={[dhStyles.circle, { bottom: -40, left: 80, width: 160, height: 160, backgroundColor: 'rgba(255,255,255,0.05)' }]} />
+      <View style={[dhStyles.circle, { top: -30, right: -30, width: 120, height: 120, backgroundColor: `${c.onPrimary}14` }]} />
+      <View style={[dhStyles.circle, { bottom: -40, left: 80, width: 160, height: 160, backgroundColor: `${c.onPrimary}0D` }]} />
 
       <View style={dhStyles.headerRow}>
-        <Avatar.Icon size={44} icon={icon} style={dhStyles.headerAvatar} color={c.onPrimary} />
+        <Avatar.Icon size={44} icon={icon} style={[dhStyles.headerAvatar, { backgroundColor: `${c.onPrimary}33` }]} color={c.onPrimary} />
         <View style={{ flex: 1 }}>
-          <Text variant="titleMedium" style={dhStyles.headerTitle}>{title}</Text>
-          {subtitle ? <Text variant="bodySmall" style={dhStyles.headerSubtitle}>{subtitle}</Text> : null}
+          <Text variant="titleLarge" style={[dhStyles.headerTitle, { color: c.onPrimary }]}>{title}</Text>
+          {subtitle ? <Text variant="bodySmall" style={[dhStyles.headerSubtitle, { color: `${c.onPrimary}B3` }]}>{subtitle}</Text> : null}
         </View>
         {right}
       </View>
@@ -212,14 +212,11 @@ const dhStyles = StyleSheet.create({
     zIndex: 1,
   },
   headerAvatar: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
   },
   headerTitle: {
-    color: '#FFFFFF',
     fontWeight: '800',
   },
   headerSubtitle: {
-    color: 'rgba(255,255,255,0.7)',
     marginTop: 2,
   },
 

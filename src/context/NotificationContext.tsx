@@ -59,6 +59,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             reconnectAttempts.current = 0;
             setNotifications((prev) => [notification, ...prev]);
             setUnreadCount((prev) => prev + 1);
+            queryClient.invalidateQueries({ queryKey: ['notifications'] });
           },
           () => {},
         )
@@ -112,11 +113,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
       const queryKey = ['notifications', unreadOnly ? 'unread' : 'all'];
 
-      // Use react-query cache: returns cached data if still fresh, otherwise fetches
+      queryClient.invalidateQueries({ queryKey });
+
       const result = await queryClient.fetchQuery<{ items: Notification[]; unread: number }>({
         queryKey,
         queryFn: () => notificationApi.getNotifications({ unread: unreadOnly || undefined, limit: 50 }),
-        staleTime: 2 * 60 * 1000, // 2 minutes for notifications
       });
 
       if (mountedRef.current) {
@@ -139,6 +140,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         prev.map((n) => (n.id === id ? { ...n, isRead: true, readAt: new Date().toISOString() } : n))
       );
       setUnreadCount((prev) => Math.max(0, prev - 1));
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
     } catch (err) {
       devError('[Notification] Failed to mark as read:', err);
     }
@@ -152,6 +154,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         prev.map((n) => ({ ...n, isRead: true, readAt: new Date().toISOString() }))
       );
       setUnreadCount(0);
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
     } catch (err) {
       devError('[Notification] Failed to mark all as read:', err);
     }
