@@ -311,7 +311,7 @@ function PatronStackNavigator() {
       <PatronStack.Screen
         name="MyReservations"
         component={MyReservationsScreen}
-        options={{ title: 'Đặt chỗ của tôi', presentation: 'card' }}
+        options={{ title: 'Sách chờ thông báo', presentation: 'card' }}
       />
       <PatronStack.Screen
         name="BookCatalog"

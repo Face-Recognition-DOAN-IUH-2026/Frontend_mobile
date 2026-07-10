@@ -158,8 +158,8 @@ export const authApi = {
     await clearTokens();
   },
 
-  getCurrentUser: async (): Promise<User> => {
-    const response = await api.get<User>('/users/me');
+  getCurrentUser: async (): Promise<any> => {
+    const response = await api.get<any>('/users/me');
     return response.data;
   },
 

@@ -300,8 +300,8 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
               accentColor={theme.colors.primary}
             >
               <List.Item
-                title="Đặt chỗ của tôi"
-                description="Xem và quản lý đặt chỗ sách"
+                title="Sách chờ thông báo"
+                description="Xem danh sách sách đang chờ nhận thông báo"
                 titleStyle={styles.itemTitle}
                 descriptionStyle={styles.itemDescription}
                 left={(props) => <List.Icon {...props} icon="book-check" color={theme.colors.primary} />}

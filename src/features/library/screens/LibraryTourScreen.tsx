@@ -68,9 +68,14 @@ export default function LibraryTourScreen() {
             style={styles.flex}
             javaScriptEnabled={true}
             domStorageEnabled={true}
+            allowFileAccess={true}
+            allowUniversalAccessFromFileURLs={true}
+            allowMixedContent={true}
             allowsInlineMediaPlayback={true}
+            mediaPlaybackRequiresUserAction={false}
             scrollEnabled={false}
-            deviceMotionPermission={true} // For iOS Gyroscope support inside WebView
+            deviceMotionPermission={true}
+            sharedCookiesEnabled={true}
             onLoadStart={() => setLoading(true)}
             onLoadEnd={() => setLoading(false)}
             onError={(syntheticEvent) => {
