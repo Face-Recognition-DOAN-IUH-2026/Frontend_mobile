@@ -43,7 +43,23 @@
         }
       ],
       "expo-font",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          },
+          "ios": {
+            "infoPlist": {
+              "NSAppTransportSecurity": {
+                "NSAllowsArbitraryLoads": true,
+                "NSAllowsLocalNetworking": true
+              }
+            }
+          }
+        }
+      ]
     ],
     "extra": {
       "eas": {
