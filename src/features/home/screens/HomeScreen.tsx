@@ -7,6 +7,7 @@ import { Avatar, Button, Chip, Surface, Text, useTheme } from 'react-native-pape
 import { useQuery } from '@tanstack/react-query';
 import { borrowApi } from '../../../api/borrow';
 import { scheduleApi } from '../../../api/schedule';
+import { useAccessRealtime } from '../hooks/useAccessRealtime';
 import { useAuth } from '../../../context/AuthContext';
 import { AppTheme } from '../../../theme/DarkTheme';
 import {
@@ -16,7 +17,7 @@ import {
   EmptyState,
   GRADIENTS,
 } from '../../../theme/MobileDesignSystem';
-import { BorrowRecord, StaffScheduleAssignment } from '../../../types';
+import { BorrowRecord, CameraEvent, StaffScheduleAssignment } from '../../../types';
 import { formatDate, getDaysUntil, isOverdue, toDateInput } from '../../../utils/dateUtils';
 import { getAssignmentTimeState } from '../../../utils/assignmentUtils';
 
@@ -37,6 +38,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const { user, patron } = useAuth();
   const isStaffScanner = user?.role === 'admin' || user?.role === 'staff';
+  const { events: accessEvents, status: accessWsStatus } = useAccessRealtime(isStaffScanner);
 
   const today = toDateInput(new Date());
   const tomorrow = toDateInput(new Date(Date.now() + 86400000));
@@ -160,6 +162,53 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             )
           }
         />
+
+        {isStaffScanner && (
+          <SectionCard
+            title="Ra/vào cổng gần đây"
+            icon="door"
+            accentColor={theme.colors.primary}
+          >
+            {accessWsStatus === 'error' ? (
+              <Text variant="bodySmall" style={styles.mutedText}>
+                Không thể kết nối luồng ra/vào thời gian thực.
+              </Text>
+            ) : accessEvents.length === 0 ? (
+              <EmptyState icon="door" message="Chưa có hoạt động ra/vào gần đây" />
+            ) : (
+              <View style={styles.accessList}>
+                {accessEvents.map((ev: CameraEvent) => {
+                  const isEntry = ev.access_type === 'entry';
+                  const granted = ev.status === 'granted' || ev.status === 'already_granted';
+                  return (
+                    <View key={ev.event_id} style={styles.accessRow}>
+                      <MaterialCommunityIcons
+                        name={isEntry ? 'login' : 'logout'}
+                        size={20}
+                        color={isEntry ? GRADIENTS.blue[0] : GRADIENTS.amber[0]}
+                      />
+                      <View style={styles.accessInfo}>
+                        <Text variant="bodySmall" style={styles.cardTitle} numberOfLines={1}>
+                          {ev.full_name || ev.student_code || 'Không xác định'}
+                        </Text>
+                        <Text variant="bodySmall" style={styles.mutedText}>
+                          {isEntry ? 'Vào' : 'Ra'} · {formatDate(ev.occurred_at)}
+                        </Text>
+                      </View>
+                      <Chip
+                        compact
+                        style={granted ? styles.successChip : styles.errorChip}
+                        textStyle={granted ? styles.successChipText : styles.errorChipText}
+                      >
+                        {granted ? 'Thành công' : 'Từ chối'}
+                      </Chip>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+          </SectionCard>
+        )}
 
         {nowShift ? (
           <SectionCard
@@ -422,6 +471,23 @@ function createStyles(theme: AppTheme) {
     borrowList: {
       gap: 10,
       paddingBottom: 4,
+    },
+
+    /* access realtime feed */
+    accessList: {
+      gap: 10,
+      paddingVertical: 4,
+    },
+    accessRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 6,
+    },
+    accessInfo: {
+      flex: 1,
+      gap: 2,
     },
     borrowCard: {
       borderRadius: 14,

@@ -25,5 +25,6 @@ flows:
     description: Register face using AutoFaceCapture component
 
 environment:
+  # Override with MAESTRO_API_URL env var for iOS simulator or physical device
   baseUrl: "http://10.0.2.2:80/api"
   apiTimeout: 30000

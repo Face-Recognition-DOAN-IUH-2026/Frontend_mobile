@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, Platform } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Text, Button, useTheme } from 'react-native-paper';
 import { AppTheme } from '../../../theme/DarkTheme';
@@ -30,7 +30,7 @@ export default function LibraryTourScreen() {
     } catch (e) {
       console.error('Error building VR tour URL:', e);
     }
-    if (__DEV__) return 'http://10.0.2.2:3000/library/vr-tour';
+    if (__DEV__) return `http://${Platform.OS === 'ios' ? 'localhost' : '10.0.2.2'}:3000/library/vr-tour`;
     return '';
   }, []);
 

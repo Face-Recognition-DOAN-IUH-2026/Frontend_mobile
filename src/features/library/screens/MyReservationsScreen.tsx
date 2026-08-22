@@ -10,6 +10,8 @@ import { AppTheme } from '../../../theme/DarkTheme';
 import { GradientHeader, SectionCard, EmptyState, GRADIENTS } from '../../../theme/MobileDesignSystem';
 import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
 import { UndoBar } from '../../../components/UndoBar';
+import SwipeReserveRow from '../../../components/SwipeReserveRow';
+import { useUndo } from '../../../lib/useUndo';
 import { devError } from '../../../utils/logger';
 import { useNetwork } from '../../../context/NetworkContext';
 
@@ -24,7 +26,7 @@ export default function MyReservationsScreen({ navigation }: MyReservationsScree
   const [snackMsg, setSnackMsg] = useState('');
   const [snackVisible, setSnackVisible] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
-  const [lastCancellation, setLastCancellation] = useState<{ id: string; title: string } | null>(null);
+  const { hiddenIds, confirmingId, undo, cancelUndo, markConfirmed } = useUndo({ duration: 5000 });
   const { isOnline } = useNetwork();
   const qc = useQueryClient();
 
@@ -56,44 +58,46 @@ export default function MyReservationsScreen({ navigation }: MyReservationsScree
     }
 
     setCancellingId(entry.id);
-    setLastCancellation({ id: entry.id, title: entry.book?.title || 'sách này' });
+    undo(entry.id);
     setCancellingId(null);
-  }, [isOnline]);
+  }, [isOnline, undo]);
 
   const handleUndoCancel = useCallback(async () => {
-    if (!lastCancellation || !isOnline) return;
+    if (!confirmingId || !isOnline) return;
     try {
-      const entry = entries.find(e => e.id === lastCancellation.id);
+      const entry = entries.find(e => e.id === confirmingId);
       if (entry) {
-        const result = await joinWaitlist(entry.book_id);
-        setSnackMsg(`Đã khôi phục nhận thông báo "${lastCancellation.title}"`);
+        await joinWaitlist(entry.book_id);
+        setSnackMsg(`Đã khôi phục nhận thông báo "${entry.book?.title || 'sách này'}"`);
         setSnackVisible(true);
       }
     } catch (error: any) {
-      const detail = error?.response?.data?.detail || error?.message || 'Không thể khôi phục';
+      const detail = error?.response?.data?.detail || error?.message || 'Không thể khôi phục nhận thông báo';
       setSnackMsg(detail);
       setSnackVisible(true);
     } finally {
-      setLastCancellation(null);
+      cancelUndo(confirmingId);
     }
-  }, [lastCancellation, isOnline, entries]);
+  }, [confirmingId, isOnline, entries, joinWaitlist, cancelUndo]);
 
   const commitCancellation = useCallback(async () => {
-    if (!lastCancellation) return;
+    if (!confirmingId) return;
+    const title = entries.find(e => e.id === confirmingId)?.book?.title || 'sách này';
     try {
-      await leaveWaitlist(lastCancellation.id);
+      await leaveWaitlist(confirmingId);
       // Invalidate query to refetch fresh data from server
       qc.invalidateQueries({ queryKey: ['myReservations'] });
-      setSnackMsg(`Đã hủy nhận thông báo "${lastCancellation.title}"`);
+      setSnackMsg(`Đã hủy nhận thông báo "${title}"`);
       setSnackVisible(true);
     } catch (error: any) {
       const msg = error?.response?.data?.detail || error?.message || 'Không thể hủy nhận thông báo';
       setSnackMsg(msg);
       setSnackVisible(true);
+      cancelUndo(confirmingId);
     } finally {
-      setLastCancellation(null);
+      markConfirmed(confirmingId);
     }
-  }, [lastCancellation]);
+  }, [confirmingId, entries, leaveWaitlist, qc, cancelUndo, markConfirmed]);
 
   const getStatusLabel = (status: string): string => {
     switch (status) {
@@ -129,60 +133,67 @@ export default function MyReservationsScreen({ navigation }: MyReservationsScree
           <EmptyState icon="bell-off-outline" title="Bạn chưa đăng ký nhận thông báo nào" />
         ) : (
           <SectionCard title="Sách đang chờ" icon="bell-check-outline" accentColor={GRADIENTS.indigo[0]}>
-            {entries.map((entry) => {
+            {entries
+              .filter((entry) => !hiddenIds.includes(entry.id))
+              .map((entry) => {
             const isNotified = entry.status === 'notified';
             return (
-              <Surface
+              <SwipeReserveRow
                 key={entry.id}
-                style={[styles.resCard, { backgroundColor: c.surface, borderColor: c.outline }]}
-                elevation={0}
+                variant="cancel"
+                onCancel={() => handleCancel(entry)}
               >
-                <View style={[styles.resCardSpine, { backgroundColor: isNotified ? c.custom.success : c.primary }]} />
-                {entry.book?.cover_url ? (
-                  <Image source={{ uri: entry.book.cover_url }} style={styles.bookCover} />
-                ) : (
-                  <View style={[styles.bookCoverPlaceholder, { backgroundColor: c.surfaceVariant }]}>
-                    <MaterialCommunityIcons name="book-variant" size={24} color={c.onSurfaceVariant} />
-                  </View>
-                )}
-                <View style={styles.resContent}>
-                  <Text style={[styles.bookTitle, { color: c.onSurface }]} numberOfLines={2}>
-                    {entry.book?.title || entry.book_id}
-                  </Text>
-                  {entry.book?.author ? (
-                    <Text style={[styles.bookAuthor, { color: c.onSurfaceVariant }]} numberOfLines={1}>
-                      {entry.book.author}
+                <Surface
+                  style={[styles.resCard, { backgroundColor: c.surface, borderColor: c.outline }]}
+                  elevation={0}
+                >
+                  <View style={[styles.resCardSpine, { backgroundColor: isNotified ? c.custom.success : c.primary }]} />
+                  {entry.book?.cover_url ? (
+                    <Image source={{ uri: entry.book.cover_url }} style={styles.bookCover} />
+                  ) : (
+                    <View style={[styles.bookCoverPlaceholder, { backgroundColor: c.surfaceVariant }]}>
+                      <MaterialCommunityIcons name="book-variant" size={24} color={c.onSurfaceVariant} />
+                    </View>
+                  )}
+                  <View style={styles.resContent}>
+                    <Text style={[styles.bookTitle, { color: c.onSurface }]} numberOfLines={2}>
+                      {entry.book?.title || entry.book_id}
                     </Text>
-                  ) : null}
-                  <View style={styles.resMeta}>
-                    <Surface
-                      style={[
-                        styles.statusBadge,
-                        { backgroundColor: isNotified ? c.custom.success : c.primary },
-                      ]}
-                      elevation={0}
-                    >
-                      <Text style={[styles.statusBadgeText, { color: '#FFFFFF' }]}>
-                        {getStatusLabel(entry.status)}
+                    {entry.book?.author ? (
+                      <Text style={[styles.bookAuthor, { color: c.onSurfaceVariant }]} numberOfLines={1}>
+                        {entry.book.author}
                       </Text>
-                    </Surface>
+                    ) : null}
+                    <View style={styles.resMeta}>
+                      <Surface
+                        style={[
+                          styles.statusBadge,
+                          { backgroundColor: isNotified ? c.custom.success : c.primary },
+                        ]}
+                        elevation={0}
+                      >
+                        <Text style={[styles.statusBadgeText, { color: '#FFFFFF' }]}>
+                          {getStatusLabel(entry.status)}
+                        </Text>
+                      </Surface>
+                    </View>
                   </View>
-                </View>
-                <View style={styles.resActions}>
-                  <Button
-                    mode="outlined"
-                    onPress={() => handleCancel(entry)}
-                    loading={cancellingId === entry.id}
-                    disabled={cancellingId === entry.id}
-                    style={styles.cancelButton}
-                    labelStyle={styles.cancelButtonLabel}
-                    textColor={c.error}
-                    compact
-                  >
-                    Hủy
-                  </Button>
-                </View>
-              </Surface>
+                  <View style={styles.resActions}>
+                    <Button
+                      mode="outlined"
+                      onPress={() => handleCancel(entry)}
+                      loading={cancellingId === entry.id}
+                      disabled={cancellingId === entry.id}
+                      style={styles.cancelButton}
+                      labelStyle={styles.cancelButtonLabel}
+                      textColor={c.error}
+                      compact
+                    >
+                      Hủy
+                    </Button>
+                  </View>
+                </Surface>
+              </SwipeReserveRow>
             );
             })}
           </SectionCard>
@@ -197,8 +208,8 @@ export default function MyReservationsScreen({ navigation }: MyReservationsScree
       />
 
       <UndoBar
-        visible={!!lastCancellation}
-        message={`Đã hủy nhận thông báo "${lastCancellation?.title ?? ''}"`}
+        visible={!!confirmingId}
+        message={`Đã hủy nhận thông báo "${entries.find(e => e.id === confirmingId)?.book?.title ?? ''}"`}
         onUndo={handleUndoCancel}
         onDismiss={commitCancellation}
       />
