@@ -23,9 +23,14 @@ describe('useAccessRealtime', () => {
     (connectAccessRealtime as jest.Mock).mockClear();
   });
 
-  it('connects to the access websocket on mount', async () => {
-    await renderHook(() => useAccessRealtime());
+  it('connects to the access websocket on mount when enabled', async () => {
+    await renderHook(() => useAccessRealtime(true));
     expect(connectAccessRealtime).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not connect when disabled', async () => {
+    await renderHook(() => useAccessRealtime(false));
+    expect(connectAccessRealtime).not.toHaveBeenCalled();
   });
 
   it('appends a received camera event to state', async () => {

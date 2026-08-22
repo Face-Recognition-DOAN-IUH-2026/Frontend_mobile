@@ -59,22 +59,26 @@ e2e/
 src/
   __tests__/
     components/
+      AIWidget.test.tsx
       CameraFallback.test.tsx
       EmptyState.test.tsx
+      ErrorBoundary.test.tsx
       LoadingOverlay.test.tsx
       NoticeSnackbar.test.tsx
       SearchField.test.tsx
+      SwipeReserveRow.cancel.test.tsx
       SwipeReserveRow.test.tsx
       UndoBar.test.tsx
     face-login/
       faceLogin.test.ts
+    home/
+      useAccessRealtime.test.ts
     hooks/
-      useUndo.test.ts
       useUndo.test.tsx
     navigation/
       RoleGuard.test.ts
-    theme/
-      EmptyState.test.ts
+    utils/
+      error-reporter.test.ts
   api/
     accessRealtime.ts
     ai.ts
@@ -92,6 +96,7 @@ src/
     AutoFaceCapture.tsx
     CameraFallback.tsx
     CodeInput.tsx
+    ErrorBoundary.tsx
     LegacyUpgradeBanner.tsx
     LoadingOverlay.tsx
     NoticeSnackbar.tsx
@@ -148,6 +153,8 @@ src/
       screens/
         HistoryScreen.tsx
     home/
+      hooks/
+        useAccessRealtime.ts
       screens/
         HomeScreen.tsx
     import/
@@ -924,36 +931,63 @@ steps:
       timeout: 5000
 </file>
 
-<file path="e2e/maestro.yaml">
-appId: com.library.mobile
-name: LibraryMobileApp
-version: 1.0.0
-runtime:
-  type:-android
-  locale: vi_VN
+<file path="src/__tests__/components/AIWidget.test.tsx">
+import React from 'react';
+import { render } from '@testing-library/react-native';
+import { PaperProvider } from 'react-native-paper';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AuthProvider } from '../../context/AuthContext';
+import AIWidget from '../../features/ai/components/AIWidget/AIWidget';
 
-flows:
-  - name: login-flow.yaml
-    description: Patron login with student code and password
+jest.mock('expo-secure-store', () => ({
+  getItemAsync: jest.fn(() => Promise.resolve(null)),
+  setItemAsync: jest.fn(() => Promise.resolve()),
+  deleteItemAsync: jest.fn(() => Promise.resolve()),
+}));
 
-  - name: face-login-flow.yaml
-    description: Face login using camera capture
+jest.mock('@expo/vector-icons/MaterialCommunityIcons', () => {
+  const React = require('react');
+  const { Text } = require('react-native');
+  return (props: any) => React.createElement(Text, { ...props }, props.name);
+});
 
-  - name: borrow-flow.yaml
-    description: Borrow a book by scanning barcode
+jest.mock('../../features/ai/components/AIWidget/useAIWidgetStore', () => ({
+  useAIWidgetStore: () => ({
+    isOpen: false,
+    isMinimized: false,
+    activeTab: 'score',
+    lastSummary: null,
+    messages: [],
+    isLoadingChat: false,
+    chatSessionId: undefined,
+    open: jest.fn(),
+    close: jest.fn(),
+    toggle: jest.fn(),
+    minimize: jest.fn(),
+    setActiveTab: jest.fn(),
+    updateSummary: jest.fn(),
+    sendMessage: jest.fn(),
+    clearMessages: jest.fn(),
+  }),
+}));
 
-  - name: return-flow.yaml
-    description: Return a borrowed book
+function renderWithProviders(ui: React.ReactElement) {
+  const queryClient = new QueryClient();
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <PaperProvider>
+        <AuthProvider>{ui}</AuthProvider>
+      </PaperProvider>
+    </QueryClientProvider>,
+  );
+}
 
-  - name: 401-handling-flow.yaml
-    description: Test that 401 triggers logout and redirect to login
-
-  - name: face-capture-flow.yaml
-    description: Register face using AutoFaceCapture component
-
-environment:
-  baseUrl: "http://10.0.2.2:80/api"
-  apiTimeout: 30000
+describe('AIWidget (mounted)', () => {
+  it('renders the floating action button when open state is false', async () => {
+    const { getByTestId } = await renderWithProviders(<AIWidget />);
+    expect(getByTestId('ai-widget-fab')).toBeTruthy();
+  });
+});
 </file>
 
 <file path="src/__tests__/components/CameraFallback.test.tsx">
@@ -1134,6 +1168,51 @@ describe('EmptyState', () => {
       <EmptyState icon="alert" message="Empty" action={<Text testID="action-btn">Retry</Text>} />,
     );
     expect(getByText('Retry')).toBeTruthy();
+  });
+});
+</file>
+
+<file path="src/__tests__/components/ErrorBoundary.test.tsx">
+import React from 'react';
+import { render } from '@testing-library/react-native';
+import ErrorBoundary from '../../components/ErrorBoundary';
+import { reportError } from '../../utils/error-reporter';
+
+jest.mock('../../utils/error-reporter', () => ({
+  reportError: jest.fn(),
+  setupGlobalErrorHandlers: jest.fn(),
+}));
+
+function Boom(): React.ReactNode {
+  throw new Error('kaboom');
+}
+
+describe('ErrorBoundary', () => {
+  beforeEach(() => {
+    (reportError as jest.Mock).mockClear();
+  });
+
+  it('renders fallback UI when a child throws', async () => {
+    const { getByText } = await render(
+      <ErrorBoundary>
+        <Boom />
+      </ErrorBoundary>,
+    );
+    expect(getByText('Da xay ra loi')).toBeTruthy();
+  });
+
+  it('reports the render error via reportError', async () => {
+    await render(
+      <ErrorBoundary>
+        <Boom />
+      </ErrorBoundary>,
+    );
+    expect(reportError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: expect.stringContaining('kaboom'),
+        priority: 'High',
+      }),
+    );
   });
 });
 </file>
@@ -1352,6 +1431,51 @@ describe('SearchField', () => {
       <SearchField value="" onChange={jest.fn()} onClear={jest.fn()} />,
     );
     expect(getByPlaceholderText('Search...')).toBeTruthy();
+  });
+});
+</file>
+
+<file path="src/__tests__/components/SwipeReserveRow.cancel.test.tsx">
+import React from 'react';
+import { render, fireEvent } from '@testing-library/react-native';
+import { PaperProvider } from 'react-native-paper';
+import SwipeReserveRow from '../../components/SwipeReserveRow';
+
+jest.mock('@expo/vector-icons/MaterialCommunityIcons', () => {
+  const React = require('react');
+  const { Text } = require('react-native');
+  return (props: any) => React.createElement(Text, { ...props }, props.name);
+});
+
+const renderRow = async (props: any) =>
+  render(
+    <PaperProvider>
+      <SwipeReserveRow {...props}>
+        <></>
+      </SwipeReserveRow>
+    </PaperProvider>,
+  );
+
+describe('SwipeReserveRow variant', () => {
+  it('cancel variant invokes onCancel when the action is pressed', async () => {
+    const onCancel = jest.fn();
+    const { getByTestId } = await renderRow({ variant: 'cancel', onCancel });
+    fireEvent.press(getByTestId('swipe-action'));
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('reserve variant invokes onReserve when the action is pressed', async () => {
+    const onReserve = jest.fn();
+    const { getByTestId } = await renderRow({ variant: 'reserve', onReserve });
+    fireEvent.press(getByTestId('swipe-action'));
+    expect(onReserve).toHaveBeenCalledTimes(1);
+  });
+
+  it('defaults to reserve variant', async () => {
+    const onReserve = jest.fn();
+    const { getByTestId } = await renderRow({ onReserve });
+    fireEvent.press(getByTestId('swipe-action'));
+    expect(onReserve).toHaveBeenCalledTimes(1);
   });
 });
 </file>
@@ -1797,148 +1921,60 @@ describe('Face Login Token Types', () => {
 });
 </file>
 
-<file path="src/__tests__/hooks/useUndo.test.ts">
-function createUndoState(duration = 5000) {
-  const timers = new Map<string, ReturnType<typeof setTimeout>>();
-  let hiddenIds: string[] = [];
-  let confirmingId: string | null = null;
+<file path="src/__tests__/home/useAccessRealtime.test.ts">
+import { renderHook, act } from '@testing-library/react-native';
+import { useAccessRealtime } from '../../features/home/hooks/useAccessRealtime';
+import { connectAccessRealtime } from '../../api/accessRealtime';
 
-  function undo(id: string) {
-    if (!hiddenIds.includes(id)) {
-      hiddenIds = [...hiddenIds, id];
-    }
-    const timer = setTimeout(() => {
-      confirmingId = id;
-      timers.delete(id);
-    }, duration);
-    timers.set(id, timer);
-  }
+jest.mock('../../api/accessRealtime', () => ({
+  connectAccessRealtime: jest.fn(() => Promise.resolve({ close: jest.fn() })),
+}));
 
-  function cancelUndo(id: string) {
-    const timer = timers.get(id);
-    if (timer) {
-      clearTimeout(timer);
-      timers.delete(id);
-    }
-    hiddenIds = hiddenIds.filter((hid) => hid !== id);
-    if (confirmingId === id) confirmingId = null;
-  }
+const fakeEvent = {
+  event_id: 'evt-1',
+  event_type: 'camera_event' as const,
+  camera_id: 'cam-1',
+  status: 'granted' as const,
+  full_name: 'Nguyen Van A',
+  student_code: 'SV001',
+  access_type: 'entry' as const,
+  occurred_at: new Date().toISOString(),
+  source: 'access-service',
+};
 
-  function markConfirmed(id: string) {
-    timers.delete(id);
-    if (confirmingId === id) confirmingId = null;
-  }
-
-  function cleanup() {
-    timers.forEach((t) => clearTimeout(t));
-    timers.clear();
-  }
-
-  return {
-    get state() {
-      return { hiddenIds: [...hiddenIds], confirmingId, hasPending: hiddenIds.length > 0 };
-    },
-    undo,
-    cancelUndo,
-    markConfirmed,
-    cleanup,
-  };
-}
-
-describe('useUndo', () => {
+describe('useAccessRealtime', () => {
   beforeEach(() => {
-    jest.useFakeTimers();
+    (connectAccessRealtime as jest.Mock).mockClear();
   });
 
-  afterEach(() => {
-    jest.useRealTimers();
+  it('connects to the access websocket on mount when enabled', async () => {
+    await renderHook(() => useAccessRealtime(true));
+    expect(connectAccessRealtime).toHaveBeenCalledTimes(1);
   });
 
-  it('hides item on undo', () => {
-    const undoState = createUndoState();
-    undoState.undo('item-1');
-    expect(undoState.state.hiddenIds).toEqual(['item-1']);
-    expect(undoState.state.hasPending).toBe(true);
+  it('does not connect when disabled', async () => {
+    await renderHook(() => useAccessRealtime(false));
+    expect(connectAccessRealtime).not.toHaveBeenCalled();
   });
 
-  it('does not duplicate hidden ids', () => {
-    const undoState = createUndoState();
-    undoState.undo('item-1');
-    undoState.undo('item-1');
-    expect(undoState.state.hiddenIds).toEqual(['item-1']);
+  it('appends a received camera event to state', async () => {
+    const { result } = await renderHook(() => useAccessRealtime());
+    const onEvent = (connectAccessRealtime as jest.Mock).mock.calls[0][0];
+    await act(async () => {
+      onEvent(fakeEvent);
+    });
+    expect(result.current.events[0]).toMatchObject({ event_id: 'evt-1' });
   });
 
-  it('moves item to confirming after timer expires', () => {
-    const undoState = createUndoState(5000);
-    undoState.undo('item-1');
-    jest.advanceTimersByTime(5000);
-    expect(undoState.state.confirmingId).toBe('item-1');
-  });
-
-  it('cancelUndo restores item before timer expires', () => {
-    const undoState = createUndoState();
-    undoState.undo('item-1');
-    undoState.cancelUndo('item-1');
-    expect(undoState.state.hiddenIds).toEqual([]);
-    expect(undoState.state.confirmingId).toBeNull();
-    expect(undoState.state.hasPending).toBe(false);
-  });
-
-  it('cancelUndo does not mark confirmed after timer expires', () => {
-    const undoState = createUndoState();
-    undoState.undo('item-1');
-    jest.advanceTimersByTime(4000);
-    undoState.cancelUndo('item-1');
-    expect(undoState.state.confirmingId).toBeNull();
-    expect(undoState.state.hiddenIds).toEqual([]);
-  });
-
-  it('markConfirmed clears confirming state', () => {
-    const undoState = createUndoState();
-    undoState.undo('item-1');
-    jest.advanceTimersByTime(5000);
-    expect(undoState.state.confirmingId).toBe('item-1');
-    undoState.markConfirmed('item-1');
-    expect(undoState.state.confirmingId).toBeNull();
-    expect(undoState.state.hiddenIds).toEqual(['item-1']); // stays hidden
-  });
-
-  it('supports multiple items', () => {
-    const undoState = createUndoState();
-    undoState.undo('item-1');
-    undoState.undo('item-2');
-    expect(undoState.state.hiddenIds).toEqual(['item-1', 'item-2']);
-    undoState.cancelUndo('item-1');
-    expect(undoState.state.hiddenIds).toEqual(['item-2']);
-  });
-
-  it('cleanup clears all timers', () => {
-    const undoState = createUndoState();
-    undoState.undo('item-1');
-    undoState.undo('item-2');
-    undoState.cleanup();
-    jest.advanceTimersByTime(5000);
-    expect(undoState.state.confirmingId).toBeNull();
-  });
-
-  it('hasPending is false when no items are pending', () => {
-    const undoState = createUndoState();
-    expect(undoState.state.hasPending).toBe(false);
-    undoState.undo('item-1');
-    expect(undoState.state.hasPending).toBe(true);
-    undoState.cancelUndo('item-1');
-    expect(undoState.state.hasPending).toBe(false);
-  });
-
-  it('cancelUndo restores item even after confirmed', () => {
-    const undoState = createUndoState();
-    undoState.undo('item-1');
-    jest.advanceTimersByTime(5000);
-    expect(undoState.state.confirmingId).toBe('item-1');
-    undoState.markConfirmed('item-1');
-    undoState.cancelUndo('item-1');
-    expect(undoState.state.hiddenIds).toEqual([]);
-    expect(undoState.state.confirmingId).toBeNull();
+  it('keeps at most the 8 most recent events', async () => {
+    const { result } = await renderHook(() => useAccessRealtime());
+    const onEvent = (connectAccessRealtime as jest.Mock).mock.calls[0][0];
+    await act(async () => {
+      for (let i = 0; i < 10; i++) {
+        onEvent({ ...fakeEvent, event_id: `evt-${i}` });
+      }
+    });
+    expect(result.current.events).toHaveLength(8);
   });
 });
 </file>
@@ -2096,80 +2132,57 @@ describe('RoleGuard', () => {
 });
 </file>
 
-<file path="src/__tests__/theme/EmptyState.test.ts">
-interface EmptyStateProps {
-  icon: string;
-  message?: string;
-  title?: string;
-  description?: string;
-  action?: unknown;
-}
+<file path="src/__tests__/utils/error-reporter.test.ts">
+import { reportError, setupGlobalErrorHandlers } from '../../utils/error-reporter';
 
-function renderEmptyState(props: EmptyStateProps) {
-  const hasTitle = !!props.title;
-  const hasDescription = !!props.description;
-  const hasAction = !!props.action;
-  const hasMessage = !!props.message;
+const mockFetch = jest.fn((...args: any[]) => Promise.resolve({ ok: true } as Response));
 
-  return {
-    icon: props.icon,
-    message: props.message ?? null,
-    title: props.title ?? null,
-    description: props.description ?? null,
-    hasAction,
-    hasTitle,
-    hasDescription,
-    hasMessage,
-  };
-}
+jest.mock('react-native', () => ({
+  Platform: { OS: 'android' },
+}));
 
-describe('EmptyState (enhanced)', () => {
-  it('renders icon and message (backward compat)', () => {
-    const result = renderEmptyState({ icon: 'book-open', message: 'No books found' });
-    expect(result.icon).toBe('book-open');
-    expect(result.message).toBe('No books found');
-    expect(result.hasTitle).toBe(false);
-    expect(result.hasDescription).toBe(false);
-    expect(result.hasAction).toBe(false);
+jest.mock('../../config/api', () => ({
+  API_BASE_NO_PATH: 'http://localhost:80/api',
+}));
+
+describe('error-reporter', () => {
+  beforeEach(() => {
+    (globalThis as any).fetch = mockFetch;
+    mockFetch.mockClear();
   });
 
-  it('renders icon, title, and description', () => {
-    const result = renderEmptyState({
-      icon: 'book-open',
-      title: 'No Books',
-      description: 'Try adjusting your search',
-    });
-    expect(result.icon).toBe('book-open');
-    expect(result.title).toBe('No Books');
-    expect(result.description).toBe('Try adjusting your search');
+  it('reportError posts with Platform.OS service and label', async () => {
+    await reportError({ title: 'Boom', description: 'details' });
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toBe('http://localhost:80/api/errors/report');
+    const body = JSON.parse(init.body as string);
+    expect(body.service).toBe('mobile-android');
+    expect(body.labels).toContain('mobile-android');
+    expect(body.title).toBe('Boom');
   });
 
-  it('renders action button when provided', () => {
-    const action = { type: 'Text', props: { children: 'Retry' } };
-    const result = renderEmptyState({
-      icon: 'wifi-off',
-      title: 'Offline',
-      description: 'Check your connection',
-      action,
-    });
-    expect(result.hasAction).toBe(true);
+  it('reportError swallows fetch failures', async () => {
+    mockFetch.mockImplementationOnce(() => Promise.reject(new Error('network')));
+    await expect(reportError({ title: 'x' })).resolves.toBeUndefined();
   });
 
-  it('prefers title over message when both provided', () => {
-    const result = renderEmptyState({
-      icon: 'book-open',
-      message: 'Fallback message',
-      title: 'Primary title',
-    });
-    expect(result.title).toBe('Primary title');
-    expect(result.message).toBe('Fallback message');
-  });
+  it('setupGlobalErrorHandlers registers a global handler', () => {
+    const original = jest.requireActual('react-native').ErrorUtils?.getGlobalHandler?.();
+    const setGlobalHandler = jest.fn((...args: any[]) => {});
+    const getGlobalHandler = jest.fn(() => original);
+    (globalThis as any).ErrorUtils = { setGlobalHandler, getGlobalHandler };
 
-  it('works with icon only and no text', () => {
-    const result = renderEmptyState({ icon: 'magnify' });
-    expect(result.icon).toBe('magnify');
-    expect(result.hasMessage).toBe(false);
-    expect(result.hasTitle).toBe(false);
+    setupGlobalErrorHandlers();
+
+    expect(setGlobalHandler).toHaveBeenCalledTimes(1);
+    const handler = setGlobalHandler.mock.calls[0][0];
+    handler(new Error('fatal'), true);
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/errors/report'),
+      expect.objectContaining({ method: 'POST' }),
+    );
   });
 });
 </file>
@@ -2554,6 +2567,98 @@ const styles = StyleSheet.create({
 });
 </file>
 
+<file path="src/components/ErrorBoundary.tsx">
+import React from 'react';
+import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import { reportError } from '../utils/error-reporter';
+
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+export default class ErrorBoundary extends React.Component<
+  ErrorBoundaryProps,
+  ErrorBoundaryState
+> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    reportError({
+      title: `[Mobile] Render Error: ${error.message}`,
+      description: error.message,
+      priority: 'High',
+      stacktrace: errorInfo.componentStack || error.stack,
+    });
+  }
+
+  private handleRetry = () => {
+    this.setState({ hasError: false, error: null });
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={styles.container}>
+          <Text style={styles.title}>Da xay ra loi</Text>
+          <Text style={styles.message}>
+            {this.state.error?.message || 'Ung dung gap loi. Vui long thu lai.'}
+          </Text>
+          <TouchableOpacity style={styles.button} onPress={this.handleRetry}>
+            <Text style={styles.buttonText}>Thu lai</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#0D1117',
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#E6EDF3',
+    marginBottom: 12,
+  },
+  message: {
+    fontSize: 14,
+    color: '#8B949E',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  button: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: '#1A73E8',
+    borderRadius: 8,
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
+</file>
+
 <file path="src/components/LegacyUpgradeBanner.tsx">
 import React, { useEffect, useState, useCallback } from 'react';
 import { StyleSheet, View, TouchableOpacity } from 'react-native';
@@ -2924,25 +3029,6 @@ const s = StyleSheet.create({
     alignItems: 'center',
   },
 });
-</file>
-
-<file path="src/config/api.ts">
-const ENV_API_URL = process.env.EXPO_PUBLIC_API_URL;
-
-function getApiBaseUrl(): string {
-  if (ENV_API_URL) return ENV_API_URL;
-  if (__DEV__) return 'http://10.0.2.2:80/api';
-  throw new Error('EXPO_PUBLIC_API_URL is not set. Application cannot start without a configured API URL.');
-}
-
-function getApiBaseNoPath(): string {
-  if (ENV_API_URL) return ENV_API_URL.replace(/\/api\/?$/, '');
-  if (__DEV__) return 'http://10.0.2.2:80';
-  throw new Error('EXPO_PUBLIC_API_URL is not set.');
-}
-
-export const API_BASE_URL = getApiBaseUrl();
-export const API_BASE_NO_PATH = getApiBaseNoPath();
 </file>
 
 <file path="src/features/ai/components/AIWidget/AIWidget.tsx">
@@ -3407,40 +3493,6 @@ const styles = StyleSheet.create({
   },
   actionInfo: {
     flex: 1,
-  },
-});
-</file>
-
-<file path="src/features/ai/components/AIWidget/AIWidgetTrigger.tsx">
-import React from 'react';
-import { StyleSheet } from 'react-native';
-import { FAB, useTheme } from 'react-native-paper';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { useAIWidgetStore } from './useAIWidgetStore';
-
-export default function AIWidgetTrigger() {
-  const theme = useTheme();
-  const { isMinimized, toggle, isOpen } = useAIWidgetStore();
-
-  if (isMinimized) return null;
-
-  return (
-    <FAB
-      icon={() => <MaterialCommunityIcons name="robot" size={24} color="#fff" />}
-      onPress={toggle}
-      style={[styles.fab, { backgroundColor: theme.colors.primary }]}
-      visible={!isOpen}
-      animated={false}
-    />
-  );
-}
-
-const styles = StyleSheet.create({
-  fab: {
-    position: 'absolute',
-    bottom: 80,
-    right: 16,
-    zIndex: 9999,
   },
 });
 </file>
@@ -7938,6 +7990,51 @@ function createStyles(theme: AppTheme) {
 }
 </file>
 
+<file path="src/features/home/hooks/useAccessRealtime.ts">
+import { useEffect, useState } from 'react';
+import { connectAccessRealtime } from '../../../api/accessRealtime';
+import { CameraEvent } from '../../../types';
+
+const MAX_EVENTS = 8;
+
+type WsStatus = 'idle' | 'connected' | 'closed' | 'error';
+
+export function useAccessRealtime(enabled = true) {
+  const [events, setEvents] = useState<CameraEvent[]>([]);
+  const [status, setStatus] = useState<WsStatus>('idle');
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    let active = true;
+    let ws: WebSocket | null = null;
+
+    connectAccessRealtime(
+      (event) => {
+        if (!active) return;
+        setEvents((prev) => [event, ...prev].slice(0, MAX_EVENTS));
+      },
+      (next) => {
+        if (active) setStatus(next);
+      },
+    )
+      .then((socket) => {
+        if (active) ws = socket;
+      })
+      .catch(() => {
+        if (active) setStatus('error');
+      });
+
+    return () => {
+      active = false;
+      ws?.close();
+    };
+  }, [enabled]);
+
+  return { events, status };
+}
+</file>
+
 <file path="src/features/notifications/screens/NotificationDetailScreen.tsx">
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import React, { useMemo } from 'react';
@@ -9889,6 +9986,39 @@ steps:
       timeout: 5000
 </file>
 
+<file path="e2e/maestro.yaml">
+appId: com.library.mobile
+name: LibraryMobileApp
+version: 1.0.0
+runtime:
+  type:-android
+  locale: vi_VN
+
+flows:
+  - name: login-flow.yaml
+    description: Patron login with student code and password
+
+  - name: face-login-flow.yaml
+    description: Face login using camera capture
+
+  - name: borrow-flow.yaml
+    description: Borrow a book by scanning barcode
+
+  - name: return-flow.yaml
+    description: Return a borrowed book
+
+  - name: 401-handling-flow.yaml
+    description: Test that 401 triggers logout and redirect to login
+
+  - name: face-capture-flow.yaml
+    description: Register face using AutoFaceCapture component
+
+environment:
+  # Override with MAESTRO_API_URL env var for iOS simulator or physical device
+  baseUrl: "http://10.0.2.2:80/api"
+  apiTimeout: 30000
+</file>
+
 <file path="src/__tests__/components/SwipeReserveRow.test.tsx">
 describe('SwipeReserveRow integration logic', () => {
   it('calls joinWaitlist and sets lastReservation on successful swipe reserve', async () => {
@@ -10111,91 +10241,29 @@ const loStyles = StyleSheet.create({
 });
 </file>
 
-<file path="src/components/SwipeReserveRow.tsx">
-import React, { useRef } from 'react';
-import { Animated, PanResponder, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { Text, useTheme } from 'react-native-paper';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import type { AppTheme } from '../theme/DarkTheme';
+<file path="src/config/api.ts">
+import { Platform } from 'react-native';
 
-const SWIPE_THRESHOLD = -80;
+const ENV_API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-interface SwipeReserveRowProps {
-  children: React.ReactNode;
-  onReserve: () => void;
-  disabled?: boolean;
-  reserveLabel?: string;
+function getDevHost(): string {
+  return Platform.OS === 'ios' ? 'localhost' : '10.0.2.2';
 }
 
-export default function SwipeReserveRow({ children, onReserve, disabled, reserveLabel = 'Báo khi có sách' }: SwipeReserveRowProps) {
-  const theme = useTheme<AppTheme>();
-  const c = theme.colors;
-  const translateX = useRef(new Animated.Value(0)).current;
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gs) => !disabled && gs.dx < 0 && Math.abs(gs.dx) > 10,
-      onPanResponderMove: (_, gs) => {
-        if (gs.dx < 0) {
-          translateX.setValue(Math.max(gs.dx, -120));
-        }
-      },
-      onPanResponderRelease: (_, gs) => {
-        if (gs.dx < SWIPE_THRESHOLD) {
-          Animated.spring(translateX, { toValue: -100, useNativeDriver: true }).start();
-        } else {
-          Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
-        }
-      },
-    }),
-  ).current;
-
-  const handleReserve = () => {
-    Animated.timing(translateX, { toValue: 0, duration: 200, useNativeDriver: true }).start();
-    onReserve();
-  };
-
-  return (
-    <View style={s.wrapper}>
-      <View style={[s.reserveAction, { backgroundColor: c.primary }]}>
-        <TouchableOpacity onPress={handleReserve} style={s.reserveButton} activeOpacity={0.7}>
-          <MaterialCommunityIcons name="bookmark-check-outline" size={22} color="#fff" />
-          <Text style={s.reserveLabel}>{reserveLabel}</Text>
-        </TouchableOpacity>
-      </View>
-      <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
-        {children}
-      </Animated.View>
-    </View>
-  );
+function getApiBaseUrl(): string {
+  if (ENV_API_URL) return ENV_API_URL;
+  if (__DEV__) return `http://${getDevHost()}:80/api`;
+  throw new Error('EXPO_PUBLIC_API_URL is not set. Application cannot start without a configured API URL.');
 }
 
-const s = StyleSheet.create({
-  wrapper: {
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  reserveAction: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: 100,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 12,
-  },
-  reserveButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-  },
-  reserveLabel: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-});
+function getApiBaseNoPath(): string {
+  if (ENV_API_URL) return ENV_API_URL.replace(/\/api\/?$/, '');
+  if (__DEV__) return `http://${getDevHost()}:80`;
+  throw new Error('EXPO_PUBLIC_API_URL is not set.');
+}
+
+export const API_BASE_URL = getApiBaseUrl();
+export const API_BASE_NO_PATH = getApiBaseNoPath();
 </file>
 
 <file path="src/context/ThemeContext.tsx">
@@ -10259,6 +10327,41 @@ export function useMobileTheme() {
   }
   return context;
 }
+</file>
+
+<file path="src/features/ai/components/AIWidget/AIWidgetTrigger.tsx">
+import React from 'react';
+import { StyleSheet } from 'react-native';
+import { FAB, useTheme } from 'react-native-paper';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { useAIWidgetStore } from './useAIWidgetStore';
+
+export default function AIWidgetTrigger() {
+  const theme = useTheme();
+  const { isMinimized, toggle, isOpen } = useAIWidgetStore();
+
+  if (isMinimized) return null;
+
+  return (
+    <FAB
+      testID="ai-widget-fab"
+      icon={() => <MaterialCommunityIcons name="robot" size={24} color="#fff" />}
+      onPress={toggle}
+      style={[styles.fab, { backgroundColor: theme.colors.primary }]}
+      visible={!isOpen}
+      animated={false}
+    />
+  );
+}
+
+const styles = StyleSheet.create({
+  fab: {
+    position: 'absolute',
+    bottom: 80,
+    right: 16,
+    zIndex: 9999,
+  },
+});
 </file>
 
 <file path="src/features/ai/screens/AIHealthScreen.tsx">
@@ -10592,485 +10695,6 @@ export default function FaceCameraScreen({ navigation }: FaceCameraScreenProps) 
       </View>
     </SafeAreaView>
   );
-}
-</file>
-
-<file path="src/features/home/screens/HomeScreen.tsx">
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { useFocusEffect } from '@react-navigation/native';
-import React, { useCallback, useMemo } from 'react';
-import { Image, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Avatar, Button, Chip, Surface, Text, useTheme } from 'react-native-paper';
-import { useQuery } from '@tanstack/react-query';
-import { borrowApi } from '../../../api/borrow';
-import { scheduleApi } from '../../../api/schedule';
-import { useAuth } from '../../../context/AuthContext';
-import { AppTheme } from '../../../theme/DarkTheme';
-import {
-  GradientHeader,
-  StatCard,
-  SectionCard,
-  EmptyState,
-  GRADIENTS,
-} from '../../../theme/MobileDesignSystem';
-import { BorrowRecord, StaffScheduleAssignment } from '../../../types';
-import { formatDate, getDaysUntil, isOverdue, toDateInput } from '../../../utils/dateUtils';
-import { getAssignmentTimeState } from '../../../utils/assignmentUtils';
-
-interface HomeScreenProps {
-  navigation: any;
-}
-
-type StaffAction = {
-  title: string;
-  description: string;
-  icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
-  route: string;
-  gradient: string[];
-};
-
-export default function HomeScreen({ navigation }: HomeScreenProps) {
-  const theme = useTheme() as AppTheme;
-  const styles = useMemo(() => createStyles(theme), [theme]);
-  const { user, patron } = useAuth();
-  const isStaffScanner = user?.role === 'admin' || user?.role === 'staff';
-
-  const today = toDateInput(new Date());
-  const tomorrow = toDateInput(new Date(Date.now() + 86400000));
-
-  const {
-    data: borrows = [],
-    error: borrowsError,
-    isFetching: borrowsFetching,
-    refetch: refetchBorrows,
-  } = useQuery<BorrowRecord[], Error>({
-    queryKey: ['activeBorrows'],
-    queryFn: () => borrowApi.getHistory('borrowed'),
-    enabled: !isStaffScanner,
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const {
-    data: scheduleResult,
-    isFetching: scheduleFetching,
-    refetch: refetchSchedule,
-  } = useQuery({
-    queryKey: ['todaySchedule', today],
-    queryFn: () => scheduleApi.getMySchedules(today, tomorrow),
-    enabled: isStaffScanner,
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const todayAssignments: StaffScheduleAssignment[] = scheduleResult?.items || [];
-  const loadError = borrowsError?.message || null;
-  const refreshing = borrowsFetching || scheduleFetching;
-
-  useFocusEffect(
-    useCallback(() => {
-      refetchBorrows();
-      refetchSchedule();
-    }, [refetchBorrows, refetchSchedule]),
-  );
-
-  const onRefresh = async () => {
-    await Promise.all([refetchBorrows(), refetchSchedule()]);
-  };
-
-  const activeBorrows = borrows.filter((item) => item.status === 'borrowed');
-  const overdueCount = activeBorrows.filter((item) => isOverdue(item.due_at)).length;
-  const displayName = user?.full_name || user?.email || 'Người dùng';
-  const roleLabel = user?.role === 'admin' ? 'Quản trị viên' : user?.role === 'staff' ? 'Nhân viên' : 'Độc giả';
-
-  const nowShift = useMemo(() => {
-    const nowItems = todayAssignments.filter((a) => getAssignmentTimeState(a) === 'now');
-    return nowItems.length > 0 ? nowItems[0] : null;
-  }, [todayAssignments]);
-
-  const staffActions: StaffAction[] = [
-    {
-      title: 'Trả sách',
-      description: 'Nhập MSSV, xem sách đang mượn và xác nhận trả.',
-      icon: 'barcode-scan',
-      route: 'StaffReturn',
-      gradient: GRADIENTS.emerald,
-    },
-    {
-      title: 'Tạo phiếu mượn',
-      description: 'Quét thẻ sinh viên và sách để tạo phiếu mượn mới.',
-      icon: 'book-plus-multiple',
-      route: 'StaffBorrow',
-      gradient: GRADIENTS.blue,
-    },
-    {
-      title: 'Nhập sách',
-      description: 'Quét ISBN và nhập sách mới vào thư viện.',
-      icon: 'package-variant-closed',
-      route: 'ImportBooks',
-      gradient: GRADIENTS.amber,
-    },
-    {
-      title: 'Lịch trực',
-      description: 'Xem ca làm việc và lịch trực của bạn.',
-      icon: 'calendar-clock',
-      route: 'Schedule',
-      gradient: GRADIENTS.violet,
-    },
-    {
-      title: 'AI Health',
-      description: 'Xem báo cáo sức khỏe hệ thống và phân tích dữ liệu AI.',
-      icon: 'chart-line',
-      route: 'AIHealth',
-      gradient: GRADIENTS.cyan,
-    },
-    {
-      title: 'Tham quan 3D',
-      description: 'Khám phá không gian thư viện thực tế ảo 360 độ.',
-      icon: 'compass-outline',
-      route: 'LibraryTour',
-      gradient: GRADIENTS.indigo,
-    },
-    {
-      title: 'Hồ sơ',
-      description: 'Cài đặt tài khoản, bảo mật và giao diện.',
-      icon: 'account-cog',
-      route: 'Profile',
-      gradient: GRADIENTS.rose,
-    },
-  ];
-
-  return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
-      <ScrollView
-        style={styles.flex}
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
-      >
-        <GradientHeader
-          title={displayName}
-          subtitle={roleLabel}
-          icon={isStaffScanner ? 'shield-account' : 'account'}
-          right={
-            user?.avatar_url ? (
-              <Avatar.Image size={40} source={{ uri: user.avatar_url }} />
-            ) : (
-              <Avatar.Text size={40} label={displayName.slice(0, 1).toUpperCase()} color={theme.colors.onPrimary} style={{ backgroundColor: 'rgba(255,255,255,0.2)' }} />
-            )
-          }
-        />
-
-        {nowShift ? (
-          <SectionCard
-            title="Ca trực hiện tại"
-            icon="clock-outline"
-            accentColor="#8b5cf6"
-            right={
-              <Button mode="contained-tonal" compact onPress={() => navigation.navigate('Schedule')}>
-                Chi tiết
-              </Button>
-            }
-          >
-            <View style={{ gap: 4, marginLeft: 16 }}>
-              <Text variant="titleSmall" style={styles.cardTitle}>
-                {nowShift.shift?.name || 'Ca trực'}
-              </Text>
-              <Text variant="bodySmall" style={styles.mutedText}>
-                {nowShift.shift?.startTime?.slice(0, 5)} — {nowShift.shift?.endTime?.slice(0, 5)}
-              </Text>
-              {nowShift.zone ? (
-                <Text variant="bodySmall" style={styles.mutedText}>
-                  Khu vực: {nowShift.zone.zoneName || nowShift.zoneId}
-                </Text>
-              ) : null}
-              {nowShift.attendance?.checkInAt ? (
-                <Chip compact icon="check-circle" style={{ alignSelf: 'flex-start', backgroundColor: '#10b98122' }} textStyle={{ color: '#10b981', fontWeight: '700' }}>
-                  Đã check-in
-                </Chip>
-              ) : (
-                <Chip compact icon="alert-circle-outline" style={{ alignSelf: 'flex-start', backgroundColor: '#f59e0b22' }} textStyle={{ color: '#f59e0b', fontWeight: '700' }}>
-                  Chưa check-in
-                </Chip>
-              )}
-            </View>
-          </SectionCard>
-        ) : null}
-
-        {patron?.password_auto_generated ? (
-          <SectionCard
-            title="Mật khẩu mặc định"
-            icon="shield-alert"
-            accentColor={theme.colors.tertiary}
-            right={
-              <Button mode="contained-tonal" compact onPress={() => navigation.navigate('ChangePassword')}>
-                Đổi
-              </Button>
-            }
-          >
-            <Text variant="bodySmall" style={styles.mutedText}>
-              Đổi mật khẩu để bảo mật tài khoản.
-            </Text>
-          </SectionCard>
-        ) : null}
-
-        {isStaffScanner ? (
-          <View style={styles.staffGrid}>
-            {staffActions.map((action) => (
-              <Surface
-                key={action.route}
-                style={[styles.staffCard, { borderColor: theme.colors.outline }]}
-                elevation={0}
-                onTouchEnd={() => navigation.navigate(action.route)}
-              >
-                <View style={[styles.staffAccent, { backgroundColor: action.gradient[0] }]} />
-                <View style={styles.staffCardInner}>
-                  <View style={[styles.staffIcon, { backgroundColor: action.gradient[0] + '18' }]}>
-                    <MaterialCommunityIcons name={action.icon as any} size={22} color={action.gradient[0]} />
-                  </View>
-                  <Text variant="titleSmall" style={styles.staffCardTitle} numberOfLines={1}>
-                    {action.title}
-                  </Text>
-                  <Text variant="bodySmall" style={styles.staffCardDesc} numberOfLines={2}>
-                    {action.description}
-                  </Text>
-                </View>
-              </Surface>
-            ))}
-          </View>
-        ) : (
-          <>
-            <View style={styles.statsRow}>
-              <View style={styles.statFlex}>
-                <StatCard
-                  label="Đang mượn"
-                  value={activeBorrows.length}
-                  icon="book-open-variant"
-                  gradient={GRADIENTS.indigo}
-                />
-              </View>
-              <View style={styles.statFlex}>
-                <StatCard
-                  label="Quá hạn"
-                  value={overdueCount}
-                  icon="alert-circle-outline"
-                  gradient={overdueCount > 0 ? GRADIENTS.red : GRADIENTS.emerald}
-                />
-              </View>
-            </View>
-
-            <SectionCard
-              title="Tham quan Thư viện 3D"
-              icon="compass-outline"
-              accentColor={theme.colors.secondary}
-              right={
-                <Button mode="contained-tonal" compact onPress={() => navigation.navigate('LibraryTour')}>
-                  Khám phá
-                </Button>
-              }
-            >
-              <Text variant="bodySmall" style={styles.mutedText}>
-                Trải nghiệm không gian thư viện thực tế ảo 360 độ trực quan sinh động.
-              </Text>
-            </SectionCard>
-
-            <SectionCard
-              title="Sách đang mượn"
-              icon="bookshelf"
-              accentColor={theme.colors.primary}
-            >
-              {loadError ? (
-                <View style={styles.stateContent}>
-                  <MaterialCommunityIcons name="cloud-off-outline" size={38} color={theme.colors.onSurfaceVariant} />
-                  <Text variant="titleSmall" style={styles.cardTitle}>Không thể kết nối server</Text>
-                  <Text variant="bodySmall" style={styles.stateDescription} selectable>{loadError}</Text>
-                  <Button mode="outlined" icon="refresh" onPress={() => refetchBorrows()}>Thử lại</Button>
-                </View>
-              ) : activeBorrows.length === 0 ? (
-                <EmptyState icon="bookshelf" message="Bạn chưa mượn cuốn sách nào" />
-              ) : (
-                <View style={styles.borrowList}>
-                  {activeBorrows.map((record) => {
-                    const daysLeft = getDaysUntil(record.due_at);
-                    const overdue = daysLeft < 0;
-                    return (
-                      <Surface key={record.id} style={[styles.borrowCard, { borderColor: theme.colors.outline }]} elevation={0}>
-                        <View style={[styles.borrowAccent, { backgroundColor: overdue ? theme.colors.error : GRADIENTS.emerald[0] }]} />
-                        <View style={styles.borrowContent}>
-                          {record.book?.cover_url ? (
-                            <Image source={{ uri: record.book.cover_url }} style={styles.bookCover} />
-                          ) : (
-                            <View style={[styles.bookCoverPlaceholder, { backgroundColor: theme.colors.surfaceVariant }]}>
-                              <MaterialCommunityIcons name="book-variant" size={24} color={theme.colors.onSurfaceVariant} />
-                            </View>
-                          )}
-                          <View style={styles.borrowInfo}>
-                            <View style={styles.borrowHeader}>
-                              <Text variant="titleSmall" style={styles.cardTitle} numberOfLines={2}>
-                                {record.book?.title || record.book_id}
-                              </Text>
-                              <Chip
-                                compact
-                                style={overdue ? styles.errorChip : styles.successChip}
-                                textStyle={overdue ? styles.errorChipText : styles.successChipText}
-                              >
-                                {overdue ? 'Quá hạn' : `Còn ${daysLeft} ngày`}
-                              </Chip>
-                            </View>
-                            {record.book?.author ? (
-                              <Text variant="bodySmall" style={styles.mutedText} numberOfLines={1}>{record.book.author}</Text>
-                            ) : null}
-                            <Text variant="bodySmall" style={styles.mutedText}>Hạn trả: {formatDate(record.due_at)}</Text>
-                          </View>
-                        </View>
-                      </Surface>
-                    );
-                  })}
-                </View>
-              )}
-            </SectionCard>
-          </>
-        )}
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
-
-function createStyles(theme: AppTheme) {
-  const success = theme.dark ? '#4A8C5C' : '#067647';
-
-  return StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: theme.colors.background,
-    },
-    flex: {
-      flex: 1,
-    },
-    content: {
-      padding: 16,
-      paddingBottom: 28,
-      gap: 12,
-    },
-    mutedText: {
-      color: theme.colors.onSurfaceVariant,
-      marginHorizontal: 16
-    },
-    cardTitle: {
-      color: theme.colors.onSurface,
-      fontWeight: '800',
-    },
-
-    /* staff grid */
-    staffGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 12,
-    },
-    staffCard: {
-      width: '47.5%',
-      borderRadius: 14,
-      overflow: 'hidden',
-      borderWidth: 0.5,
-      backgroundColor: theme.colors.surface,
-    },
-    staffAccent: {
-      height: 3,
-    },
-    staffCardInner: {
-      padding: 14,
-      gap: 6,
-    },
-    staffIcon: {
-      width: 40,
-      height: 40,
-      borderRadius: 12,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: 4,
-    },
-    staffCardTitle: {
-      color: theme.colors.onSurface,
-      fontWeight: '800',
-    },
-    staffCardDesc: {
-      color: theme.colors.onSurfaceVariant,
-      lineHeight: 18,
-    },
-
-    /* stats */
-    statsRow: {
-      flexDirection: 'row',
-      gap: 12,
-    },
-    statFlex: {
-      flex: 1,
-    },
-
-    /* state card inside section */
-    stateContent: {
-      alignItems: 'center',
-      gap: 10,
-      paddingVertical: 18,
-    },
-    stateDescription: {
-      color: theme.colors.onSurfaceVariant,
-      textAlign: 'center',
-    },
-
-    /* borrow list */
-    borrowList: {
-      gap: 10,
-      paddingBottom: 4,
-    },
-    borrowCard: {
-      borderRadius: 14,
-      overflow: 'hidden',
-      borderWidth: 0.5,
-      backgroundColor: theme.colors.surface,
-    },
-    borrowAccent: {
-      height: 3,
-    },
-    borrowContent: {
-      flexDirection: 'row',
-      gap: 12,
-      padding: 14,
-    },
-    bookCover: {
-      width: 58,
-      height: 82,
-      borderRadius: 8,
-    },
-    bookCoverPlaceholder: {
-      width: 58,
-      height: 82,
-      borderRadius: 8,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    borrowInfo: {
-      flex: 1,
-      gap: 5,
-    },
-    borrowHeader: {
-      gap: 8,
-    },
-    successChip: {
-      alignSelf: 'flex-start',
-      backgroundColor: `${success}22`,
-    },
-    successChipText: {
-      color: success,
-      fontWeight: '800',
-    },
-    errorChip: {
-      alignSelf: 'flex-start',
-      backgroundColor: theme.colors.errorContainer,
-    },
-    errorChipText: {
-      color: theme.colors.error,
-      fontWeight: '800',
-    },
-  });
 }
 </file>
 
@@ -11896,139 +11520,6 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
       />
     </SafeAreaView>
   );
-}
-</file>
-
-<file path="src/features/library/screens/LibraryTourScreen.tsx">
-import React, { useState, useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
-import { WebView } from 'react-native-webview';
-import { Text, Button, useTheme } from 'react-native-paper';
-import { AppTheme } from '../../../theme/DarkTheme';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { LoadingOverlay } from '../../../components/LoadingOverlay';
-import { API_BASE_NO_PATH } from '../../../config/api';
-
-export default function LibraryTourScreen() {
-  const theme = useTheme() as AppTheme;
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [key, setKey] = useState(0);
-
-  const styles = useMemo(() => createStyles(theme), [theme]);
-
-  // Calculate WebVR URL dynamically based on current API URL to support local development on physical devices
-  const tourUrl = useMemo(() => {
-    if (process.env.EXPO_PUBLIC_WEB_URL) {
-      return `${process.env.EXPO_PUBLIC_WEB_URL}/library/vr-tour`;
-    }
-
-    const apiUrl = API_BASE_NO_PATH;
-    try {
-      const url = new URL(apiUrl);
-      url.port = '3000';
-      url.pathname = '/library/vr-tour';
-      return url.toString();
-    } catch (e) {
-      console.error('Error building VR tour URL:', e);
-    }
-    if (__DEV__) return 'http://10.0.2.2:3000/library/vr-tour';
-    return '';
-  }, []);
-
-  const handleReload = () => {
-    setError(null);
-    setLoading(true);
-    setKey(prev => prev + 1);
-  };
-
-  return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {error ? (
-        <View style={styles.errorContainer}>
-          <MaterialCommunityIcons name="wifi-off" size={64} color={theme.colors.error} />
-          <Text style={styles.errorTitle}>Không thể kết nối Tour 3D</Text>
-          <Text style={styles.errorDesc}>
-            Vui lòng kiểm tra kết nối mạng và đảm bảo máy chủ Web đang hoạt động tại địa chỉ:{"\n"}
-            <Text style={{ fontWeight: 'bold' }}>{tourUrl}</Text>
-          </Text>
-          <Button
-            mode="contained"
-            onPress={handleReload}
-            style={styles.retryButton}
-            buttonColor={theme.colors.primary}
-            textColor={theme.colors.onPrimary}
-          >
-            Thử lại
-          </Button>
-        </View>
-      ) : (
-        <View style={styles.flex}>
-          <WebView
-            key={key}
-            source={{ uri: tourUrl }}
-            style={styles.flex}
-            javaScriptEnabled={true}
-            domStorageEnabled={true}
-            allowFileAccess={true}
-            allowUniversalAccessFromFileURLs={true}
-            allowMixedContent={true}
-            allowsInlineMediaPlayback={true}
-            mediaPlaybackRequiresUserAction={false}
-            scrollEnabled={false}
-            deviceMotionPermission={true}
-            sharedCookiesEnabled={true}
-            onLoadStart={() => setLoading(true)}
-            onLoadEnd={() => setLoading(false)}
-            onError={(syntheticEvent) => {
-              const { nativeEvent } = syntheticEvent;
-              console.warn('WebView load error: ', nativeEvent);
-              setError(nativeEvent.description || 'Connection failed');
-              setLoading(false);
-            }}
-          />
-
-          {loading ? (
-            <LoadingOverlay loading message="Đang mở không gian 3D..." />
-          ) : null}
-        </View>
-      )}
-    </View>
-  );
-}
-
-function createStyles(theme: AppTheme) {
-  return StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  flex: {
-    flex: 1,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  errorTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  errorDesc: {
-    textAlign: 'center',
-    fontSize: 14,
-    color: theme.colors.onSurfaceVariant,
-    marginBottom: 24,
-    lineHeight: 20,
-  },
-  retryButton: {
-    borderRadius: 20,
-    paddingHorizontal: 24,
-  },
-});
 }
 </file>
 
@@ -14265,6 +13756,109 @@ const s = StyleSheet.create({
 });
 </file>
 
+<file path="src/components/SwipeReserveRow.tsx">
+import React, { useRef } from 'react';
+import { Animated, PanResponder, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Text, useTheme } from 'react-native-paper';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import type { AppTheme } from '../theme/DarkTheme';
+
+const SWIPE_THRESHOLD = -80;
+
+interface SwipeReserveRowProps {
+  children: React.ReactNode;
+  onReserve?: () => void;
+  onCancel?: () => void;
+  disabled?: boolean;
+  variant?: 'reserve' | 'cancel';
+  reserveLabel?: string;
+  cancelLabel?: string;
+}
+
+export default function SwipeReserveRow({
+  children,
+  onReserve,
+  onCancel,
+  disabled,
+  variant = 'reserve',
+  reserveLabel = 'Báo khi có sách',
+  cancelLabel = 'Hủy nhận',
+}: SwipeReserveRowProps) {
+  const theme = useTheme<AppTheme>();
+  const c = theme.colors;
+  const translateX = useRef(new Animated.Value(0)).current;
+  const isCancel = variant === 'cancel';
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gs) => !disabled && gs.dx < 0 && Math.abs(gs.dx) > 10,
+      onPanResponderMove: (_, gs) => {
+        if (gs.dx < 0) {
+          translateX.setValue(Math.max(gs.dx, -120));
+        }
+      },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dx < SWIPE_THRESHOLD) {
+          Animated.spring(translateX, { toValue: -100, useNativeDriver: true }).start();
+        } else {
+          Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
+        }
+      },
+    }),
+  ).current;
+
+  const handleAction = () => {
+    Animated.timing(translateX, { toValue: 0, duration: 200, useNativeDriver: true }).start();
+    if (isCancel) {
+      onCancel?.();
+    } else {
+      onReserve?.();
+    }
+  };
+
+  return (
+    <View style={s.wrapper}>
+      <View style={[s.reserveAction, { backgroundColor: isCancel ? c.error : c.primary }]}>
+        <TouchableOpacity testID="swipe-action" onPress={handleAction} style={s.reserveButton} activeOpacity={0.7}>
+          <MaterialCommunityIcons name={isCancel ? 'close-circle-outline' : 'bookmark-check-outline'} size={22} color="#fff" />
+          <Text style={s.reserveLabel}>{isCancel ? cancelLabel : reserveLabel}</Text>
+        </TouchableOpacity>
+      </View>
+      <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
+        {children}
+      </Animated.View>
+    </View>
+  );
+}
+
+const s = StyleSheet.create({
+  wrapper: {
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  reserveAction: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 100,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
+  },
+  reserveButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  reserveLabel: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+});
+</file>
+
 <file path="src/context/NetworkContext.tsx">
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { API_BASE_URL } from '../config/api';
@@ -16485,6 +16079,684 @@ function createStyles(theme: AppTheme) {
 }
 </file>
 
+<file path="src/features/home/screens/HomeScreen.tsx">
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { useFocusEffect } from '@react-navigation/native';
+import React, { useCallback, useMemo } from 'react';
+import { Image, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Avatar, Button, Chip, Surface, Text, useTheme } from 'react-native-paper';
+import { useQuery } from '@tanstack/react-query';
+import { borrowApi } from '../../../api/borrow';
+import { scheduleApi } from '../../../api/schedule';
+import { useAccessRealtime } from '../hooks/useAccessRealtime';
+import { useAuth } from '../../../context/AuthContext';
+import { AppTheme } from '../../../theme/DarkTheme';
+import {
+  GradientHeader,
+  StatCard,
+  SectionCard,
+  EmptyState,
+  GRADIENTS,
+} from '../../../theme/MobileDesignSystem';
+import { BorrowRecord, CameraEvent, StaffScheduleAssignment } from '../../../types';
+import { formatDate, getDaysUntil, isOverdue, toDateInput } from '../../../utils/dateUtils';
+import { getAssignmentTimeState } from '../../../utils/assignmentUtils';
+
+interface HomeScreenProps {
+  navigation: any;
+}
+
+type StaffAction = {
+  title: string;
+  description: string;
+  icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+  route: string;
+  gradient: string[];
+};
+
+export default function HomeScreen({ navigation }: HomeScreenProps) {
+  const theme = useTheme() as AppTheme;
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const { user, patron } = useAuth();
+  const isStaffScanner = user?.role === 'admin' || user?.role === 'staff';
+  const { events: accessEvents, status: accessWsStatus } = useAccessRealtime(isStaffScanner);
+
+  const today = toDateInput(new Date());
+  const tomorrow = toDateInput(new Date(Date.now() + 86400000));
+
+  const {
+    data: borrows = [],
+    error: borrowsError,
+    isFetching: borrowsFetching,
+    refetch: refetchBorrows,
+  } = useQuery<BorrowRecord[], Error>({
+    queryKey: ['activeBorrows'],
+    queryFn: () => borrowApi.getHistory('borrowed'),
+    enabled: !isStaffScanner,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const {
+    data: scheduleResult,
+    isFetching: scheduleFetching,
+    refetch: refetchSchedule,
+  } = useQuery({
+    queryKey: ['todaySchedule', today],
+    queryFn: () => scheduleApi.getMySchedules(today, tomorrow),
+    enabled: isStaffScanner,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const todayAssignments: StaffScheduleAssignment[] = scheduleResult?.items || [];
+  const loadError = borrowsError?.message || null;
+  const refreshing = borrowsFetching || scheduleFetching;
+
+  useFocusEffect(
+    useCallback(() => {
+      refetchBorrows();
+      refetchSchedule();
+    }, [refetchBorrows, refetchSchedule]),
+  );
+
+  const onRefresh = async () => {
+    await Promise.all([refetchBorrows(), refetchSchedule()]);
+  };
+
+  const activeBorrows = borrows.filter((item) => item.status === 'borrowed');
+  const overdueCount = activeBorrows.filter((item) => isOverdue(item.due_at)).length;
+  const displayName = user?.full_name || user?.email || 'Người dùng';
+  const roleLabel = user?.role === 'admin' ? 'Quản trị viên' : user?.role === 'staff' ? 'Nhân viên' : 'Độc giả';
+
+  const nowShift = useMemo(() => {
+    const nowItems = todayAssignments.filter((a) => getAssignmentTimeState(a) === 'now');
+    return nowItems.length > 0 ? nowItems[0] : null;
+  }, [todayAssignments]);
+
+  const staffActions: StaffAction[] = [
+    {
+      title: 'Trả sách',
+      description: 'Nhập MSSV, xem sách đang mượn và xác nhận trả.',
+      icon: 'barcode-scan',
+      route: 'StaffReturn',
+      gradient: GRADIENTS.emerald,
+    },
+    {
+      title: 'Tạo phiếu mượn',
+      description: 'Quét thẻ sinh viên và sách để tạo phiếu mượn mới.',
+      icon: 'book-plus-multiple',
+      route: 'StaffBorrow',
+      gradient: GRADIENTS.blue,
+    },
+    {
+      title: 'Nhập sách',
+      description: 'Quét ISBN và nhập sách mới vào thư viện.',
+      icon: 'package-variant-closed',
+      route: 'ImportBooks',
+      gradient: GRADIENTS.amber,
+    },
+    {
+      title: 'Lịch trực',
+      description: 'Xem ca làm việc và lịch trực của bạn.',
+      icon: 'calendar-clock',
+      route: 'Schedule',
+      gradient: GRADIENTS.violet,
+    },
+    {
+      title: 'AI Health',
+      description: 'Xem báo cáo sức khỏe hệ thống và phân tích dữ liệu AI.',
+      icon: 'chart-line',
+      route: 'AIHealth',
+      gradient: GRADIENTS.cyan,
+    },
+    {
+      title: 'Tham quan 3D',
+      description: 'Khám phá không gian thư viện thực tế ảo 360 độ.',
+      icon: 'compass-outline',
+      route: 'LibraryTour',
+      gradient: GRADIENTS.indigo,
+    },
+    {
+      title: 'Hồ sơ',
+      description: 'Cài đặt tài khoản, bảo mật và giao diện.',
+      icon: 'account-cog',
+      route: 'Profile',
+      gradient: GRADIENTS.rose,
+    },
+  ];
+
+  return (
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
+      >
+        <GradientHeader
+          title={displayName}
+          subtitle={roleLabel}
+          icon={isStaffScanner ? 'shield-account' : 'account'}
+          right={
+            user?.avatar_url ? (
+              <Avatar.Image size={40} source={{ uri: user.avatar_url }} />
+            ) : (
+              <Avatar.Text size={40} label={displayName.slice(0, 1).toUpperCase()} color={theme.colors.onPrimary} style={{ backgroundColor: 'rgba(255,255,255,0.2)' }} />
+            )
+          }
+        />
+
+        {isStaffScanner && (
+          <SectionCard
+            title="Ra/vào cổng gần đây"
+            icon="door"
+            accentColor={theme.colors.primary}
+          >
+            {accessWsStatus === 'error' ? (
+              <Text variant="bodySmall" style={styles.mutedText}>
+                Không thể kết nối luồng ra/vào thời gian thực.
+              </Text>
+            ) : accessEvents.length === 0 ? (
+              <EmptyState icon="door" message="Chưa có hoạt động ra/vào gần đây" />
+            ) : (
+              <View style={styles.accessList}>
+                {accessEvents.map((ev: CameraEvent) => {
+                  const isEntry = ev.access_type === 'entry';
+                  const granted = ev.status === 'granted' || ev.status === 'already_granted';
+                  return (
+                    <View key={ev.event_id} style={styles.accessRow}>
+                      <MaterialCommunityIcons
+                        name={isEntry ? 'login' : 'logout'}
+                        size={20}
+                        color={isEntry ? GRADIENTS.blue[0] : GRADIENTS.amber[0]}
+                      />
+                      <View style={styles.accessInfo}>
+                        <Text variant="bodySmall" style={styles.cardTitle} numberOfLines={1}>
+                          {ev.full_name || ev.student_code || 'Không xác định'}
+                        </Text>
+                        <Text variant="bodySmall" style={styles.mutedText}>
+                          {isEntry ? 'Vào' : 'Ra'} · {formatDate(ev.occurred_at)}
+                        </Text>
+                      </View>
+                      <Chip
+                        compact
+                        style={granted ? styles.successChip : styles.errorChip}
+                        textStyle={granted ? styles.successChipText : styles.errorChipText}
+                      >
+                        {granted ? 'Thành công' : 'Từ chối'}
+                      </Chip>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+          </SectionCard>
+        )}
+
+        {nowShift ? (
+          <SectionCard
+            title="Ca trực hiện tại"
+            icon="clock-outline"
+            accentColor="#8b5cf6"
+            right={
+              <Button mode="contained-tonal" compact onPress={() => navigation.navigate('Schedule')}>
+                Chi tiết
+              </Button>
+            }
+          >
+            <View style={{ gap: 4, marginLeft: 16 }}>
+              <Text variant="titleSmall" style={styles.cardTitle}>
+                {nowShift.shift?.name || 'Ca trực'}
+              </Text>
+              <Text variant="bodySmall" style={styles.mutedText}>
+                {nowShift.shift?.startTime?.slice(0, 5)} — {nowShift.shift?.endTime?.slice(0, 5)}
+              </Text>
+              {nowShift.zone ? (
+                <Text variant="bodySmall" style={styles.mutedText}>
+                  Khu vực: {nowShift.zone.zoneName || nowShift.zoneId}
+                </Text>
+              ) : null}
+              {nowShift.attendance?.checkInAt ? (
+                <Chip compact icon="check-circle" style={{ alignSelf: 'flex-start', backgroundColor: '#10b98122' }} textStyle={{ color: '#10b981', fontWeight: '700' }}>
+                  Đã check-in
+                </Chip>
+              ) : (
+                <Chip compact icon="alert-circle-outline" style={{ alignSelf: 'flex-start', backgroundColor: '#f59e0b22' }} textStyle={{ color: '#f59e0b', fontWeight: '700' }}>
+                  Chưa check-in
+                </Chip>
+              )}
+            </View>
+          </SectionCard>
+        ) : null}
+
+        {patron?.password_auto_generated ? (
+          <SectionCard
+            title="Mật khẩu mặc định"
+            icon="shield-alert"
+            accentColor={theme.colors.tertiary}
+            right={
+              <Button mode="contained-tonal" compact onPress={() => navigation.navigate('ChangePassword')}>
+                Đổi
+              </Button>
+            }
+          >
+            <Text variant="bodySmall" style={styles.mutedText}>
+              Đổi mật khẩu để bảo mật tài khoản.
+            </Text>
+          </SectionCard>
+        ) : null}
+
+        {isStaffScanner ? (
+          <View style={styles.staffGrid}>
+            {staffActions.map((action) => (
+              <Surface
+                key={action.route}
+                style={[styles.staffCard, { borderColor: theme.colors.outline }]}
+                elevation={0}
+                onTouchEnd={() => navigation.navigate(action.route)}
+              >
+                <View style={[styles.staffAccent, { backgroundColor: action.gradient[0] }]} />
+                <View style={styles.staffCardInner}>
+                  <View style={[styles.staffIcon, { backgroundColor: action.gradient[0] + '18' }]}>
+                    <MaterialCommunityIcons name={action.icon as any} size={22} color={action.gradient[0]} />
+                  </View>
+                  <Text variant="titleSmall" style={styles.staffCardTitle} numberOfLines={1}>
+                    {action.title}
+                  </Text>
+                  <Text variant="bodySmall" style={styles.staffCardDesc} numberOfLines={2}>
+                    {action.description}
+                  </Text>
+                </View>
+              </Surface>
+            ))}
+          </View>
+        ) : (
+          <>
+            <View style={styles.statsRow}>
+              <View style={styles.statFlex}>
+                <StatCard
+                  label="Đang mượn"
+                  value={activeBorrows.length}
+                  icon="book-open-variant"
+                  gradient={GRADIENTS.indigo}
+                />
+              </View>
+              <View style={styles.statFlex}>
+                <StatCard
+                  label="Quá hạn"
+                  value={overdueCount}
+                  icon="alert-circle-outline"
+                  gradient={overdueCount > 0 ? GRADIENTS.red : GRADIENTS.emerald}
+                />
+              </View>
+            </View>
+
+            <SectionCard
+              title="Tham quan Thư viện 3D"
+              icon="compass-outline"
+              accentColor={theme.colors.secondary}
+              right={
+                <Button mode="contained-tonal" compact onPress={() => navigation.navigate('LibraryTour')}>
+                  Khám phá
+                </Button>
+              }
+            >
+              <Text variant="bodySmall" style={styles.mutedText}>
+                Trải nghiệm không gian thư viện thực tế ảo 360 độ trực quan sinh động.
+              </Text>
+            </SectionCard>
+
+            <SectionCard
+              title="Sách đang mượn"
+              icon="bookshelf"
+              accentColor={theme.colors.primary}
+            >
+              {loadError ? (
+                <View style={styles.stateContent}>
+                  <MaterialCommunityIcons name="cloud-off-outline" size={38} color={theme.colors.onSurfaceVariant} />
+                  <Text variant="titleSmall" style={styles.cardTitle}>Không thể kết nối server</Text>
+                  <Text variant="bodySmall" style={styles.stateDescription} selectable>{loadError}</Text>
+                  <Button mode="outlined" icon="refresh" onPress={() => refetchBorrows()}>Thử lại</Button>
+                </View>
+              ) : activeBorrows.length === 0 ? (
+                <EmptyState icon="bookshelf" message="Bạn chưa mượn cuốn sách nào" />
+              ) : (
+                <View style={styles.borrowList}>
+                  {activeBorrows.map((record) => {
+                    const daysLeft = getDaysUntil(record.due_at);
+                    const overdue = daysLeft < 0;
+                    return (
+                      <Surface key={record.id} style={[styles.borrowCard, { borderColor: theme.colors.outline }]} elevation={0}>
+                        <View style={[styles.borrowAccent, { backgroundColor: overdue ? theme.colors.error : GRADIENTS.emerald[0] }]} />
+                        <View style={styles.borrowContent}>
+                          {record.book?.cover_url ? (
+                            <Image source={{ uri: record.book.cover_url }} style={styles.bookCover} />
+                          ) : (
+                            <View style={[styles.bookCoverPlaceholder, { backgroundColor: theme.colors.surfaceVariant }]}>
+                              <MaterialCommunityIcons name="book-variant" size={24} color={theme.colors.onSurfaceVariant} />
+                            </View>
+                          )}
+                          <View style={styles.borrowInfo}>
+                            <View style={styles.borrowHeader}>
+                              <Text variant="titleSmall" style={styles.cardTitle} numberOfLines={2}>
+                                {record.book?.title || record.book_id}
+                              </Text>
+                              <Chip
+                                compact
+                                style={overdue ? styles.errorChip : styles.successChip}
+                                textStyle={overdue ? styles.errorChipText : styles.successChipText}
+                              >
+                                {overdue ? 'Quá hạn' : `Còn ${daysLeft} ngày`}
+                              </Chip>
+                            </View>
+                            {record.book?.author ? (
+                              <Text variant="bodySmall" style={styles.mutedText} numberOfLines={1}>{record.book.author}</Text>
+                            ) : null}
+                            <Text variant="bodySmall" style={styles.mutedText}>Hạn trả: {formatDate(record.due_at)}</Text>
+                          </View>
+                        </View>
+                      </Surface>
+                    );
+                  })}
+                </View>
+              )}
+            </SectionCard>
+          </>
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function createStyles(theme: AppTheme) {
+  const success = theme.dark ? '#4A8C5C' : '#067647';
+
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    flex: {
+      flex: 1,
+    },
+    content: {
+      padding: 16,
+      paddingBottom: 28,
+      gap: 12,
+    },
+    mutedText: {
+      color: theme.colors.onSurfaceVariant,
+      marginHorizontal: 16
+    },
+    cardTitle: {
+      color: theme.colors.onSurface,
+      fontWeight: '800',
+    },
+
+    /* staff grid */
+    staffGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 12,
+    },
+    staffCard: {
+      width: '47.5%',
+      borderRadius: 14,
+      overflow: 'hidden',
+      borderWidth: 0.5,
+      backgroundColor: theme.colors.surface,
+    },
+    staffAccent: {
+      height: 3,
+    },
+    staffCardInner: {
+      padding: 14,
+      gap: 6,
+    },
+    staffIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 4,
+    },
+    staffCardTitle: {
+      color: theme.colors.onSurface,
+      fontWeight: '800',
+    },
+    staffCardDesc: {
+      color: theme.colors.onSurfaceVariant,
+      lineHeight: 18,
+    },
+
+    /* stats */
+    statsRow: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    statFlex: {
+      flex: 1,
+    },
+
+    /* state card inside section */
+    stateContent: {
+      alignItems: 'center',
+      gap: 10,
+      paddingVertical: 18,
+    },
+    stateDescription: {
+      color: theme.colors.onSurfaceVariant,
+      textAlign: 'center',
+    },
+
+    /* borrow list */
+    borrowList: {
+      gap: 10,
+      paddingBottom: 4,
+    },
+
+    /* access realtime feed */
+    accessList: {
+      gap: 10,
+      paddingVertical: 4,
+    },
+    accessRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 6,
+    },
+    accessInfo: {
+      flex: 1,
+      gap: 2,
+    },
+    borrowCard: {
+      borderRadius: 14,
+      overflow: 'hidden',
+      borderWidth: 0.5,
+      backgroundColor: theme.colors.surface,
+    },
+    borrowAccent: {
+      height: 3,
+    },
+    borrowContent: {
+      flexDirection: 'row',
+      gap: 12,
+      padding: 14,
+    },
+    bookCover: {
+      width: 58,
+      height: 82,
+      borderRadius: 8,
+    },
+    bookCoverPlaceholder: {
+      width: 58,
+      height: 82,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    borrowInfo: {
+      flex: 1,
+      gap: 5,
+    },
+    borrowHeader: {
+      gap: 8,
+    },
+    successChip: {
+      alignSelf: 'flex-start',
+      backgroundColor: `${success}22`,
+    },
+    successChipText: {
+      color: success,
+      fontWeight: '800',
+    },
+    errorChip: {
+      alignSelf: 'flex-start',
+      backgroundColor: theme.colors.errorContainer,
+    },
+    errorChipText: {
+      color: theme.colors.error,
+      fontWeight: '800',
+    },
+  });
+}
+</file>
+
+<file path="src/features/library/screens/LibraryTourScreen.tsx">
+import React, { useState, useMemo } from 'react';
+import { StyleSheet, View, Platform } from 'react-native';
+import { WebView } from 'react-native-webview';
+import { Text, Button, useTheme } from 'react-native-paper';
+import { AppTheme } from '../../../theme/DarkTheme';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { LoadingOverlay } from '../../../components/LoadingOverlay';
+import { API_BASE_NO_PATH } from '../../../config/api';
+
+export default function LibraryTourScreen() {
+  const theme = useTheme() as AppTheme;
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [key, setKey] = useState(0);
+
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
+  // Calculate WebVR URL dynamically based on current API URL to support local development on physical devices
+  const tourUrl = useMemo(() => {
+    if (process.env.EXPO_PUBLIC_WEB_URL) {
+      return `${process.env.EXPO_PUBLIC_WEB_URL}/library/vr-tour`;
+    }
+
+    const apiUrl = API_BASE_NO_PATH;
+    try {
+      const url = new URL(apiUrl);
+      url.port = '3000';
+      url.pathname = '/library/vr-tour';
+      return url.toString();
+    } catch (e) {
+      console.error('Error building VR tour URL:', e);
+    }
+    if (__DEV__) return `http://${Platform.OS === 'ios' ? 'localhost' : '10.0.2.2'}:3000/library/vr-tour`;
+    return '';
+  }, []);
+
+  const handleReload = () => {
+    setError(null);
+    setLoading(true);
+    setKey(prev => prev + 1);
+  };
+
+  return (
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      {error ? (
+        <View style={styles.errorContainer}>
+          <MaterialCommunityIcons name="wifi-off" size={64} color={theme.colors.error} />
+          <Text style={styles.errorTitle}>Không thể kết nối Tour 3D</Text>
+          <Text style={styles.errorDesc}>
+            Vui lòng kiểm tra kết nối mạng và đảm bảo máy chủ Web đang hoạt động tại địa chỉ:{"\n"}
+            <Text style={{ fontWeight: 'bold' }}>{tourUrl}</Text>
+          </Text>
+          <Button
+            mode="contained"
+            onPress={handleReload}
+            style={styles.retryButton}
+            buttonColor={theme.colors.primary}
+            textColor={theme.colors.onPrimary}
+          >
+            Thử lại
+          </Button>
+        </View>
+      ) : (
+        <View style={styles.flex}>
+          <WebView
+            key={key}
+            source={{ uri: tourUrl }}
+            style={styles.flex}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            allowFileAccess={true}
+            allowUniversalAccessFromFileURLs={true}
+            allowMixedContent={true}
+            allowsInlineMediaPlayback={true}
+            mediaPlaybackRequiresUserAction={false}
+            scrollEnabled={false}
+            deviceMotionPermission={true}
+            sharedCookiesEnabled={true}
+            onLoadStart={() => setLoading(true)}
+            onLoadEnd={() => setLoading(false)}
+            onError={(syntheticEvent) => {
+              const { nativeEvent } = syntheticEvent;
+              console.warn('WebView load error: ', nativeEvent);
+              setError(nativeEvent.description || 'Connection failed');
+              setLoading(false);
+            }}
+          />
+
+          {loading ? (
+            <LoadingOverlay loading message="Đang mở không gian 3D..." />
+          ) : null}
+        </View>
+      )}
+    </View>
+  );
+}
+
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  flex: {
+    flex: 1,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  errorDesc: {
+    textAlign: 'center',
+    fontSize: 14,
+    color: theme.colors.onSurfaceVariant,
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  retryButton: {
+    borderRadius: 20,
+    paddingHorizontal: 24,
+  },
+});
+}
+</file>
+
 <file path="src/utils/error-reporter.ts">
 import { Platform } from 'react-native';
 import { API_BASE_NO_PATH } from '../config/api';
@@ -16955,271 +17227,6 @@ export default function StudentCardScanner({ onScanned, onError, onSkip }: Stude
 const CORNER_SIZE = 28;
 const CORNER_WIDTH = 3;
 const FRAME_BORDER_RADIUS = 12;
-</file>
-
-<file path="src/features/library/screens/MyReservationsScreen.tsx">
-import React, { useState, useCallback, useMemo } from 'react';
-import { View, Image, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, Surface, Button, useTheme } from 'react-native-paper';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { useFocusEffect } from '@react-navigation/native';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getMyWaitlist, joinWaitlist, leaveWaitlist, WaitlistEntry } from '../../../api/borrow';
-import { AppTheme } from '../../../theme/DarkTheme';
-import { GradientHeader, SectionCard, EmptyState, GRADIENTS } from '../../../theme/MobileDesignSystem';
-import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
-import { UndoBar } from '../../../components/UndoBar';
-import { devError } from '../../../utils/logger';
-import { useNetwork } from '../../../context/NetworkContext';
-
-interface MyReservationsScreenProps {
-  navigation: any;
-}
-
-export default function MyReservationsScreen({ navigation }: MyReservationsScreenProps) {
-  const theme = useTheme() as AppTheme;
-  const c = theme.colors;
-  const styles = useMemo(() => createStyles(theme), [theme]);
-  const [snackMsg, setSnackMsg] = useState('');
-  const [snackVisible, setSnackVisible] = useState(false);
-  const [cancellingId, setCancellingId] = useState<string | null>(null);
-  const [lastCancellation, setLastCancellation] = useState<{ id: string; title: string } | null>(null);
-  const { isOnline } = useNetwork();
-  const qc = useQueryClient();
-
-  const {
-    data: waitlistData,
-    error: waitlistError,
-    isFetching,
-    refetch,
-  } = useQuery({
-    queryKey: ['myReservations'],
-    queryFn: () => getMyWaitlist(),
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const entries: WaitlistEntry[] = waitlistData?.items || [];
-  const loadError = waitlistError ? (waitlistError as any)?.response?.data?.detail || (waitlistError as Error)?.message || 'Không thể tải danh sách nhận thông báo' : null;
-  const refreshing = isFetching;
-
-  useFocusEffect(
-    useCallback(() => {
-      refetch();
-    }, [refetch])
-  );
-
-  const handleCancel = useCallback((entry: WaitlistEntry) => {
-    if (!isOnline) {
-      Alert.alert('Yêu cầu mạng', 'Bạn cần kết nối internet để hủy nhận thông báo.');
-      return;
-    }
-
-    setCancellingId(entry.id);
-    setLastCancellation({ id: entry.id, title: entry.book?.title || 'sách này' });
-    setCancellingId(null);
-  }, [isOnline]);
-
-  const handleUndoCancel = useCallback(async () => {
-    if (!lastCancellation || !isOnline) return;
-    try {
-      const entry = entries.find(e => e.id === lastCancellation.id);
-      if (entry) {
-        const result = await joinWaitlist(entry.book_id);
-        setSnackMsg(`Đã khôi phục nhận thông báo "${lastCancellation.title}"`);
-        setSnackVisible(true);
-      }
-    } catch (error: any) {
-      const detail = error?.response?.data?.detail || error?.message || 'Không thể khôi phục';
-      setSnackMsg(detail);
-      setSnackVisible(true);
-    } finally {
-      setLastCancellation(null);
-    }
-  }, [lastCancellation, isOnline, entries]);
-
-  const commitCancellation = useCallback(async () => {
-    if (!lastCancellation) return;
-    try {
-      await leaveWaitlist(lastCancellation.id);
-      // Invalidate query to refetch fresh data from server
-      qc.invalidateQueries({ queryKey: ['myReservations'] });
-      setSnackMsg(`Đã hủy nhận thông báo "${lastCancellation.title}"`);
-      setSnackVisible(true);
-    } catch (error: any) {
-      const msg = error?.response?.data?.detail || error?.message || 'Không thể hủy nhận thông báo';
-      setSnackMsg(msg);
-      setSnackVisible(true);
-    } finally {
-      setLastCancellation(null);
-    }
-  }, [lastCancellation]);
-
-  const getStatusLabel = (status: string): string => {
-    switch (status) {
-      case 'waiting': return 'Đang chờ';
-      case 'notified': return 'Đã thông báo';
-      case 'fulfilled': return 'Đã mượn';
-      case 'expired': return 'Đã hết hạn';
-      default: return status;
-    }
-  };
-
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: c.background }]} edges={['bottom']}>
-      <ScrollView
-        style={styles.flex}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => refetch()} tintColor={c.primary} />
-        }
-      >
-        <GradientHeader
-          title="Sách chờ nhận thông báo"
-          subtitle={entries.length > 0 ? `${entries.length} đang chờ` : 'Ch chưa có sách nào'}
-          icon="bell-ring-outline"
-        />
-
-        {loadError ? (
-          <EmptyState
-            icon="cloud-off-outline"
-            title={loadError}
-            action={<Button mode="outlined" onPress={() => refetch()} icon="refresh">Thử lại</Button>}
-          />
-        ) : entries.length === 0 ? (
-          <EmptyState icon="bell-off-outline" title="Bạn chưa đăng ký nhận thông báo nào" />
-        ) : (
-          <SectionCard title="Sách đang chờ" icon="bell-check-outline" accentColor={GRADIENTS.indigo[0]}>
-            {entries.map((entry) => {
-            const isNotified = entry.status === 'notified';
-            return (
-              <Surface
-                key={entry.id}
-                style={[styles.resCard, { backgroundColor: c.surface, borderColor: c.outline }]}
-                elevation={0}
-              >
-                <View style={[styles.resCardSpine, { backgroundColor: isNotified ? c.custom.success : c.primary }]} />
-                {entry.book?.cover_url ? (
-                  <Image source={{ uri: entry.book.cover_url }} style={styles.bookCover} />
-                ) : (
-                  <View style={[styles.bookCoverPlaceholder, { backgroundColor: c.surfaceVariant }]}>
-                    <MaterialCommunityIcons name="book-variant" size={24} color={c.onSurfaceVariant} />
-                  </View>
-                )}
-                <View style={styles.resContent}>
-                  <Text style={[styles.bookTitle, { color: c.onSurface }]} numberOfLines={2}>
-                    {entry.book?.title || entry.book_id}
-                  </Text>
-                  {entry.book?.author ? (
-                    <Text style={[styles.bookAuthor, { color: c.onSurfaceVariant }]} numberOfLines={1}>
-                      {entry.book.author}
-                    </Text>
-                  ) : null}
-                  <View style={styles.resMeta}>
-                    <Surface
-                      style={[
-                        styles.statusBadge,
-                        { backgroundColor: isNotified ? c.custom.success : c.primary },
-                      ]}
-                      elevation={0}
-                    >
-                      <Text style={[styles.statusBadgeText, { color: '#FFFFFF' }]}>
-                        {getStatusLabel(entry.status)}
-                      </Text>
-                    </Surface>
-                  </View>
-                </View>
-                <View style={styles.resActions}>
-                  <Button
-                    mode="outlined"
-                    onPress={() => handleCancel(entry)}
-                    loading={cancellingId === entry.id}
-                    disabled={cancellingId === entry.id}
-                    style={styles.cancelButton}
-                    labelStyle={styles.cancelButtonLabel}
-                    textColor={c.error}
-                    compact
-                  >
-                    Hủy
-                  </Button>
-                </View>
-              </Surface>
-            );
-            })}
-          </SectionCard>
-        )}
-      </ScrollView>
-
-      <NoticeSnackbar
-        visible={snackVisible}
-        message={snackMsg}
-        severity={snackMsg.includes('hủy') ? 'success' : 'error'}
-        onDismiss={() => setSnackVisible(false)}
-      />
-
-      <UndoBar
-        visible={!!lastCancellation}
-        message={`Đã hủy nhận thông báo "${lastCancellation?.title ?? ''}"`}
-        onUndo={handleUndoCancel}
-        onDismiss={commitCancellation}
-      />
-    </SafeAreaView>
-  );
-}
-
-function createStyles(theme: AppTheme) {
-  const c = theme.colors;
-  return StyleSheet.create({
-    container: { flex: 1 },
-    flex: { flex: 1 },
-    resCard: {
-      marginHorizontal: 16,
-      marginTop: 10,
-      borderRadius: 10,
-      flexDirection: 'row',
-      overflow: 'hidden',
-      borderWidth: 0.5,
-      alignItems: 'center',
-    },
-    resCardSpine: { width: 4, alignSelf: 'stretch' },
-    bookCover: {
-      width: 48,
-      height: 66,
-      borderRadius: 4,
-      margin: 10,
-      marginRight: 0,
-    },
-    bookCoverPlaceholder: {
-      width: 48,
-      height: 66,
-      borderRadius: 4,
-      margin: 10,
-      marginRight: 0,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    resContent: { flex: 1, padding: 10, gap: 4 },
-    bookTitle: { fontWeight: '600', fontSize: 14, lineHeight: 18 },
-    bookAuthor: { fontSize: 12 },
-    resMeta: { flexDirection: 'row', gap: 6, marginTop: 6, flexWrap: 'wrap' },
-    statusBadge: {
-      paddingHorizontal: 8,
-      paddingVertical: 2,
-      borderRadius: 4,
-    },
-    statusBadgeText: { fontSize: 11, fontWeight: '700' },
-    resActions: {
-      paddingRight: 10,
-      paddingVertical: 10,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    cancelButton: {
-      borderRadius: 6,
-      borderColor: c.error,
-    },
-    cancelButtonLabel: { fontSize: 12 },
-  });
-}
 </file>
 
 <file path="src/theme/MobileDesignSystem.tsx">
@@ -17959,6 +17966,282 @@ function createStyles(theme: AppTheme) {
 }
 </file>
 
+<file path="src/features/library/screens/MyReservationsScreen.tsx">
+import React, { useState, useCallback, useMemo } from 'react';
+import { View, Image, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Text, Surface, Button, useTheme } from 'react-native-paper';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { useFocusEffect } from '@react-navigation/native';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getMyWaitlist, joinWaitlist, leaveWaitlist, WaitlistEntry } from '../../../api/borrow';
+import { AppTheme } from '../../../theme/DarkTheme';
+import { GradientHeader, SectionCard, EmptyState, GRADIENTS } from '../../../theme/MobileDesignSystem';
+import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
+import { UndoBar } from '../../../components/UndoBar';
+import SwipeReserveRow from '../../../components/SwipeReserveRow';
+import { useUndo } from '../../../lib/useUndo';
+import { devError } from '../../../utils/logger';
+import { useNetwork } from '../../../context/NetworkContext';
+
+interface MyReservationsScreenProps {
+  navigation: any;
+}
+
+export default function MyReservationsScreen({ navigation }: MyReservationsScreenProps) {
+  const theme = useTheme() as AppTheme;
+  const c = theme.colors;
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const [snackMsg, setSnackMsg] = useState('');
+  const [snackVisible, setSnackVisible] = useState(false);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const { hiddenIds, confirmingId, undo, cancelUndo, markConfirmed } = useUndo({ duration: 5000 });
+  const { isOnline } = useNetwork();
+  const qc = useQueryClient();
+
+  const {
+    data: waitlistData,
+    error: waitlistError,
+    isFetching,
+    refetch,
+  } = useQuery({
+    queryKey: ['myReservations'],
+    queryFn: () => getMyWaitlist(),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const entries: WaitlistEntry[] = waitlistData?.items || [];
+  const loadError = waitlistError ? (waitlistError as any)?.response?.data?.detail || (waitlistError as Error)?.message || 'Không thể tải danh sách nhận thông báo' : null;
+  const refreshing = isFetching;
+
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+    }, [refetch])
+  );
+
+  const handleCancel = useCallback((entry: WaitlistEntry) => {
+    if (!isOnline) {
+      Alert.alert('Yêu cầu mạng', 'Bạn cần kết nối internet để hủy nhận thông báo.');
+      return;
+    }
+
+    setCancellingId(entry.id);
+    undo(entry.id);
+    setCancellingId(null);
+  }, [isOnline, undo]);
+
+  const handleUndoCancel = useCallback(async () => {
+    if (!confirmingId || !isOnline) return;
+    try {
+      const entry = entries.find(e => e.id === confirmingId);
+      if (entry) {
+        await joinWaitlist(entry.book_id);
+        setSnackMsg(`Đã khôi phục nhận thông báo "${entry.book?.title || 'sách này'}"`);
+        setSnackVisible(true);
+      }
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail || error?.message || 'Không thể khôi phục nhận thông báo';
+      setSnackMsg(detail);
+      setSnackVisible(true);
+    } finally {
+      cancelUndo(confirmingId);
+    }
+  }, [confirmingId, isOnline, entries, joinWaitlist, cancelUndo]);
+
+  const commitCancellation = useCallback(async () => {
+    if (!confirmingId) return;
+    const title = entries.find(e => e.id === confirmingId)?.book?.title || 'sách này';
+    try {
+      await leaveWaitlist(confirmingId);
+      // Invalidate query to refetch fresh data from server
+      qc.invalidateQueries({ queryKey: ['myReservations'] });
+      setSnackMsg(`Đã hủy nhận thông báo "${title}"`);
+      setSnackVisible(true);
+    } catch (error: any) {
+      const msg = error?.response?.data?.detail || error?.message || 'Không thể hủy nhận thông báo';
+      setSnackMsg(msg);
+      setSnackVisible(true);
+      cancelUndo(confirmingId);
+    } finally {
+      markConfirmed(confirmingId);
+    }
+  }, [confirmingId, entries, leaveWaitlist, qc, cancelUndo, markConfirmed]);
+
+  const getStatusLabel = (status: string): string => {
+    switch (status) {
+      case 'waiting': return 'Đang chờ';
+      case 'notified': return 'Đã thông báo';
+      case 'fulfilled': return 'Đã mượn';
+      case 'expired': return 'Đã hết hạn';
+      default: return status;
+    }
+  };
+
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: c.background }]} edges={['bottom']}>
+      <ScrollView
+        style={styles.flex}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => refetch()} tintColor={c.primary} />
+        }
+      >
+        <GradientHeader
+          title="Sách chờ nhận thông báo"
+          subtitle={entries.length > 0 ? `${entries.length} đang chờ` : 'Ch chưa có sách nào'}
+          icon="bell-ring-outline"
+        />
+
+        {loadError ? (
+          <EmptyState
+            icon="cloud-off-outline"
+            title={loadError}
+            action={<Button mode="outlined" onPress={() => refetch()} icon="refresh">Thử lại</Button>}
+          />
+        ) : entries.length === 0 ? (
+          <EmptyState icon="bell-off-outline" title="Bạn chưa đăng ký nhận thông báo nào" />
+        ) : (
+          <SectionCard title="Sách đang chờ" icon="bell-check-outline" accentColor={GRADIENTS.indigo[0]}>
+            {entries
+              .filter((entry) => !hiddenIds.includes(entry.id))
+              .map((entry) => {
+            const isNotified = entry.status === 'notified';
+            return (
+              <SwipeReserveRow
+                key={entry.id}
+                variant="cancel"
+                onCancel={() => handleCancel(entry)}
+              >
+                <Surface
+                  style={[styles.resCard, { backgroundColor: c.surface, borderColor: c.outline }]}
+                  elevation={0}
+                >
+                  <View style={[styles.resCardSpine, { backgroundColor: isNotified ? c.custom.success : c.primary }]} />
+                  {entry.book?.cover_url ? (
+                    <Image source={{ uri: entry.book.cover_url }} style={styles.bookCover} />
+                  ) : (
+                    <View style={[styles.bookCoverPlaceholder, { backgroundColor: c.surfaceVariant }]}>
+                      <MaterialCommunityIcons name="book-variant" size={24} color={c.onSurfaceVariant} />
+                    </View>
+                  )}
+                  <View style={styles.resContent}>
+                    <Text style={[styles.bookTitle, { color: c.onSurface }]} numberOfLines={2}>
+                      {entry.book?.title || entry.book_id}
+                    </Text>
+                    {entry.book?.author ? (
+                      <Text style={[styles.bookAuthor, { color: c.onSurfaceVariant }]} numberOfLines={1}>
+                        {entry.book.author}
+                      </Text>
+                    ) : null}
+                    <View style={styles.resMeta}>
+                      <Surface
+                        style={[
+                          styles.statusBadge,
+                          { backgroundColor: isNotified ? c.custom.success : c.primary },
+                        ]}
+                        elevation={0}
+                      >
+                        <Text style={[styles.statusBadgeText, { color: '#FFFFFF' }]}>
+                          {getStatusLabel(entry.status)}
+                        </Text>
+                      </Surface>
+                    </View>
+                  </View>
+                  <View style={styles.resActions}>
+                    <Button
+                      mode="outlined"
+                      onPress={() => handleCancel(entry)}
+                      loading={cancellingId === entry.id}
+                      disabled={cancellingId === entry.id}
+                      style={styles.cancelButton}
+                      labelStyle={styles.cancelButtonLabel}
+                      textColor={c.error}
+                      compact
+                    >
+                      Hủy
+                    </Button>
+                  </View>
+                </Surface>
+              </SwipeReserveRow>
+            );
+            })}
+          </SectionCard>
+        )}
+      </ScrollView>
+
+      <NoticeSnackbar
+        visible={snackVisible}
+        message={snackMsg}
+        severity={snackMsg.includes('hủy') ? 'success' : 'error'}
+        onDismiss={() => setSnackVisible(false)}
+      />
+
+      <UndoBar
+        visible={!!confirmingId}
+        message={`Đã hủy nhận thông báo "${entries.find(e => e.id === confirmingId)?.book?.title ?? ''}"`}
+        onUndo={handleUndoCancel}
+        onDismiss={commitCancellation}
+      />
+    </SafeAreaView>
+  );
+}
+
+function createStyles(theme: AppTheme) {
+  const c = theme.colors;
+  return StyleSheet.create({
+    container: { flex: 1 },
+    flex: { flex: 1 },
+    resCard: {
+      marginHorizontal: 16,
+      marginTop: 10,
+      borderRadius: 10,
+      flexDirection: 'row',
+      overflow: 'hidden',
+      borderWidth: 0.5,
+      alignItems: 'center',
+    },
+    resCardSpine: { width: 4, alignSelf: 'stretch' },
+    bookCover: {
+      width: 48,
+      height: 66,
+      borderRadius: 4,
+      margin: 10,
+      marginRight: 0,
+    },
+    bookCoverPlaceholder: {
+      width: 48,
+      height: 66,
+      borderRadius: 4,
+      margin: 10,
+      marginRight: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    resContent: { flex: 1, padding: 10, gap: 4 },
+    bookTitle: { fontWeight: '600', fontSize: 14, lineHeight: 18 },
+    bookAuthor: { fontSize: 12 },
+    resMeta: { flexDirection: 'row', gap: 6, marginTop: 6, flexWrap: 'wrap' },
+    statusBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 4,
+    },
+    statusBadgeText: { fontSize: 11, fontWeight: '700' },
+    resActions: {
+      paddingRight: 10,
+      paddingVertical: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    cancelButton: {
+      borderRadius: 6,
+      borderColor: c.error,
+    },
+    cancelButtonLabel: { fontSize: 12 },
+  });
+}
+</file>
+
 <file path="src/api/schedule.ts">
 import api from './client';
 import { ScheduleAssignmentList, StaffScheduleAssignment } from '../types';
@@ -18212,36 +18495,6 @@ export function useNotification() {
 }
 </file>
 
-<file path=".env.example">
-# ============================================
-# Library Mobile App - Environment Config
-# ============================================
-#
-# IMPORTANT: Copy this file to .env and update values for your setup
-#
-# Android Emulator: http://10.0.2.2:80/api (default - maps to host localhost)
-# iOS Simulator: http://localhost:80/api
-# Real Device (same network): http://<your-pc-ip>:80/api
-#
-# To find your PC IP on Windows:
-#   ipconfig | Select-String "IPv4"
-#
-# If login fails with "Cannot connect to server":
-#   1. Make sure Docker containers are running: docker compose up -d
-#   2. Try accessing http://localhost:80/api/healthz from your browser
-#   3. If localhost works but 10.0.2.2 doesn't, the emulator can't reach Docker
-#   4. On Windows with Docker Desktop, try restarting Docker and running:
-#      docker compose down && docker compose up -d
-
-EXPO_PUBLIC_API_URL=http://172.21.218.35:80/api
-
-# Web frontend URL for 3D tour and other web views
-# Android Emulator: http://10.0.2.2:3000
-# iOS Simulator: http://localhost:3000
-# Real Device (same network): http://<your-pc-ip>:3000
-EXPO_PUBLIC_WEB_URL=http://172.21.218.35:3000
-</file>
-
 <file path="app.json">
 {
   "expo": {
@@ -18316,14 +18569,43 @@ EXPO_PUBLIC_WEB_URL=http://172.21.218.35:3000
 }
 </file>
 
+<file path=".env.example">
+# ============================================
+# Library Mobile App - Environment Config
+# ============================================
+#
+# IMPORTANT: Copy this file to .env and update values for your setup
+#
+# Android Emulator: http://10.0.2.2:80/api (default - maps to host localhost)
+# iOS Simulator: http://localhost:80/api
+# Real Device (same network): http://<your-pc-ip>:80/api
+#
+# To find your PC IP on Windows:
+#   ipconfig | Select-String "IPv4"
+#
+# If login fails with "Cannot connect to server":
+#   1. Make sure Docker containers are running: docker compose up -d
+#   2. Try accessing http://localhost:80/api/healthz from your browser
+#   3. If localhost works but 10.0.2.2 doesn't, the emulator can't reach Docker
+#   4. On Windows with Docker Desktop, try restarting Docker and running:
+#      docker compose down && docker compose up -d
+
+EXPO_PUBLIC_API_URL=http://<your-pc-ip>:80/api
+
+# Web frontend URL for 3D tour and other web views
+# Android Emulator: http://10.0.2.2:3000
+# iOS Simulator: http://localhost:3000
+# Real Device (same network): http://<your-pc-ip>:3000
+EXPO_PUBLIC_WEB_URL=http://<your-pc-ip>:3000
+</file>
+
 <file path="App.tsx">
 import 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
-import React from 'react';
+import { StyleSheet } from 'react-native';
 import { PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import { QueryClientProvider } from '@tanstack/react-query';
 
 import { AuthProvider } from './src/context/AuthContext';
@@ -18332,78 +18614,18 @@ import { NotificationProvider } from './src/context/NotificationContext';
 import { MobileThemeProvider, useMobileTheme } from './src/context/ThemeContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import LegacyUpgradeBanner from './src/components/LegacyUpgradeBanner';
+import ErrorBoundary from './src/components/ErrorBoundary';
+import AIWidget from './src/features/ai/components/AIWidget/AIWidget';
+import { setupGlobalErrorHandlers } from './src/utils/error-reporter';
 import { queryClient } from './src/lib/queryClient';
 
-class ErrorBoundary extends React.Component<
-  { children: React.ReactNode },
-  { hasError: boolean; error: Error | null }
-> {
-  constructor(props: { children: React.ReactNode }) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-
-  static getDerivedStateFromError(error: Error) {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('App error:', error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <View style={errorStyles.container}>
-          <Text style={errorStyles.title}>Da xay ra loi</Text>
-          <Text style={errorStyles.message}>
-            {this.state.error?.message || 'Ung dung gap loi. Vui long thu lai.'}
-          </Text>
-          <TouchableOpacity
-            style={errorStyles.button}
-            onPress={() => this.setState({ hasError: false, error: null })}
-          >
-            <Text style={errorStyles.buttonText}>Thu lai</Text>
-          </TouchableOpacity>
-        </View>
-      );
-    }
-    return this.props.children;
-  }
+let errorHandlersInitialized = false;
+function ensureErrorHandlers() {
+  if (errorHandlersInitialized) return;
+  errorHandlersInitialized = true;
+  setupGlobalErrorHandlers();
 }
-
-const errorStyles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#0D1117',
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#E6EDF3',
-    marginBottom: 12,
-  },
-  message: {
-    fontSize: 14,
-    color: '#8B949E',
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  button: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    backgroundColor: '#1A73E8',
-    borderRadius: 8,
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});
+ensureErrorHandlers();
 
 function AppContent() {
   const { theme, isDark } = useMobileTheme();
@@ -18417,6 +18639,7 @@ function AppContent() {
               <StatusBar style={isDark ? 'light' : 'dark'} />
               <LegacyUpgradeBanner />
               <AppNavigator />
+              <AIWidget />
             </NotificationProvider>
           </AuthProvider>
         </NetworkProvider>
@@ -18556,6 +18779,126 @@ api.interceptors.response.use(
 );
 
 export default api;
+</file>
+
+<file path="src/api/borrow.ts">
+import api from './client';
+import { BorrowResponse, ReturnResponse, BorrowRecord, Book, BookWithStats, BookImportResponse, StaffPatronActiveBorrowsResponse, CreateBorrowSlipRequest, CreateBorrowSlipResponse, LookupBorrowSlipRequest, LookupBorrowSlipResponse, ConfirmBorrowSlipRequest } from '../types';
+
+export interface WaitlistEntry {
+  id: string;
+  book_id: string;
+  status: string;
+  created_at: string;
+  book: {
+    id: string;
+    isbn: string;
+    title: string;
+    author?: string;
+    cover_url?: string;
+  };
+}
+
+export const getMyWaitlist = async (): Promise<{ items: WaitlistEntry[]; total: number }> => {
+  const response = await api.get<{ items: WaitlistEntry[]; total: number }>('/borrow/waitlist');
+  return response.data;
+};
+
+export const joinWaitlist = async (bookId: string): Promise<{ id: string; book_id: string; status: string }> => {
+  const response = await api.post<{ id: string; book_id: string; status: string }>('/borrow/waitlist', { book_id: bookId });
+  return response.data;
+};
+
+export const leaveWaitlist = async (waitlistId: string): Promise<void> => {
+  await api.delete(`/borrow/waitlist/${waitlistId}`);
+};
+
+export const borrowApi = {
+  borrowBook: async (barcode: string): Promise<BorrowResponse> => {
+    const response = await api.post<BorrowResponse>('/borrow/', { barcode });
+    return response.data;
+  },
+
+  returnBook: async (barcode: string, note?: string): Promise<ReturnResponse> => {
+    const response = await api.post<ReturnResponse>('/borrow/staff-return', { barcode, note });
+    return response.data;
+  },
+
+  lookupByBarcode: async (barcode: string): Promise<BorrowRecord> => {
+    const response = await api.get<BorrowRecord>(`/borrow/barcode/${encodeURIComponent(barcode)}`);
+    return response.data;
+  },
+
+  getActiveBorrowsByStudentCode: async (studentCode: string): Promise<StaffPatronActiveBorrowsResponse> => {
+    const response = await api.get<StaffPatronActiveBorrowsResponse>(
+      `/borrow/staff/patrons/${encodeURIComponent(studentCode)}/active`,
+    );
+    return response.data;
+  },
+
+  getPatronActiveBorrows: async (): Promise<StaffPatronActiveBorrowsResponse> => {
+    const response = await api.get<StaffPatronActiveBorrowsResponse>('/borrow/patron/active');
+    return response.data;
+  },
+
+  returnByPatron: async (studentCode: string, barcodeOrIsbn: string, note?: string): Promise<ReturnResponse> => {
+    const response = await api.post<ReturnResponse>('/borrow/staff-return/by-patron', {
+      student_code: studentCode,
+      barcode_or_isbn: barcodeOrIsbn,
+      note,
+    });
+    return response.data;
+  },
+
+  getHistory: async (status?: string): Promise<BorrowRecord[]> => {
+    const params = status ? { status_filter: status } : {};
+    const response = await api.get<BorrowRecord[]>('/borrow/history', { params });
+    return response.data;
+  },
+
+  getBooks: async (skip = 0, limit = 50): Promise<Book[]> => {
+    const response = await api.get<{ items: Book[]; total: number } | Book[]>('/borrow/books', {
+      params: { skip, limit },
+    });
+    const data = response.data;
+    return Array.isArray(data) ? data : data.items || [];
+  },
+
+  getBook: async (isbn: string): Promise<BookWithStats> => {
+    const response = await api.get<BookWithStats>(`/borrow/book/${isbn}`);
+    return response.data;
+  },
+
+  lookupBookByIsbn: async (isbn: string): Promise<BookWithStats> => {
+    const response = await api.get<BookWithStats>(`/borrow/book/${isbn}`);
+    return response.data;
+  },
+
+  batchImportByIsbn: async (items: { isbn: string; quantity: number }[]): Promise<BookImportResponse> => {
+    const response = await api.post<BookImportResponse>('/borrow/isbn-import/batch', { items });
+    return response.data;
+  },
+
+  createSlip: async (data: CreateBorrowSlipRequest): Promise<CreateBorrowSlipResponse> => {
+    const response = await api.post<CreateBorrowSlipResponse>('/borrow/staff/slip/create', data);
+    return response.data;
+  },
+
+  lookupBorrowSlip: async (data: LookupBorrowSlipRequest): Promise<LookupBorrowSlipResponse> => {
+    const response = await api.post<LookupBorrowSlipResponse>('/borrow/staff/slip/lookup', data);
+    return response.data;
+  },
+
+  confirmBorrowSlip: async (data: ConfirmBorrowSlipRequest): Promise<CreateBorrowSlipResponse> => {
+    const response = await api.post<CreateBorrowSlipResponse>('/borrow/staff/slip/confirm', data);
+    return response.data;
+  },
+
+  getBorrowConfig: async (): Promise<{ max_borrow_books: number; max_borrow_books_per_slip: number; max_borrow_days: number }> => {
+    const response = await api.get('/borrow/config');
+    return response.data;
+  },
+};
 </file>
 
 <file path="src/context/AuthContext.tsx">
@@ -18797,126 +19140,6 @@ export function useAuth() {
   }
   return context;
 }
-</file>
-
-<file path="src/api/borrow.ts">
-import api from './client';
-import { BorrowResponse, ReturnResponse, BorrowRecord, Book, BookWithStats, BookImportResponse, StaffPatronActiveBorrowsResponse, CreateBorrowSlipRequest, CreateBorrowSlipResponse, LookupBorrowSlipRequest, LookupBorrowSlipResponse, ConfirmBorrowSlipRequest } from '../types';
-
-export interface WaitlistEntry {
-  id: string;
-  book_id: string;
-  status: string;
-  created_at: string;
-  book: {
-    id: string;
-    isbn: string;
-    title: string;
-    author?: string;
-    cover_url?: string;
-  };
-}
-
-export const getMyWaitlist = async (): Promise<{ items: WaitlistEntry[]; total: number }> => {
-  const response = await api.get<{ items: WaitlistEntry[]; total: number }>('/borrow/waitlist');
-  return response.data;
-};
-
-export const joinWaitlist = async (bookId: string): Promise<{ id: string; book_id: string; status: string }> => {
-  const response = await api.post<{ id: string; book_id: string; status: string }>('/borrow/waitlist', { book_id: bookId });
-  return response.data;
-};
-
-export const leaveWaitlist = async (waitlistId: string): Promise<void> => {
-  await api.delete(`/borrow/waitlist/${waitlistId}`);
-};
-
-export const borrowApi = {
-  borrowBook: async (barcode: string): Promise<BorrowResponse> => {
-    const response = await api.post<BorrowResponse>('/borrow/', { barcode });
-    return response.data;
-  },
-
-  returnBook: async (barcode: string, note?: string): Promise<ReturnResponse> => {
-    const response = await api.post<ReturnResponse>('/borrow/staff-return', { barcode, note });
-    return response.data;
-  },
-
-  lookupByBarcode: async (barcode: string): Promise<BorrowRecord> => {
-    const response = await api.get<BorrowRecord>(`/borrow/barcode/${encodeURIComponent(barcode)}`);
-    return response.data;
-  },
-
-  getActiveBorrowsByStudentCode: async (studentCode: string): Promise<StaffPatronActiveBorrowsResponse> => {
-    const response = await api.get<StaffPatronActiveBorrowsResponse>(
-      `/borrow/staff/patrons/${encodeURIComponent(studentCode)}/active`,
-    );
-    return response.data;
-  },
-
-  getPatronActiveBorrows: async (): Promise<StaffPatronActiveBorrowsResponse> => {
-    const response = await api.get<StaffPatronActiveBorrowsResponse>('/borrow/patron/active');
-    return response.data;
-  },
-
-  returnByPatron: async (studentCode: string, barcodeOrIsbn: string, note?: string): Promise<ReturnResponse> => {
-    const response = await api.post<ReturnResponse>('/borrow/staff-return/by-patron', {
-      student_code: studentCode,
-      barcode_or_isbn: barcodeOrIsbn,
-      note,
-    });
-    return response.data;
-  },
-
-  getHistory: async (status?: string): Promise<BorrowRecord[]> => {
-    const params = status ? { status_filter: status } : {};
-    const response = await api.get<BorrowRecord[]>('/borrow/history', { params });
-    return response.data;
-  },
-
-  getBooks: async (skip = 0, limit = 50): Promise<Book[]> => {
-    const response = await api.get<{ items: Book[]; total: number } | Book[]>('/borrow/books', {
-      params: { skip, limit },
-    });
-    const data = response.data;
-    return Array.isArray(data) ? data : data.items || [];
-  },
-
-  getBook: async (isbn: string): Promise<BookWithStats> => {
-    const response = await api.get<BookWithStats>(`/borrow/book/${isbn}`);
-    return response.data;
-  },
-
-  lookupBookByIsbn: async (isbn: string): Promise<BookWithStats> => {
-    const response = await api.get<BookWithStats>(`/borrow/book/${isbn}`);
-    return response.data;
-  },
-
-  batchImportByIsbn: async (items: { isbn: string; quantity: number }[]): Promise<BookImportResponse> => {
-    const response = await api.post<BookImportResponse>('/borrow/isbn-import/batch', { items });
-    return response.data;
-  },
-
-  createSlip: async (data: CreateBorrowSlipRequest): Promise<CreateBorrowSlipResponse> => {
-    const response = await api.post<CreateBorrowSlipResponse>('/borrow/staff/slip/create', data);
-    return response.data;
-  },
-
-  lookupBorrowSlip: async (data: LookupBorrowSlipRequest): Promise<LookupBorrowSlipResponse> => {
-    const response = await api.post<LookupBorrowSlipResponse>('/borrow/staff/slip/lookup', data);
-    return response.data;
-  },
-
-  confirmBorrowSlip: async (data: ConfirmBorrowSlipRequest): Promise<CreateBorrowSlipResponse> => {
-    const response = await api.post<CreateBorrowSlipResponse>('/borrow/staff/slip/confirm', data);
-    return response.data;
-  },
-
-  getBorrowConfig: async (): Promise<{ max_borrow_books: number; max_borrow_books_per_slip: number; max_borrow_days: number }> => {
-    const response = await api.get('/borrow/config');
-    return response.data;
-  },
-};
 </file>
 
 <file path="package.json">
@@ -19203,6 +19426,75 @@ export const authApi = {
     });
   },
 };
+</file>
+
+<file path="src/navigation/types.ts">
+import { NavigatorScreenParams } from '@react-navigation/native';
+import { Notification } from '../types';
+
+export type AuthStackParamList = {
+  Login: undefined;
+  Register: undefined;
+  FaceLogin: undefined;
+  ForgotPassword: undefined;
+};
+
+export type PatronTabParamList = {
+  Home: undefined;
+  AIChat: undefined;
+  BookRecommendations: undefined;
+  BookCatalog: undefined;
+  Profile: undefined;
+};
+
+export type StaffTabParamList = {
+  Home: undefined;
+  AIChat: undefined;
+  Profile: undefined;
+};
+
+export type PatronStackParamList = {
+  MainTabs: NavigatorScreenParams<PatronTabParamList>;
+  NotificationDetail: { notification: Notification };
+  FaceCamera: undefined;
+  ChangePassword: undefined;
+  BookRecommendations: undefined;
+  MyReservations: undefined;
+  BookCatalog: undefined;
+  Notifications: undefined;
+  History: undefined;
+  EditProfile: undefined;
+  LibraryTour: undefined;
+};
+
+export type StaffStackParamList = {
+  MainTabs: NavigatorScreenParams<StaffTabParamList>;
+  NotificationDetail: { notification: Notification };
+  FaceCamera: undefined;
+  ChangePassword: undefined;
+  ImportBooks: undefined;
+  AIHealth: undefined;
+  AIChat: undefined;
+  Notifications: undefined;
+  StaffReturn: undefined;
+  StaffBorrow: undefined;
+  Schedule: undefined;
+  History: undefined;
+  EditProfile: undefined;
+  LibraryTour: undefined;
+};
+
+export type RootStackParamList = {
+  Auth: NavigatorScreenParams<AuthStackParamList>;
+  Patron: NavigatorScreenParams<PatronStackParamList>;
+  Staff: NavigatorScreenParams<StaffStackParamList>;
+};
+
+declare global {
+  namespace ReactNavigation {
+    interface RootParamList extends RootStackParamList {}
+  }
+}
 </file>
 
 <file path="src/types/index.ts">
@@ -19516,75 +19808,6 @@ export interface NotificationListResponse {
   items: Notification[];
   total: number;
   unread: number;
-}
-</file>
-
-<file path="src/navigation/types.ts">
-import { NavigatorScreenParams } from '@react-navigation/native';
-import { Notification } from '../types';
-
-export type AuthStackParamList = {
-  Login: undefined;
-  Register: undefined;
-  FaceLogin: undefined;
-  ForgotPassword: undefined;
-};
-
-export type PatronTabParamList = {
-  Home: undefined;
-  AIChat: undefined;
-  BookRecommendations: undefined;
-  BookCatalog: undefined;
-  Profile: undefined;
-};
-
-export type StaffTabParamList = {
-  Home: undefined;
-  AIChat: undefined;
-  Profile: undefined;
-};
-
-export type PatronStackParamList = {
-  MainTabs: NavigatorScreenParams<PatronTabParamList>;
-  NotificationDetail: { notification: Notification };
-  FaceCamera: undefined;
-  ChangePassword: undefined;
-  BookRecommendations: undefined;
-  MyReservations: undefined;
-  BookCatalog: undefined;
-  Notifications: undefined;
-  History: undefined;
-  EditProfile: undefined;
-  LibraryTour: undefined;
-};
-
-export type StaffStackParamList = {
-  MainTabs: NavigatorScreenParams<StaffTabParamList>;
-  NotificationDetail: { notification: Notification };
-  FaceCamera: undefined;
-  ChangePassword: undefined;
-  ImportBooks: undefined;
-  AIHealth: undefined;
-  AIChat: undefined;
-  Notifications: undefined;
-  StaffReturn: undefined;
-  StaffBorrow: undefined;
-  Schedule: undefined;
-  History: undefined;
-  EditProfile: undefined;
-  LibraryTour: undefined;
-};
-
-export type RootStackParamList = {
-  Auth: NavigatorScreenParams<AuthStackParamList>;
-  Patron: NavigatorScreenParams<PatronStackParamList>;
-  Staff: NavigatorScreenParams<StaffStackParamList>;
-};
-
-declare global {
-  namespace ReactNavigation {
-    interface RootParamList extends RootStackParamList {}
-  }
 }
 </file>
 
