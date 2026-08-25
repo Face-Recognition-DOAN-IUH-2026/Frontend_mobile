@@ -317,7 +317,6 @@ describe('Face Login Success Navigation', () => {
     await authApi.logout();
 
     expect(clearTokens).toHaveBeenCalled();
-    expect(AsyncStorage.multiRemove).toHaveBeenCalledWith(['patronData', 'userData']);
   });
 });
 

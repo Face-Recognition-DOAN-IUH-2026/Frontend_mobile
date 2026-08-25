@@ -30,6 +30,26 @@ export function cancelPendingRequests() {
   queue.forEach(({ reject }) => reject(new Error('Session expired')));
 }
 
+const AUTH_SKIP_REFRESH_ENDPOINTS = [
+  '/auth/login',
+  '/patrons/login',
+  '/auth/refresh',
+  '/patrons/register',
+  '/auth/pre-register-otp',
+  '/auth/pre-register-verify',
+  '/patrons/check-exists',
+  '/patrons/check-code',
+  '/auth/forgot-password',
+  '/auth/verify-reset-code',
+  '/auth/reset-password',
+  '/auth/face-login',
+];
+
+export function shouldSkipAuthRefresh(url?: string): boolean {
+  if (!url) return false;
+  return AUTH_SKIP_REFRESH_ENDPOINTS.some((p) => url.includes(p));
+}
+
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
@@ -69,6 +89,11 @@ api.interceptors.response.use(
       const endpoint = originalRequest?.url || 'unknown';
       const method = originalRequest?.method?.toUpperCase() || 'GET';
       devError(`[API] 401 received for ${method} ${endpoint}`);
+
+      if (shouldSkipAuthRefresh(originalRequest.url)) {
+        devError(`[API] Skipping refresh for auth endpoint: ${endpoint}`);
+        return Promise.reject(error);
+      }
 
       if (_isRefreshing) {
         return new Promise((resolve, reject) => {

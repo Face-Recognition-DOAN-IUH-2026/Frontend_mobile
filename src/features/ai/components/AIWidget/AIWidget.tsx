@@ -6,8 +6,12 @@ import AIWidgetTrigger from './AIWidgetTrigger';
 import AIWidgetPanel from './AIWidgetPanel';
 
 export default function AIWidget() {
-  const { user } = useAuth();
-  const role = user?.role || 'staff';
+  const { user, isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) return null;
+  if (!isAuthenticated || !user) return null;
+
+  const role = user.role || 'staff';
 
   return (
     <Portal>
