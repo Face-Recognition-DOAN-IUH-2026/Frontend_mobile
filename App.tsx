@@ -13,7 +13,6 @@ import { MobileThemeProvider, useMobileTheme } from './src/context/ThemeContext'
 import AppNavigator from './src/navigation/AppNavigator';
 import LegacyUpgradeBanner from './src/components/LegacyUpgradeBanner';
 import ErrorBoundary from './src/components/ErrorBoundary';
-import AIWidget from './src/features/ai/components/AIWidget/AIWidget';
 import { setupGlobalErrorHandlers } from './src/utils/error-reporter';
 import { queryClient } from './src/lib/queryClient';
 
@@ -37,7 +36,6 @@ function AppContent() {
               <StatusBar style={isDark ? 'light' : 'dark'} />
               <LegacyUpgradeBanner />
               <AppNavigator />
-              <AIWidget />
             </NotificationProvider>
           </AuthProvider>
         </NetworkProvider>

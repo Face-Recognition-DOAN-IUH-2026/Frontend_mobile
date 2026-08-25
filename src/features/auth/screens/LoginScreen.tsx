@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, SegmentedButtons, Text, TextInput, useTheme } from 'react-native-paper';
+import { Button, HelperText, SegmentedButtons, Text, TextInput, useTheme } from 'react-native-paper';
 import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
 import { useAuth } from '../../../context/AuthContext';
 import { AppTheme } from '../../../theme/DarkTheme';
+import { mapAuthError } from '../../../utils/mapAuthError';
 
 interface LoginScreenProps {
   navigation: any;
@@ -42,36 +43,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
         await patronLogin(studentCode.trim(), password);
       }
     } catch (err: any) {
-      let message = 'Đăng nhập thất bại';
-      if (err.response?.data) {
-        const data = err.response.data;
-        if (typeof data === 'string' && data.trim()) {
-          message = data;
-        } else if (data.error) {
-          const backendError = data.error;
-          if (backendError === 'Invalid credentials') {
-            message = 'Sai tài khoản hoặc mật khẩu';
-          } else if (backendError === 'Account is disabled') {
-            message = 'Tài khoản đã bị khóa';
-          } else if (backendError === 'Membership has expired') {
-            message = 'Thẻ thư viện đã hết hạn';
-          } else if (typeof backendError === 'string' && backendError.trim()) {
-            message = backendError;
-          }
-        } else if (data.detail) {
-          message = typeof data.detail === 'string' ? data.detail : data.detail[0] || 'Lỗi từ server';
-        } else if (Array.isArray(data.message)) {
-          message = data.message[0];
-        } else if (data.message) {
-          message = data.message;
-        }
-      } else if (err.code === 'ECONNABORTED') {
-        message = 'Kết nối quá lâu. Vui lòng thử lại.';
-      } else if (err.message) {
-        message = err.message;
-      } else if (!err.response) {
-        message = 'Không thể kết nối server. Vui lòng kiểm tra mạng.';
-      }
+      const message = mapAuthError(err);
       setError(message);
     } finally {
       setIsLoading(false);
@@ -157,6 +129,9 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
                 outlineStyle={styles.inputOutline}
                 style={styles.input}
               />
+              <HelperText type="error" visible={!!error} testID="helper-error" style={styles.helperError}>
+                {error}
+              </HelperText>
 
               <Button
                 mode="contained"
@@ -330,6 +305,10 @@ function createStyles(theme: AppTheme) {
     },
     inputOutline: {
       borderRadius: 6,
+    },
+    helperError: {
+      marginTop: -8,
+      fontSize: 13,
     },
     loginBtn: {
       minHeight: 50,
