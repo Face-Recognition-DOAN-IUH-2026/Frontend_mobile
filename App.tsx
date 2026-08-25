@@ -1,10 +1,9 @@
 import 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
-import React from 'react';
+import { StyleSheet } from 'react-native';
 import { PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import { QueryClientProvider } from '@tanstack/react-query';
 
 import { AuthProvider } from './src/context/AuthContext';
@@ -13,78 +12,18 @@ import { NotificationProvider } from './src/context/NotificationContext';
 import { MobileThemeProvider, useMobileTheme } from './src/context/ThemeContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import LegacyUpgradeBanner from './src/components/LegacyUpgradeBanner';
+import ErrorBoundary from './src/components/ErrorBoundary';
+import AIWidget from './src/features/ai/components/AIWidget/AIWidget';
+import { setupGlobalErrorHandlers } from './src/utils/error-reporter';
 import { queryClient } from './src/lib/queryClient';
 
-class ErrorBoundary extends React.Component<
-  { children: React.ReactNode },
-  { hasError: boolean; error: Error | null }
-> {
-  constructor(props: { children: React.ReactNode }) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-
-  static getDerivedStateFromError(error: Error) {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('App error:', error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <View style={errorStyles.container}>
-          <Text style={errorStyles.title}>Da xay ra loi</Text>
-          <Text style={errorStyles.message}>
-            {this.state.error?.message || 'Ung dung gap loi. Vui long thu lai.'}
-          </Text>
-          <TouchableOpacity
-            style={errorStyles.button}
-            onPress={() => this.setState({ hasError: false, error: null })}
-          >
-            <Text style={errorStyles.buttonText}>Thu lai</Text>
-          </TouchableOpacity>
-        </View>
-      );
-    }
-    return this.props.children;
-  }
+let errorHandlersInitialized = false;
+function ensureErrorHandlers() {
+  if (errorHandlersInitialized) return;
+  errorHandlersInitialized = true;
+  setupGlobalErrorHandlers();
 }
-
-const errorStyles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#0D1117',
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#E6EDF3',
-    marginBottom: 12,
-  },
-  message: {
-    fontSize: 14,
-    color: '#8B949E',
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  button: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    backgroundColor: '#1A73E8',
-    borderRadius: 8,
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});
+ensureErrorHandlers();
 
 function AppContent() {
   const { theme, isDark } = useMobileTheme();
@@ -98,6 +37,7 @@ function AppContent() {
               <StatusBar style={isDark ? 'light' : 'dark'} />
               <LegacyUpgradeBanner />
               <AppNavigator />
+              <AIWidget />
             </NotificationProvider>
           </AuthProvider>
         </NetworkProvider>

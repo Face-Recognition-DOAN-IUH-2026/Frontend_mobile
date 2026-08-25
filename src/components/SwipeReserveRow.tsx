@@ -8,15 +8,27 @@ const SWIPE_THRESHOLD = -80;
 
 interface SwipeReserveRowProps {
   children: React.ReactNode;
-  onReserve: () => void;
+  onReserve?: () => void;
+  onCancel?: () => void;
   disabled?: boolean;
+  variant?: 'reserve' | 'cancel';
   reserveLabel?: string;
+  cancelLabel?: string;
 }
 
-export default function SwipeReserveRow({ children, onReserve, disabled, reserveLabel = 'Báo khi có sách' }: SwipeReserveRowProps) {
+export default function SwipeReserveRow({
+  children,
+  onReserve,
+  onCancel,
+  disabled,
+  variant = 'reserve',
+  reserveLabel = 'Báo khi có sách',
+  cancelLabel = 'Hủy nhận',
+}: SwipeReserveRowProps) {
   const theme = useTheme<AppTheme>();
   const c = theme.colors;
   const translateX = useRef(new Animated.Value(0)).current;
+  const isCancel = variant === 'cancel';
 
   const panResponder = useRef(
     PanResponder.create({
@@ -36,17 +48,21 @@ export default function SwipeReserveRow({ children, onReserve, disabled, reserve
     }),
   ).current;
 
-  const handleReserve = () => {
+  const handleAction = () => {
     Animated.timing(translateX, { toValue: 0, duration: 200, useNativeDriver: true }).start();
-    onReserve();
+    if (isCancel) {
+      onCancel?.();
+    } else {
+      onReserve?.();
+    }
   };
 
   return (
     <View style={s.wrapper}>
-      <View style={[s.reserveAction, { backgroundColor: c.primary }]}>
-        <TouchableOpacity onPress={handleReserve} style={s.reserveButton} activeOpacity={0.7}>
-          <MaterialCommunityIcons name="bookmark-check-outline" size={22} color="#fff" />
-          <Text style={s.reserveLabel}>{reserveLabel}</Text>
+      <View style={[s.reserveAction, { backgroundColor: isCancel ? c.error : c.primary }]}>
+        <TouchableOpacity testID="swipe-action" onPress={handleAction} style={s.reserveButton} activeOpacity={0.7}>
+          <MaterialCommunityIcons name={isCancel ? 'close-circle-outline' : 'bookmark-check-outline'} size={22} color="#fff" />
+          <Text style={s.reserveLabel}>{isCancel ? cancelLabel : reserveLabel}</Text>
         </TouchableOpacity>
       </View>
       <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>

@@ -12,6 +12,7 @@ export default function AIWidgetTrigger() {
 
   return (
     <FAB
+      testID="ai-widget-fab"
       icon={() => <MaterialCommunityIcons name="robot" size={24} color="#fff" />}
       onPress={toggle}
       style={[styles.fab, { backgroundColor: theme.colors.primary }]}
