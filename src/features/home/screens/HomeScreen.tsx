@@ -104,7 +104,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       description: 'Quét thẻ sinh viên và sách để tạo phiếu mượn mới.',
       icon: 'book-plus-multiple',
       route: 'StaffBorrow',
-      gradient: GRADIENTS.blue,
+      gradient: GRADIENTS.navy,
     },
     {
       title: 'Nhập sách',
@@ -118,28 +118,28 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       description: 'Xem ca làm việc và lịch trực của bạn.',
       icon: 'calendar-clock',
       route: 'Schedule',
-      gradient: GRADIENTS.violet,
+      gradient: GRADIENTS.steel,
     },
     {
       title: 'AI Health',
       description: 'Xem báo cáo sức khỏe hệ thống và phân tích dữ liệu AI.',
       icon: 'chart-line',
       route: 'AIHealth',
-      gradient: GRADIENTS.cyan,
+      gradient: GRADIENTS.navyLight,
     },
     {
       title: 'Tham quan 3D',
       description: 'Khám phá không gian thư viện thực tế ảo 360 độ.',
       icon: 'compass-outline',
       route: 'LibraryTour',
-      gradient: GRADIENTS.indigo,
+      gradient: GRADIENTS.amberLight,
     },
     {
       title: 'Hồ sơ',
       description: 'Cài đặt tài khoản, bảo mật và giao diện.',
       icon: 'account-cog',
       route: 'Profile',
-      gradient: GRADIENTS.rose,
+      gradient: GRADIENTS.slate,
     },
   ];
 
@@ -418,9 +418,9 @@ function createStyles(theme: AppTheme) {
     },
     staffCard: {
       width: '47.5%',
-      borderRadius: 14,
+      borderRadius: 16,
       overflow: 'hidden',
-      borderWidth: 0.5,
+      borderWidth: 0,
       backgroundColor: theme.colors.surface,
     },
     staffAccent: {
@@ -490,9 +490,9 @@ function createStyles(theme: AppTheme) {
       gap: 2,
     },
     borrowCard: {
-      borderRadius: 14,
+      borderRadius: 16,
       overflow: 'hidden',
-      borderWidth: 0.5,
+      borderWidth: 0,
       backgroundColor: theme.colors.surface,
     },
     borrowAccent: {

@@ -18,7 +18,8 @@ const STORAGE_KEY = 'mobile_theme_mode';
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function MobileThemeProvider({ children }: { children: ReactNode }) {
-  const [mode, setMode] = useState<MobileThemeMode>('dark');
+  // Default: light mode — app thư viện dùng ngoài trời, light dễ đọc hơn
+  const [mode, setMode] = useState<MobileThemeMode>('light');
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY)

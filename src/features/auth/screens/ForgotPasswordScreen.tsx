@@ -246,7 +246,7 @@ export default function ForgotPasswordScreen({ navigation }: ForgotPasswordScree
                 </Text>
                 <Button
                   mode="contained"
-                  onPress={() => navigation.goBack()}
+                  onPress={() => navigation.navigate('Login' as never)}
                   contentStyle={styles.largeButton}
                   style={styles.successButton}
                 >
@@ -435,9 +435,11 @@ function createStyles(theme: AppTheme) {
     },
     primaryButton: {
       marginTop: 8,
+      borderRadius: 12,
     },
     largeButton: {
       minHeight: 52,
+      borderRadius: 12,
     },
     resendBtn: {
       marginTop: 4,

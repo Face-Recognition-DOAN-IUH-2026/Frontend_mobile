@@ -182,16 +182,38 @@ export function EmptyState({
   );
 }
 
-/* ─── Gradient presets ─── */
+/* ─── Gradient presets (IUH Brand-aligned) ─── */
+// Chỉ dùng các màu trong hệ brand — không scatter rainbow ngẫu nhiên
 export const GRADIENTS = {
-  indigo: ['#6366f1', '#4338ca'],
-  emerald: ['#10b981', '#059669'],
-  amber: ['#f59e0b', '#d97706'],
-  blue: ['#3b82f6', '#1d4ed8'],
-  red: ['#ef4444', '#dc2626'],
-  violet: ['#8b5cf6', '#6d28d9'],
-  cyan: ['#06b6d4', '#0891b2'],
-  rose: ['#f43f5e', '#e11d48'],
+  // Primary actions — Navy Blue
+  navy:   ['#1E6091', '#154E78'],
+  navyLight: ['#2980B9', '#1E6091'],
+
+  // Secondary / Accent — Warm Amber
+  amber:  ['#D97706', '#B45309'],
+  amberLight: ['#F59E0B', '#D97706'],
+
+  // Success — Emerald (giữ nguyên vì semantic)
+  emerald: ['#059669', '#047857'],
+
+  // Info — Steel Blue (tương đồng với navy)
+  steel:  ['#2563EB', '#1D4ED8'],
+
+  // Warning / Alert
+  orange: ['#EA580C', '#C2410C'],
+
+  // Error
+  red:    ['#DC2626', '#B91C1C'],
+
+  // Neutral (cho cards không có semantic đặc biệt)
+  slate:  ['#475569', '#334155'],
+
+  // Legacy aliases (giữ để không break components cũ)
+  indigo: ['#1E6091', '#154E78'],   // → navy
+  blue:   ['#2563EB', '#1D4ED8'],   // → steel
+  violet: ['#1E6091', '#154E78'],   // → navy
+  cyan:   ['#0891B2', '#0E7490'],
+  rose:   ['#E11D48', '#BE123C'],
 };
 
 const dhStyles = StyleSheet.create({
@@ -221,11 +243,11 @@ const dhStyles = StyleSheet.create({
   },
 
   statCard: {
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 16,
     position: 'relative',
     overflow: 'hidden',
-    borderWidth: 0.5,
+    borderWidth: 0,
   },
   statAccent: {
     position: 'absolute',
@@ -264,10 +286,10 @@ const dhStyles = StyleSheet.create({
   },
 
   sectionCard: {
-    borderRadius: 14,
+    borderRadius: 16,
     overflow: 'hidden',
     position: 'relative',
-    borderWidth: 0.5,
+    borderWidth: 0,
   },
   sectionAccent: {
     position: 'absolute',

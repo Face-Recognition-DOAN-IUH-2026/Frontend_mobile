@@ -407,12 +407,12 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
           <SectionCard
             title="Mã xác thực"
             icon="email-check-outline"
-            accentColor={GRADIENTS.blue[0]}
+            accentColor={GRADIENTS.navy[0]}
             style={styles.choiceCard}
           >
             <View style={styles.otpInner}>
               <View style={styles.otpIconWrap}>
-                <MaterialCommunityIcons name="email-check" size={48} color={GRADIENTS.blue[0]} />
+                <MaterialCommunityIcons name="email-check" size={48} color={GRADIENTS.navy[0]} />
               </View>
               <Text style={styles.otpTitle}>Nhập mã OTP</Text>
               <Text style={styles.otpSubtitle}>
@@ -803,7 +803,7 @@ function createStyles(theme: AppTheme) {
       backgroundColor: 'transparent',
     },
     inputOutline: {
-      borderRadius: 6,
+      borderRadius: 12,
     },
     prefillBanner: {
       flexDirection: 'row',
@@ -812,7 +812,7 @@ function createStyles(theme: AppTheme) {
       backgroundColor: `${GRADIENTS.emerald[0]}18`,
       paddingVertical: 8,
       paddingHorizontal: 12,
-      borderRadius: 8,
+      borderRadius: 12,
     },
     prefillText: {
       color: GRADIENTS.emerald[0],
@@ -820,15 +820,15 @@ function createStyles(theme: AppTheme) {
       fontWeight: '600',
     },
     primaryBtn: {
-      minHeight: 50,
-      borderRadius: 8,
+      minHeight: 52,
+      borderRadius: 12,
     },
     primaryBtnLabel: {
-      fontWeight: '700',
+      fontWeight: '800',
       fontSize: 15,
     },
     primaryBtnWrapper: {
-      borderRadius: 8,
+      borderRadius: 12,
       marginTop: 4,
     },
     loginLink: {
