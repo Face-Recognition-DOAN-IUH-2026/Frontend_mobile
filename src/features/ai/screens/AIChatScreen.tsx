@@ -256,7 +256,7 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
         Xin chào! 👋
       </Text>
       <Text variant="bodyLarge" style={styles.welcomeSubtitle}>
-        Tôi là Trợ Lý AI của Thư Viện.
+        Tôi là Trợ Lý AI của Thư Viện IUH.
       </Text>
       <Text variant="bodyMedium" style={styles.welcomeHint}>
         Bạn muốn tìm sách, kiểm tra thẻ, hay xem lịch sử mượn?
@@ -268,7 +268,7 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
               icon={action.icon}
               size={18}
               onPress={() => sendMessage(action.message)}
-              iconColor={GRADIENTS.indigo[0]}
+              iconColor={GRADIENTS.navy[0]}
               style={styles.chipIcon}
             />
             <Text

@@ -333,7 +333,7 @@ export default function StaffBorrowScreen() {
       <SectionCard
         title="Độc giả"
         icon="account-outline"
-        accentColor={GRADIENTS.indigo[0]}
+        accentColor={GRADIENTS.navy[0]}
         right={
           patronId ? (
             <Button mode="text" compact onPress={resetState} textColor={c.error}>
@@ -393,7 +393,7 @@ export default function StaffBorrowScreen() {
               label="Đang mượn"
               value={activeCount}
               icon="book-open-variant"
-              gradient={GRADIENTS.blue}
+              gradient={GRADIENTS.navy}
               pct={(activeCount / borrowConfig.max_borrow_books) * 100}
             />
           </View>

@@ -26,7 +26,7 @@ interface BookCatalogScreenProps {
   navigation: any;
 }
 
-const SPINE_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#3b82f6', '#ef4444', '#8b5cf6', '#06b6d4', '#f43f5e'];
+const SPINE_COLORS = ['#1E6091', '#059669', '#D97706', '#2563EB', '#DC2626', '#154E78', '#2980B9', '#B45309'];
 
 function getSpineColor(id: string): string {
   let hash = 0;

@@ -127,7 +127,7 @@ export default function HistoryScreen({ navigation }: HistoryScreenProps) {
         {showHeader && safeRecords.length > 0 ? (
           <AnimatedCard delay={50}>
             <View style={styles.statRow}>
-              <StatBadge label="Tổng số" value={safeRecords.length} icon="book-open-variant" color={GRADIENTS.indigo[0]} />
+              <StatBadge label="Tổng số" value={safeRecords.length} icon="book-open-variant" color={GRADIENTS.navy[0]} />
               <StatBadge label="Đang mượn" value={borrowedCount} icon="book-check" color={GRADIENTS.emerald[0]} />
               <StatBadge label="Quá hạn" value={overdueCount} icon="alert-circle" color={GRADIENTS.red[0]} />
               <StatBadge label="Đã trả" value={returnedCount} icon="book-check" color={GRADIENTS.amber[0]} />
@@ -178,7 +178,7 @@ export default function HistoryScreen({ navigation }: HistoryScreenProps) {
               ? GRADIENTS.amber[0]
               : overdue
               ? GRADIENTS.red[0]
-              : GRADIENTS.indigo[0];
+              : GRADIENTS.navy[0];
 
             return (
               <AnimatedCard key={record.id} delay={150 + idx * 40}>
@@ -285,10 +285,10 @@ function createStyles(theme: AppTheme) {
     recordCard: {
       marginHorizontal: 14,
       marginTop: 10,
-      borderRadius: 12,
+      borderRadius: 16,
       flexDirection: 'row',
       overflow: 'hidden',
-      borderWidth: 0.5,
+      borderWidth: 0,
       backgroundColor: c.surface,
     },
     spine: { width: 3.5, alignSelf: 'stretch' },
@@ -351,9 +351,9 @@ function createStyles(theme: AppTheme) {
     },
     statBadge: {
       flex: 1,
-      borderRadius: 12,
+      borderRadius: 16,
       padding: 10,
-      borderWidth: 0.5,
+      borderWidth: 0,
       backgroundColor: c.surface,
     },
     statBadgeRow: {

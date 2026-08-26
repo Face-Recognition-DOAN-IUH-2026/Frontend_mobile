@@ -63,14 +63,14 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
             <View style={styles.decorCircle3} />
             <View style={styles.brandRow}>
               <View style={styles.logoBox}>
-                <Text style={styles.logoText}>TV</Text>
+                <Text style={styles.logoText}>IUH</Text>
               </View>
               <View>
-                <Text variant="headlineMedium" style={styles.brandTitle}>Thư Viện</Text>
-                <Text variant="bodyMedium" style={styles.brandSubtitle}>Thư viện số thông minh</Text>
+                <Text variant="headlineMedium" style={styles.brandTitle}>THƯ VIỆN IUH</Text>
+                <Text variant="bodyMedium" style={styles.brandSubtitle}>Đại học Công nghiệp TP.HCM</Text>
               </View>
             </View>
-            <Text variant="bodyLarge" style={styles.welcomeText}>Đăng nhập để tiếp tục</Text>
+            <Text variant="bodyLarge" style={styles.welcomeText}>Hệ thống Thư viện Thông minh</Text>
           </View>
 
           <View style={styles.formCard}>
@@ -280,11 +280,17 @@ function createStyles(theme: AppTheme) {
     },
     formCard: {
       marginHorizontal: 16,
-      marginTop: -20,
+      marginTop: -30,
       backgroundColor: theme.colors.surface,
-      borderRadius: 14,
-      borderWidth: 0.5,
-      borderColor: theme.colors.outlineVariant,
+      borderRadius: 20,
+      shadowColor: '#000',
+      shadowOffset: {
+        width: 0,
+        height: 10,
+      },
+      shadowOpacity: 0.1,
+      shadowRadius: 20,
+      elevation: 8,
       position: 'relative',
       overflow: 'hidden',
     },
@@ -293,33 +299,33 @@ function createStyles(theme: AppTheme) {
       left: 0,
       top: 0,
       bottom: 0,
-      width: 3,
+      width: 4,
       backgroundColor: theme.colors.primary,
     },
     formInner: {
-      padding: 20,
-      gap: 14,
+      padding: 24,
+      gap: 16,
     },
     input: {
       backgroundColor: 'transparent',
     },
     inputOutline: {
-      borderRadius: 6,
+      borderRadius: 12,
     },
     helperError: {
       marginTop: -8,
       fontSize: 13,
     },
     loginBtn: {
-      minHeight: 50,
-      borderRadius: 8,
+      minHeight: 52,
+      borderRadius: 12,
     },
     loginBtnLabel: {
-      fontWeight: '700',
+      fontWeight: '800',
       fontSize: 15,
     },
     loginBtnWrapper: {
-      borderRadius: 8,
+      borderRadius: 12,
       marginTop: 4,
     },
     forgotLabel: {
@@ -341,15 +347,15 @@ function createStyles(theme: AppTheme) {
       color: theme.colors.onSurfaceVariant,
     },
     faceBtn: {
-      minHeight: 48,
-      borderRadius: 8,
+      minHeight: 52,
+      borderRadius: 12,
     },
     faceBtnLabel: {
-      fontWeight: '600',
+      fontWeight: '700',
       fontSize: 14,
     },
     faceBtnWrapper: {
-      borderRadius: 8,
+      borderRadius: 12,
       borderColor: theme.colors.outline,
     },
     registerLabel: {

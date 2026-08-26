@@ -15,7 +15,6 @@ import { Text, useTheme, TouchableRipple, ActivityIndicator, SegmentedButtons } 
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useAIWidgetStore } from './useAIWidgetStore';
 import { aiApi } from '../../../../api/ai';
-
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const PANEL_HEIGHT = SCREEN_HEIGHT * 0.75;
 

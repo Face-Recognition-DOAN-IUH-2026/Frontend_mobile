@@ -377,7 +377,7 @@ export default function ReturnScreen() {
         <SectionCard
           title="Tìm độc giả"
           icon="account-search-outline"
-          accentColor={GRADIENTS.indigo[0]}
+          accentColor={GRADIENTS.navy[0]}
           right={
             staffLookup ? (
               <Button mode="text" compact onPress={resetPatron}>
@@ -432,7 +432,7 @@ export default function ReturnScreen() {
           <SectionCard
             title="Thông tin độc giả"
             icon="account-outline"
-            accentColor={GRADIENTS.cyan[0]}
+            accentColor={GRADIENTS.steel[0]}
           >
             <View style={styles.patronHeader}>
               <View style={styles.avatar}>
@@ -456,7 +456,7 @@ export default function ReturnScreen() {
                   label="Đang mượn"
                   value={staffLookup.total}
                   icon="book-open-variant"
-                  gradient={GRADIENTS.blue}
+                  gradient={GRADIENTS.navy}
                 />
               </View>
               <View style={styles.statHalf}>
