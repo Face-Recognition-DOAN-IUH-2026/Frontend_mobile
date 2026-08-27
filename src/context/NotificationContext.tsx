@@ -8,6 +8,19 @@ import { Notification } from '../types';
 import { devError } from '../utils/logger';
 import { queryClient } from '../lib/queryClient';
 
+// ─── Guard: expo-notifications needs native modules not available in Expo Go ───
+function isNotificationsAvailable(): boolean {
+  try {
+    // If the native module is missing this will throw
+    require('expo-notifications/build/NotificationPermissionsModule');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const NOTIFS_AVAILABLE = isNotificationsAvailable();
+
 interface NotificationContextValue {
   notifications: Notification[];
   unreadCount: number;
@@ -49,6 +62,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, []);
 
   const registerPushToken = useCallback(async () => {
+    if (!NOTIFS_AVAILABLE) return; // Skip in Expo Go
     try {
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
       let finalStatus = existingStatus;
@@ -68,6 +82,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, []);
 
   const unregisterPushToken = useCallback(async () => {
+    if (!NOTIFS_AVAILABLE) return; // Skip in Expo Go
     try {
       const tokenData = await Notifications.getExpoPushTokenAsync();
       await notificationApi.unregisterDeviceToken(tokenData.data);
@@ -197,34 +212,42 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       return;
     }
 
-    Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-        shouldShowBanner: true,
-        shouldShowList: true,
-      }),
-    });
+    // Only set up native notification listeners when the module is available
+    let sub: { remove: () => void } | null = null;
+    if (NOTIFS_AVAILABLE) {
+      try {
+        Notifications.setNotificationHandler({
+          handleNotification: async () => ({
+            shouldShowAlert: true,
+            shouldPlaySound: true,
+            shouldSetBadge: true,
+            shouldShowBanner: true,
+            shouldShowList: true,
+          }),
+        });
 
-    const sub = Notifications.addNotificationReceivedListener((notification: Notifications.Notification) => {
-      const data = notification.request.content.data as Record<string, any> | undefined;
-      if (data?.id) {
-        const notif: Notification = {
-          id: String(data.id),
-          userId: String(data.userId || ''),
-          type: String(data.type || 'info'),
-          title: String(notification.request.content.title || ''),
-          body: String(notification.request.content.body || ''),
-          data: data,
-          isRead: false,
-          createdAt: new Date().toISOString(),
-        };
-        setNotifications((prev) => [notif, ...prev]);
-        setUnreadCount((prev) => prev + 1);
-        queryClient.invalidateQueries({ queryKey: ['notifications'] });
+        sub = Notifications.addNotificationReceivedListener((notification: Notifications.Notification) => {
+          const data = notification.request.content.data as Record<string, any> | undefined;
+          if (data?.id) {
+            const notif: Notification = {
+              id: String(data.id),
+              userId: String(data.userId || ''),
+              type: String(data.type || 'info'),
+              title: String(notification.request.content.title || ''),
+              body: String(notification.request.content.body || ''),
+              data: data,
+              isRead: false,
+              createdAt: new Date().toISOString(),
+            };
+            setNotifications((prev) => [notif, ...prev]);
+            setUnreadCount((prev) => prev + 1);
+            queryClient.invalidateQueries({ queryKey: ['notifications'] });
+          }
+        });
+      } catch (err) {
+        devError('[Notification] Native module unavailable:', err);
       }
-    });
+    }
 
     registerPushToken();
     fetchUnreadCount();
@@ -232,7 +255,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
     return () => {
       mountedRef.current = false;
-      sub.remove();
+      sub?.remove();
       cleanup();
     };
   }, [isAuthenticated, fetchUnreadCount, connectWs, cleanup, registerPushToken]);
