@@ -1,6 +1,17 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
+
+// Guard: expo-notifications needs native modules not available in Expo Go
+function isNotificationsAvailable(): boolean {
+  try {
+    require('expo-notifications/build/NotificationPermissionsModule');
+    return true;
+  } catch {
+    return false;
+  }
+}
+const NOTIFS_AVAILABLE = isNotificationsAvailable();
 import { User, UserRole } from '../types';
 import { authApi } from '../api/auth';
 import { notificationApi } from '../api/notification';
@@ -208,10 +219,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    try {
-      const tokenData = await Notifications.getExpoPushTokenAsync();
-      await notificationApi.unregisterDeviceToken(tokenData.data);
-    } catch {}
+    if (NOTIFS_AVAILABLE) {
+      try {
+        const tokenData = await Notifications.getExpoPushTokenAsync();
+        await notificationApi.unregisterDeviceToken(tokenData.data);
+      } catch {}
+    }
     cancelPendingRequests();
     await authApi.logout();
     queryClient.clear();
