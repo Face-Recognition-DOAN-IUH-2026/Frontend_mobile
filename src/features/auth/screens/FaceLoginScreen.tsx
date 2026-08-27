@@ -1,8 +1,8 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, StyleSheet, TextInput, View } from 'react-native';
+import { Animated, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, Card, Text, useTheme } from 'react-native-paper';
+import { Button, Card, Text, TextInput, useTheme } from 'react-native-paper';
 import { useAuth } from '../../../context/AuthContext';
 import CameraFallback from '../../../components/CameraFallback';
 import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
@@ -65,7 +65,9 @@ export default function FaceLoginScreen({ navigation }: FaceLoginScreenProps) {
     try {
       await staffLogin(email.trim(), password);
     } catch (err: any) {
-      const message = err?.response?.data?.detail || err?.message || 'Đăng nhập thất bại';
+      const message = err?.response?.data?.detail?.includes('Invalid')
+        ? 'Email hoặc mật khẩu không đúng'
+        : 'Đăng nhập thất bại, vui lòng thử lại';
       setError(message);
     } finally {
       setLoginLoading(false);
@@ -177,20 +179,18 @@ export default function FaceLoginScreen({ navigation }: FaceLoginScreenProps) {
           <Card.Content style={styles.passwordFormContent}>
             <Text style={styles.passwordFormTitle}>Đăng nhập bằng mật khẩu</Text>
             <TextInput
-              style={styles.input}
-              placeholder="Email"
-              placeholderTextColor={theme.colors.onSurfaceVariant}
+              label="Email"
               value={email}
               onChangeText={setEmail}
+              mode="outlined"
               keyboardType="email-address"
               autoCapitalize="none"
             />
             <TextInput
-              style={styles.input}
-              placeholder="Mật khẩu"
-              placeholderTextColor={theme.colors.onSurfaceVariant}
+              label="Mật khẩu"
               value={password}
               onChangeText={setPassword}
+              mode="outlined"
               secureTextEntry
             />
             <Button

@@ -36,6 +36,14 @@ export const notificationApi = {
     await api.put('/notifications/read-all');
   },
 
+  async registerDeviceToken(token: string, platform: 'ios' | 'android' | 'web'): Promise<void> {
+    await api.post('/notifications/device-tokens', { token, platform });
+  },
+
+  async unregisterDeviceToken(token: string): Promise<void> {
+    await api.delete('/notifications/device-tokens', { data: { token } });
+  },
+
   async connectRealtime(
     onNotification: (notification: Notification) => void,
     onStatus?: (status: 'connected' | 'closed' | 'error') => void,

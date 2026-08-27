@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Animated, PanResponder, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Text, useTheme } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -17,6 +17,9 @@ export default function SwipeDeleteRow({ children, onDelete, disabled, deleteLab
   const theme = useTheme<AppTheme>();
   const c = theme.colors;
   const translateX = useRef(new Animated.Value(0)).current;
+
+  const onDeleteRef = useRef(onDelete);
+  useEffect(() => { onDeleteRef.current = onDelete; }, [onDelete]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -38,7 +41,7 @@ export default function SwipeDeleteRow({ children, onDelete, disabled, deleteLab
 
   const handleDelete = () => {
     Animated.timing(translateX, { toValue: 0, duration: 200, useNativeDriver: true }).start();
-    onDelete();
+    onDeleteRef.current();
   };
 
   return (

@@ -1,9 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import { User, UserRole } from '../types';
 import { authApi } from '../api/auth';
+import { notificationApi } from '../api/notification';
 import { devError } from '../utils/logger';
 import { queryClient } from '../lib/queryClient';
-import { getAccessToken, getRefreshToken, setAccessToken } from '../api/secureStorage';
+import { getAccessToken, getRefreshToken, setAccessToken, setRefreshToken, clearTokens } from '../api/secureStorage';
 import { cancelPendingRequests } from '../api/client';
 import bus from '../lib/event-bus';
 
@@ -89,12 +92,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           try {
             const result = await authApi.refreshToken(refreshToken);
             await setAccessToken(result.access_token);
+            if (result.refresh_token) {
+              await setRefreshToken(result.refresh_token);
+            }
           } catch {
             devError('[Auth] Refresh token failed on restore');
+            await clearTokens();
+            setUser(null);
             setIsLoading(false);
             return;
           }
         } else {
+          await clearTokens();
+          setUser(null);
           setIsLoading(false);
           return;
         }
@@ -198,6 +208,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    try {
+      const tokenData = await Notifications.getExpoPushTokenAsync();
+      await notificationApi.unregisterDeviceToken(tokenData.data);
+    } catch {}
     cancelPendingRequests();
     await authApi.logout();
     queryClient.clear();

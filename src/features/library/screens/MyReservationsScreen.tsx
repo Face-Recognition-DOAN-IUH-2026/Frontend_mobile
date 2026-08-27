@@ -25,7 +25,6 @@ export default function MyReservationsScreen({ navigation }: MyReservationsScree
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [snackMsg, setSnackMsg] = useState('');
   const [snackVisible, setSnackVisible] = useState(false);
-  const [cancellingId, setCancellingId] = useState<string | null>(null);
   const { hiddenIds, confirmingId, undo, cancelUndo, markConfirmed } = useUndo({ duration: 5000 });
   const { isOnline } = useNetwork();
   const qc = useQueryClient();
@@ -57,9 +56,7 @@ export default function MyReservationsScreen({ navigation }: MyReservationsScree
       return;
     }
 
-    setCancellingId(entry.id);
     undo(entry.id);
-    setCancellingId(null);
   }, [isOnline, undo]);
 
   const handleUndoCancel = useCallback(async () => {
@@ -178,20 +175,6 @@ export default function MyReservationsScreen({ navigation }: MyReservationsScree
                       </Surface>
                     </View>
                   </View>
-                  <View style={styles.resActions}>
-                    <Button
-                      mode="outlined"
-                      onPress={() => handleCancel(entry)}
-                      loading={cancellingId === entry.id}
-                      disabled={cancellingId === entry.id}
-                      style={styles.cancelButton}
-                      labelStyle={styles.cancelButtonLabel}
-                      textColor={c.error}
-                      compact
-                    >
-                      Hủy
-                    </Button>
-                  </View>
                 </Surface>
               </SwipeReserveRow>
             );
@@ -258,16 +241,5 @@ function createStyles(theme: AppTheme) {
       borderRadius: 4,
     },
     statusBadgeText: { fontSize: 11, fontWeight: '700' },
-    resActions: {
-      paddingRight: 10,
-      paddingVertical: 10,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    cancelButton: {
-      borderRadius: 6,
-      borderColor: c.error,
-    },
-    cancelButtonLabel: { fontSize: 12 },
   });
 }

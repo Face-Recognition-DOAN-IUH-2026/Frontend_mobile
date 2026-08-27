@@ -149,7 +149,7 @@ export const authApi = {
     return response.data;
   },
 
-  refreshToken: async (refreshToken: string): Promise<{ access_token: string }> => {
+  refreshToken: async (refreshToken: string): Promise<{ access_token: string; refresh_token?: string; token_type?: string }> => {
     const response = await axios.post(`${API_BASE_URL}/auth/refresh`, { refresh_token: refreshToken }, { timeout: 15000 });
     return response.data;
   },

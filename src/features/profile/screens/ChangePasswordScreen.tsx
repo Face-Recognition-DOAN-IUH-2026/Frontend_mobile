@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { TextInput, Button, Text, Surface, useTheme } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { authApi } from '../../../api/auth';
+import { useAuth } from '../../../context/AuthContext';
 import { devError } from '../../../utils/logger';
 import { AppTheme } from '../../../theme/DarkTheme';
 import { GradientHeader, SectionCard } from '../../../theme/MobileDesignSystem';
@@ -16,6 +17,7 @@ export default function ChangePasswordScreen({ navigation }: ChangePasswordScree
   const theme = useTheme() as AppTheme;
   const c = theme.colors;
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const { user } = useAuth();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -40,14 +42,12 @@ export default function ChangePasswordScreen({ navigation }: ChangePasswordScree
 
     setIsLoading(true);
     try {
-      const patronDataStr = await require('@react-native-async-storage/async-storage').default.getItem('patronData');
-      const patronData = JSON.parse(patronDataStr || '{}');
-      if (!patronData?.id) {
+      if (!user?.id) {
         Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng');
         return;
       }
 
-      await authApi.changePassword(patronData.id, currentPassword, newPassword);
+      await authApi.changePassword(user.id, currentPassword, newPassword);
       Alert.alert('Thành công', 'Mật khẩu đã được thay đổi', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);

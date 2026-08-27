@@ -315,9 +315,15 @@ export default function AutoFaceCapture({
     [runCountdown],
   );
   const allCaptured = captured.length === ANGLES.length;
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const handleSubmit = async () => {
-    if (!consent || !allCaptured) return;
-    await onFilesReady(captured);
+    if (!consent || !allCaptured || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await onFilesReady(captured);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
   if (!permission) {
     return (
@@ -404,8 +410,9 @@ export default function AutoFaceCapture({
           <Button
             mode="contained"
             onPress={handleSubmit}
-            disabled={!consent}
-            style={[styles.submitBtn, !consent && styles.submitBtnDisabled]}
+            disabled={!consent || isSubmitting}
+            loading={isSubmitting}
+            style={[styles.submitBtn, (!consent || isSubmitting) && styles.submitBtnDisabled]}
             labelStyle={styles.submitBtnLabel}
           >
             {" "}

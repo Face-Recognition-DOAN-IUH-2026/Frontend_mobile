@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Animated, PanResponder, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Text, useTheme } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -30,6 +30,11 @@ export default function SwipeReserveRow({
   const translateX = useRef(new Animated.Value(0)).current;
   const isCancel = variant === 'cancel';
 
+  const onReserveRef = useRef(onReserve);
+  const onCancelRef = useRef(onCancel);
+  useEffect(() => { onReserveRef.current = onReserve; }, [onReserve]);
+  useEffect(() => { onCancelRef.current = onCancel; }, [onCancel]);
+
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gs) => !disabled && gs.dx < 0 && Math.abs(gs.dx) > 10,
@@ -51,9 +56,9 @@ export default function SwipeReserveRow({
   const handleAction = () => {
     Animated.timing(translateX, { toValue: 0, duration: 200, useNativeDriver: true }).start();
     if (isCancel) {
-      onCancel?.();
+      onCancelRef.current?.();
     } else {
-      onReserve?.();
+      onReserveRef.current?.();
     }
   };
 
