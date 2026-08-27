@@ -145,6 +145,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   const [registeredUser, setRegisteredUser] = useState<any>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [snackbar, setSnackbar] = useState('');
+  const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error' | 'warning' | 'info'>('error');
   const [consentGiven, setConsentGiven] = useState(false);
   const [otpCode, setOtpCode] = useState('');
   const [verificationToken, setVerificationToken] = useState('');
@@ -194,7 +195,8 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
         if (ignore) return;
         setStudentCodeCheck(codeValid ? (result.student_code_exists ? 'exists' : 'available') : 'idle');
         setEmailCheck(mailValid ? (result.email_exists ? 'exists' : 'available') : 'idle');
-      }).catch(() => {
+      }).catch((e) => {
+        console.warn('[Register] checkExists debounce failed', e?.message);
         if (!ignore) {
           setStudentCodeCheck('idle');
           setEmailCheck('idle');
@@ -219,7 +221,8 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
     }, 1000);
   };
 
-  const showError = (message: string) => setSnackbar(message);
+  const showError = (message: string) => { setSnackbarSeverity('error'); setSnackbar(message); };
+  const showSuccess = (message: string) => { setSnackbarSeverity('success'); setSnackbar(message); };
 
   const handleSendOtp = async () => {
     setOtpSending(true);
@@ -274,7 +277,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
       await authApi.preRegisterOtp(email.trim());
       startOtpCooldown();
       setOtpCode('');
-      showError('Da gui lai ma OTP');
+      showSuccess('Da gui lai ma OTP');
     } catch (error: any) {
       const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || 'Gui lai OTP that bai';
       showError(message);
@@ -359,7 +362,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
         timeout: 130000,
       });
 
-      setSnackbar('Đăng ký tài khoản và khuôn mặt thành công');
+      showSuccess('Đăng ký tài khoản và khuôn mặt thành công');
       navigation.replace('Login');
     } catch (error: any) {
       const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || 'Đăng ký khuôn mặt thất bại';
@@ -379,7 +382,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
             setStep('form');
           }}
         />
-        <NoticeSnackbar visible={!!snackbar} message={snackbar} severity="error" onDismiss={() => setSnackbar('')} />
+        <NoticeSnackbar visible={!!snackbar} message={snackbar} severity={snackbarSeverity} onDismiss={() => setSnackbar('')} />
       </SafeAreaView>
     );
   }
@@ -446,7 +449,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
           </SectionCard>
         </View>
 
-        <NoticeSnackbar visible={!!snackbar} message={snackbar} severity="error" onDismiss={() => setSnackbar('')} />
+        <NoticeSnackbar visible={!!snackbar} message={snackbar} severity={snackbarSeverity} onDismiss={() => setSnackbar('')} />
       </SafeAreaView>
     );
   }
@@ -479,7 +482,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
             </View>
           </SectionCard>
         </View>
-        <NoticeSnackbar visible={!!snackbar} message={snackbar} severity="error" onDismiss={() => setSnackbar('')} />
+        <NoticeSnackbar visible={!!snackbar} message={snackbar} severity={snackbarSeverity} onDismiss={() => setSnackbar('')} />
       </SafeAreaView>
     );
   }
@@ -557,7 +560,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
           <LoadingOverlay loading message="Đang đăng ký khuôn mặt..." />
         ) : null}
 
-        <NoticeSnackbar visible={!!snackbar} message={snackbar} severity="error" onDismiss={() => setSnackbar('')} />
+        <NoticeSnackbar visible={!!snackbar} message={snackbar} severity={snackbarSeverity} onDismiss={() => setSnackbar('')} />
       </SafeAreaView>
     );
   }
@@ -648,10 +651,16 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               value={course}
               onChangeText={setCourse}
               mode="outlined"
+              placeholder="VD: 2022 - 2026"
+              autoCapitalize="none"
+              autoCorrect={false}
               left={<TextInput.Icon icon="bookmark-outline" color={theme.colors.onSurfaceVariant} />}
               outlineStyle={styles.inputOutline}
               style={styles.input}
             />
+            <Text style={{ color: theme.colors.onSurfaceVariant, fontSize: 11, marginTop: -8, paddingHorizontal: 4 }}>
+              Nhập dạng 2022 - 2026, 2022-2026 hoặc K22 đều được
+            </Text>
 
             <TextInput
               label="HKTT (không bắt buộc)"
@@ -730,8 +739,10 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
                     showError('Email đã được đăng ký');
                     return;
                   }
-                } catch {
-                  showError('Không thể kiểm tra thông tin');
+                } catch (e: any) {
+                  const detail = e?.response?.data?.error || e?.message || '';
+                  console.error('[Register] checkExists failed', detail, e);
+                  showError(detail ? `Không thể kiểm tra: ${detail}` : 'Không thể kiểm tra thông tin — hãy kiểm tra mạng và thử lại');
                   return;
                 }
                 handleSendOtp();
@@ -752,7 +763,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
         </SectionCard>
       </ScrollView>
 
-      <NoticeSnackbar visible={!!snackbar} message={snackbar} severity="error" onDismiss={() => setSnackbar('')} />
+      <NoticeSnackbar visible={!!snackbar} message={snackbar} severity={snackbarSeverity} onDismiss={() => setSnackbar('')} />
     </SafeAreaView>
   );
 }

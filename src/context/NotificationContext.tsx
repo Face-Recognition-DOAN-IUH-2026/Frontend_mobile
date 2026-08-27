@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+import { Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import { notificationApi } from '../api/notification';
 import { getAccessToken } from '../api/secureStorage';
 import { useAuth } from './AuthContext';
@@ -44,6 +46,32 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       wsRef.current.close();
       wsRef.current = null;
     }
+  }, []);
+
+  const registerPushToken = useCallback(async () => {
+    try {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      if (finalStatus !== 'granted') return;
+
+      const tokenData = await Notifications.getExpoPushTokenAsync();
+      const expoPushToken = tokenData.data;
+
+      await notificationApi.registerDeviceToken(expoPushToken, Platform.OS as 'ios' | 'android');
+    } catch (err) {
+      devError('[Notification] Failed to register push token:', err);
+    }
+  }, []);
+
+  const unregisterPushToken = useCallback(async () => {
+    try {
+      const tokenData = await Notifications.getExpoPushTokenAsync();
+      await notificationApi.unregisterDeviceToken(tokenData.data);
+    } catch {}
   }, []);
 
   const connectWs = useCallback(() => {
@@ -169,14 +197,45 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       return;
     }
 
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+
+    const sub = Notifications.addNotificationReceivedListener((notification: Notifications.Notification) => {
+      const data = notification.request.content.data as Record<string, any> | undefined;
+      if (data?.id) {
+        const notif: Notification = {
+          id: String(data.id),
+          userId: String(data.userId || ''),
+          type: String(data.type || 'info'),
+          title: String(notification.request.content.title || ''),
+          body: String(notification.request.content.body || ''),
+          data: data,
+          isRead: false,
+          createdAt: new Date().toISOString(),
+        };
+        setNotifications((prev) => [notif, ...prev]);
+        setUnreadCount((prev) => prev + 1);
+        queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      }
+    });
+
+    registerPushToken();
     fetchUnreadCount();
     connectWs();
 
     return () => {
       mountedRef.current = false;
+      sub.remove();
       cleanup();
     };
-  }, [isAuthenticated, fetchUnreadCount, connectWs, cleanup]);
+  }, [isAuthenticated, fetchUnreadCount, connectWs, cleanup, registerPushToken]);
 
   return (
     <NotificationContext.Provider

@@ -41,12 +41,12 @@ export default class ErrorBoundary extends React.Component<
     if (this.state.hasError) {
       return (
         <View style={styles.container}>
-          <Text style={styles.title}>Da xay ra loi</Text>
+          <Text style={styles.title}>Đã xảy ra lỗi</Text>
           <Text style={styles.message}>
-            {this.state.error?.message || 'Ung dung gap loi. Vui long thu lai.'}
+            {this.state.error?.message || 'Ứng dụng gặp lỗi. Vui lòng thử lại.'}
           </Text>
           <TouchableOpacity style={styles.button} onPress={this.handleRetry}>
-            <Text style={styles.buttonText}>Thu lai</Text>
+            <Text style={styles.buttonText}>Thử lại</Text>
           </TouchableOpacity>
         </View>
       );
@@ -61,24 +61,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#0D1117',
+    backgroundColor: '#F5F5F5',
   },
   title: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#E6EDF3',
+    color: '#1C1B1F',
     marginBottom: 12,
   },
   message: {
     fontSize: 14,
-    color: '#8B949E',
+    color: '#49454F',
     textAlign: 'center',
     marginBottom: 24,
   },
   button: {
     paddingHorizontal: 24,
     paddingVertical: 12,
-    backgroundColor: '#1A73E8',
+    backgroundColor: '#6366f1',
     borderRadius: 8,
   },
   buttonText: {

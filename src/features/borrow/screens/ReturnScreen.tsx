@@ -79,9 +79,12 @@ export default function ReturnScreen() {
     const status = err?.response?.status;
     const detail = err?.response?.data?.detail || err?.response?.data?.error;
     if (status === 404 && detail === 'Not Found') {
-      return 'Backend chưa có endpoint tra cứu theo MSSV. Vui lòng rebuild/restart borrow-service và gateway.';
+      return 'Không tìm thấy thông tin độc giả. Vui lòng thử lại.';
     }
-    return detail || 'Không tìm thấy độc giả hoặc không thể tải sách đang mượn';
+    if (detail && typeof detail === 'string' && !detail.includes('backend') && !detail.includes('endpoint')) {
+      return detail;
+    }
+    return 'Không tìm thấy độc giả hoặc không thể tải sách đang mượn';
   };
 
   const loadPatronBorrows = async (code = studentCode.trim()) => {

@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosError, AxiosRequestConfig } from 'axios';
-import { getAccessToken, getRefreshToken, setAccessToken, clearTokens } from './secureStorage';
+import { getAccessToken, getRefreshToken, setAccessToken, setRefreshToken, clearTokens } from './secureStorage';
 import { devError } from '../utils/logger';
 import { API_BASE_URL } from '../config/api';
 import bus from '../lib/event-bus';
@@ -112,7 +112,11 @@ api.interceptors.response.use(
         try {
           const { data } = await refreshApi.post('/auth/refresh', { refresh_token: refreshToken });
           const newAccessToken = data.access_token;
+          const newRefreshToken = data.refresh_token;
           await setAccessToken(newAccessToken);
+          if (newRefreshToken) {
+            await setRefreshToken(newRefreshToken);
+          }
           _isRefreshing = false;
           onTokenRefreshed(newAccessToken);
           originalRequest.headers = { ...originalRequest.headers, Authorization: `Bearer ${newAccessToken}` };
