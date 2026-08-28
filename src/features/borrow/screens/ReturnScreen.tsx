@@ -15,6 +15,7 @@ import {
 import { LoadingOverlay } from '../../../components/LoadingOverlay';
 import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
 import { borrowApi } from '../../../api/borrow';
+import { triggerHaptic } from '../../../utils/haptics';
 import { AppTheme } from '../../../theme/DarkTheme';
 import { BorrowRecord, StaffPatronActiveBorrowsResponse } from '../../../types';
 import { formatDate, getDaysUntil, isOverdue } from '../../../utils/dateUtils';
@@ -164,14 +165,17 @@ export default function ReturnScreen() {
     setScannedReturns((prev) => {
       if (prev.some((item) => item.isbn === code)) {
         toast = `Sách ${code} đã có trong danh sách`;
+        triggerHaptic.warning();
         return prev;
       }
       const match = activeRecords.find((r) => normalizeBookCode(r.book?.isbn) === code);
       if (match) {
         toast = `Đã thêm: ${match.book?.title || code}`;
+        triggerHaptic.success();
         return [...prev, { isbn: code, record: match, condition: '' }];
       }
       toast = `Không tìm thấy sách đang mượn: ${code}`;
+      triggerHaptic.error();
       return prev;
     });
     setScanToast(toast);

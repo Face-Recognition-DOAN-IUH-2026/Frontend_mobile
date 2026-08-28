@@ -14,9 +14,11 @@ import {
   GradientHeader,
   StatCard,
   SectionCard,
+  QuickActionButton,
   EmptyState,
   GRADIENTS,
 } from '../../../theme/MobileDesignSystem';
+import { GreetingBar } from '../../../components/GreetingBar';
 import { BorrowRecord, CameraEvent, StaffScheduleAssignment } from '../../../types';
 import { formatDate, getDaysUntil, isOverdue, toDateInput } from '../../../utils/dateUtils';
 import { getAssignmentTimeState } from '../../../utils/assignmentUtils';
@@ -144,7 +146,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   ];
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={[]}>
       <ScrollView
         style={styles.flex}
         contentContainerStyle={styles.content}
@@ -162,6 +164,95 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             )
           }
         />
+
+        <GreetingBar
+          userName={displayName}
+          onRefresh={onRefresh}
+          liveConnected={accessWsStatus === 'connected' || !isStaffScanner}
+        />
+
+        {/* Quick Actions Shortcuts */}
+        <SectionCard title="Tiện ích nhanh" icon="lightning-bolt" accentColor={theme.colors.secondary}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.quickActionsContainer}
+          >
+            {isStaffScanner ? (
+              <>
+                <QuickActionButton
+                  label="Trả sách"
+                  icon="barcode-scan"
+                  color={GRADIENTS.emerald[0]}
+                  onPress={() => navigation.navigate('StaffReturn')}
+                />
+                <QuickActionButton
+                  label="Mượn sách"
+                  icon="book-plus-multiple"
+                  color={GRADIENTS.navy[0]}
+                  onPress={() => navigation.navigate('StaffBorrow')}
+                />
+                <QuickActionButton
+                  label="Nhập sách"
+                  icon="package-variant-closed"
+                  color={GRADIENTS.amber[0]}
+                  onPress={() => navigation.navigate('ImportBooks')}
+                />
+                <QuickActionButton
+                  label="Lịch trực"
+                  icon="calendar-clock"
+                  color={GRADIENTS.steel[0]}
+                  onPress={() => navigation.navigate('Schedule')}
+                />
+                <QuickActionButton
+                  label="AI Health"
+                  icon="chart-line"
+                  color={GRADIENTS.navyLight[0]}
+                  onPress={() => navigation.navigate('AIHealth')}
+                />
+                <QuickActionButton
+                  label="Hỏi AI"
+                  icon="robot"
+                  color={GRADIENTS.violet[0]}
+                  onPress={() => navigation.navigate('AIChat')}
+                />
+              </>
+            ) : (
+              <>
+                <QuickActionButton
+                  label="Tìm sách"
+                  icon="book-search"
+                  color={GRADIENTS.navy[0]}
+                  onPress={() => navigation.navigate('BookCatalog')}
+                />
+                <QuickActionButton
+                  label="Gợi ý sách"
+                  icon="lightbulb-on-outline"
+                  color={GRADIENTS.amber[0]}
+                  onPress={() => navigation.navigate('BookRecommendations')}
+                />
+                <QuickActionButton
+                  label="Thẻ thư viện"
+                  icon="card-account-details"
+                  color={GRADIENTS.emerald[0]}
+                  onPress={() => navigation.navigate('Profile')}
+                />
+                <QuickActionButton
+                  label="Tham quan 3D"
+                  icon="compass-outline"
+                  color={GRADIENTS.steel[0]}
+                  onPress={() => navigation.navigate('LibraryTour')}
+                />
+                <QuickActionButton
+                  label="Hỏi trợ lý AI"
+                  icon="robot"
+                  color={GRADIENTS.violet[0]}
+                  onPress={() => navigation.navigate('AIChat')}
+                />
+              </>
+            )}
+          </ScrollView>
+        </SectionCard>
 
         {isStaffScanner && (
           <SectionCard
@@ -408,6 +499,12 @@ function createStyles(theme: AppTheme) {
     cardTitle: {
       color: theme.colors.onSurface,
       fontWeight: '800',
+    },
+    quickActionsContainer: {
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      gap: 12,
+      alignItems: 'center',
     },
 
     /* staff grid */

@@ -24,6 +24,7 @@ const MESSAGES_KEY_PREFIX = 'ai-chat-messages';
 
 interface AIChatScreenProps {
   navigation: any;
+  route?: any;
 }
 
 const WELCOME_ACTIONS_STAFF = [
@@ -40,7 +41,7 @@ const WELCOME_ACTIONS_PATRON = [
   { label: 'Thẻ thư viện', message: 'tra cứu thông tin thẻ', icon: 'card-account-details' },
 ];
 
-export default function AIChatScreen({ navigation }: AIChatScreenProps) {
+export default function AIChatScreen({ navigation, route }: AIChatScreenProps) {
   const theme = useTheme() as AppTheme;
   const styles = useMemo(() => createStyles(theme), [theme]);
   const { user, patron } = useAuth();
@@ -57,6 +58,12 @@ export default function AIChatScreen({ navigation }: AIChatScreenProps) {
   const [lastReservation, setLastReservation] = useState<{ id: string; bookId: string; title: string } | null>(null);
 
   const currentUserId = useMemo(() => patron?.id || user?.id, [patron?.id, user?.id]);
+
+  useEffect(() => {
+    if (route?.params?.initialPrompt) {
+      setInput(route.params.initialPrompt);
+    }
+  }, [route?.params?.initialPrompt]);
 
   const sessionKey = useMemo(() => currentUserId ? `${SESSION_KEY_PREFIX}-${currentUserId}` : null, [currentUserId]);
   const messagesKey = useMemo(() => currentUserId ? `${MESSAGES_KEY_PREFIX}-${currentUserId}` : null, [currentUserId]);

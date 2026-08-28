@@ -14,9 +14,17 @@ function zoneLabel(item: StaffScheduleAssignment) {
   return compact ? compact[2] : zoneName || `${item.zone.floor ?? '-'}`;
 }
 
+function parseTimeToMinutes(timeStr?: string | null): number | null {
+  if (!timeStr) return null;
+  const parts = timeStr.split(':').map(Number);
+  if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) return null;
+  return parts[0] * 60 + parts[1];
+}
+
 interface AssignmentCardProps {
   item: StaffScheduleAssignment;
   onCheckIn: (id: string) => void;
+  onFaceCheckIn?: (item: StaffScheduleAssignment) => void;
   onCheckOut: (id: string) => void;
   onRequestManualCheckIn?: (assignmentId: string) => void;
   actionLoadingId: string | null;
@@ -24,7 +32,16 @@ interface AssignmentCardProps {
   shiftTime?: string;
 }
 
-export default function AssignmentCard({ item, onCheckIn, onCheckOut, onRequestManualCheckIn, actionLoadingId, shiftLabel, shiftTime }: AssignmentCardProps) {
+export default function AssignmentCard({
+  item,
+  onCheckIn,
+  onFaceCheckIn,
+  onCheckOut,
+  onRequestManualCheckIn,
+  actionLoadingId,
+  shiftLabel,
+  shiftTime,
+}: AssignmentCardProps) {
   const theme = useTheme<AppTheme>();
   const c = theme.colors;
   const state = getAssignmentTimeState(item);
@@ -35,13 +52,21 @@ export default function AssignmentCard({ item, onCheckIn, onCheckOut, onRequestM
   const endTime = normalizeTime(item.shift?.endTime);
   const nowDate = new Date();
   const nowMins = nowDate.getHours() * 60 + nowDate.getMinutes();
-  const startMins = startTime ? startTime.split(':').map(Number).reduce((h, m, i) => i === 0 ? h * 60 + m : h * 60 + m, 0) : null;
-  const endMins = endTime ? endTime.split(':').map(Number).reduce((h, m, i) => i === 0 ? h * 60 + m : h * 60 + m, 0) : null;
-  const withinShift = startMins !== null && endMins !== null && nowMins >= startMins && nowMins <= endMins;
+  const startMins = parseTimeToMinutes(startTime);
+  const endMins = parseTimeToMinutes(endTime);
 
-  const canCheckIn = isToday && !item.attendance?.checkInAt && withinShift;
-  const canCheckOut = isToday && !!item.attendance?.checkInAt && !item.attendance?.checkOutAt;
-  const isNow = state === 'now';
+  // Check-in tolerance window: backend opens 45 mins before shift start and allows throughout shift
+  const withinCheckInWindow = startMins !== null && endMins !== null
+    ? nowMins >= startMins - 45 && nowMins <= endMins + 30
+    : true;
+
+  const isPendingManual = item.attendance?.status === 'pending_manual';
+  const isRejectedManual = item.attendance?.status === 'rejected_manual';
+  const isCancelled = item.status === 'cancelled';
+  const isCompleted = item.status === 'completed' || !!item.attendance?.checkOutAt;
+
+  const canCheckIn = isToday && !item.attendance?.checkInAt && !isPendingManual && !isCancelled && !isCompleted && withinCheckInWindow;
+  const canCheckOut = isToday && !!item.attendance?.checkInAt && !item.attendance?.checkOutAt && !isCancelled;
   const isPast = state === 'past';
 
   const checkInTime = item.attendance?.checkInAt ? item.attendance.checkInAt.slice(11, 16) : null;
@@ -58,77 +83,127 @@ export default function AssignmentCard({ item, onCheckIn, onCheckOut, onRequestM
           backgroundColor: c.surface,
           borderColor: c.outlineVariant,
         },
-        isPast && { opacity: 0.6 },
+        isPast && { opacity: 0.75 },
       ]}
     >
+      <View style={[s.accentBar, { backgroundColor: canCheckIn ? c.primary : isCompleted ? (c.custom?.success || '#10B981') : isCancelled ? c.error : c.outlineVariant }]} />
       <Card.Content style={s.content}>
         {(shiftLabel || shiftTime) && (
-          <Text style={[s.shiftInfo, { color: c.onSurface }]}>
-            {shiftLabel}{shiftTime ? ` · ${shiftTime}` : ''}
-          </Text>
+          <View style={s.headerRow}>
+            <Text style={[s.shiftInfo, { color: c.onSurface }]}>
+              {shiftLabel}{shiftTime ? ` · ${shiftTime}` : ''}
+            </Text>
+            {isCompleted ? (
+              <View style={[s.chipBadge, { backgroundColor: (c.custom?.success || '#10B981') + '18' }]}>
+                <MaterialCommunityIcons name="check-circle" size={12} color={c.custom?.success || '#10B981'} />
+                <Text style={[s.chipBadgeText, { color: c.custom?.success || '#10B981' }]}>Hoàn thành</Text>
+              </View>
+            ) : isToday && canCheckIn ? (
+              <View style={[s.chipBadge, { backgroundColor: c.primary + '18' }]}>
+                <MaterialCommunityIcons name="clock-fast" size={12} color={c.primary} />
+                <Text style={[s.chipBadgeText, { color: c.primary }]}>Đang mở check-in</Text>
+              </View>
+            ) : null}
+          </View>
         )}
 
-        <Text style={s.fieldRow}>
-          <Text style={[s.fieldLabel, { color: c.onSurface }]}>Tầng : </Text>
-          <Text style={[s.fieldValue, { color: c.onSurface }]}>{zoneLabel(item)}</Text>
-        </Text>
+        <View style={s.infoGrid}>
+          <Text style={s.fieldRow}>
+            <Text style={[s.fieldLabel, { color: c.onSurfaceVariant }]}>Tầng / Khu vực: </Text>
+            <Text style={[s.fieldValue, { color: c.onSurface }]}>{zoneLabel(item)}</Text>
+          </Text>
 
-        <Text style={s.fieldRow}>
-          <Text style={[s.fieldLabel, { color: c.onSurface }]}>Email : </Text>
-          <Text style={[s.fieldValue, { color: c.onSurface }]}>{staffName}</Text>
-        </Text>
+          <Text style={s.fieldRow}>
+            <Text style={[s.fieldLabel, { color: c.onSurfaceVariant }]}>Nhân viên: </Text>
+            <Text style={[s.fieldValue, { color: c.onSurface }]} numberOfLines={1}>{staffName}</Text>
+          </Text>
 
-        <Text style={s.fieldRow}>
-          <Text style={[s.fieldLabel, { color: c.onSurface }]}>Vào : </Text>
-          <Text style={[s.fieldValue, { color: c.onSurface }]}>{checkInTime ?? '--'}</Text>
-          <Text style={[s.separator, { color: c.onSurface }]}>  -  </Text>
-          <Text style={[s.fieldLabel, { color: c.onSurface }]}>Ra : </Text>
-          <Text style={[s.fieldValue, { color: c.onSurface }]}>{checkOutTime ?? '--'}</Text>
-        </Text>
+          <Text style={s.fieldRow}>
+            <Text style={[s.fieldLabel, { color: c.onSurfaceVariant }]}>Vào: </Text>
+            <Text style={[s.fieldValue, { color: checkInTime ? (c.custom?.success || '#10B981') : c.onSurfaceVariant }]}>{checkInTime ?? '--:--'}</Text>
+            <Text style={[s.separator, { color: c.outlineVariant }]}>  ·  </Text>
+            <Text style={[s.fieldLabel, { color: c.onSurfaceVariant }]}>Ra: </Text>
+            <Text style={[s.fieldValue, { color: checkOutTime ? c.primary : c.onSurfaceVariant }]}>{checkOutTime ?? '--:--'}</Text>
+          </Text>
+        </View>
 
-        {(canCheckIn || canCheckOut) && (
-          <View style={s.actionRow}>
+        {isPendingManual && (
+          <View style={[s.statusBadge, { backgroundColor: 'rgba(234, 179, 8, 0.15)' }]}>
+            <MaterialCommunityIcons name="clock-outline" size={16} color="#eab308" />
+            <Text style={[s.statusBadgeText, { color: '#eab308' }]}>Đang chờ duyệt check-in thủ công</Text>
+          </View>
+        )}
+
+        {isRejectedManual && !item.attendance?.checkInAt && (
+          <View style={[s.statusBadge, { backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}>
+            <MaterialCommunityIcons name="alert-circle-outline" size={16} color="#ef4444" />
+            <Text style={[s.statusBadgeText, { color: '#ef4444' }]}>Check-in thủ công đã bị từ chối</Text>
+          </View>
+        )}
+
+        {(canCheckIn || canCheckOut || (isRejectedManual && !item.attendance?.checkInAt)) && (
+          <View style={s.actionContainer}>
             {canCheckIn ? (
-              <Button
-                mode="contained"
-                icon="login"
-                compact
-                loading={actionLoadingId === `${item.id}:check-in`}
-                onPress={() => onCheckIn(item.id)}
-                style={[s.actionBtn, { backgroundColor: c.primary }]}
-                labelStyle={s.actionLabel}
-                textColor="#fff"
-              >
-                Check-in
-              </Button>
+              <View style={s.actionRow}>
+                {onFaceCheckIn ? (
+                  <Button
+                    mode="contained"
+                    icon="face-recognition"
+                    compact
+                    onPress={() => onFaceCheckIn(item)}
+                    style={[s.actionBtn, { backgroundColor: c.primary }]}
+                    labelStyle={s.actionLabel}
+                    textColor="#fff"
+                  >
+                    Face Check-in
+                  </Button>
+                ) : null}
+
+                <Button
+                  mode={onFaceCheckIn ? 'outlined' : 'contained'}
+                  icon="map-marker-check"
+                  compact
+                  loading={actionLoadingId === `${item.id}:check-in`}
+                  onPress={() => onCheckIn(item.id)}
+                  style={[s.actionBtn, onFaceCheckIn ? { borderColor: c.primary } : { backgroundColor: c.primary }]}
+                  labelStyle={s.actionLabel}
+                  textColor={onFaceCheckIn ? c.primary : '#fff'}
+                >
+                  GPS
+                </Button>
+
+                {onRequestManualCheckIn ? (
+                  <Button
+                    mode="outlined"
+                    icon="clipboard-text-outline"
+                    compact
+                    loading={actionLoadingId === `${item.id}:manual-checkin`}
+                    onPress={() => onRequestManualCheckIn(item.id)}
+                    style={[s.actionBtn, { borderColor: c.secondary }]}
+                    labelStyle={[s.actionLabel, { color: c.secondary }]}
+                    textColor={c.secondary}
+                  >
+                    Thủ công
+                  </Button>
+                ) : null}
+              </View>
             ) : null}
-            {canCheckIn && onRequestManualCheckIn ? (
-              <Button
-                mode="outlined"
-                icon="clipboard-text-outline"
-                compact
-                loading={actionLoadingId === `${item.id}:manual-checkin`}
-                onPress={() => onRequestManualCheckIn(item.id)}
-                style={[s.actionBtn, { borderColor: '#8b5cf6' }]}
-                labelStyle={[s.actionLabel, { color: '#8b5cf6' }]}
-                textColor="#8b5cf6"
-              >
-                Thủ công
-              </Button>
-            ) : null}
+
             {canCheckOut ? (
-              <Button
-                mode="outlined"
-                icon="logout"
-                compact
-                loading={actionLoadingId === `${item.id}:check-out`}
-                onPress={() => onCheckOut(item.id)}
-                style={[s.actionBtn, { borderColor: c.outline }]}
-                labelStyle={[s.actionLabel, { color: c.onSurface }]}
-                textColor={c.onSurface}
-              >
-                Check-out
-              </Button>
+              <View style={s.actionRow}>
+                <Button
+                  mode="outlined"
+                  icon="logout"
+                  compact
+                  loading={actionLoadingId === `${item.id}:check-out`}
+                  onPress={() => onCheckOut(item.id)}
+                  style={[s.actionBtn, { borderColor: c.error }]}
+                  labelStyle={[s.actionLabel, { color: c.error }]}
+                  textColor={c.error}
+                >
+                  Check-out
+                </Button>
+              </View>
             ) : null}
           </View>
         )}
@@ -139,15 +214,50 @@ export default function AssignmentCard({ item, onCheckIn, onCheckOut, onRequestM
 
 const s = StyleSheet.create({
   card: {
-    borderRadius: 12,
+    borderRadius: 16,
+    overflow: 'hidden',
+    position: 'relative',
+    borderWidth: 1,
+  },
+  accentBar: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+    zIndex: 1,
   },
   content: {
-    gap: 4,
+    paddingLeft: 18,
+    paddingRight: 14,
+    paddingVertical: 12,
+    gap: 6,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
   },
   shiftInfo: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
-    marginBottom: 4,
+    flex: 1,
+  },
+  chipBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  chipBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  infoGrid: {
+    gap: 3,
   },
   fieldRow: {
     flexDirection: 'row',
@@ -159,23 +269,40 @@ const s = StyleSheet.create({
   },
   separator: {
     fontSize: 13,
-    fontWeight: '400',
+    fontWeight: '700',
   },
   fieldValue: {
     fontSize: 13,
-    fontWeight: '400',
+    fontWeight: '500',
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  statusBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
     flex: 1,
+  },
+  actionContainer: {
+    marginTop: 8,
+    gap: 8,
   },
   actionRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 8,
+    gap: 6,
   },
   actionBtn: {
     flex: 1,
-    borderRadius: 8,
+    borderRadius: 10,
   },
   actionLabel: {
-    fontSize: 13,
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

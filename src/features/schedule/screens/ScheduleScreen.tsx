@@ -16,6 +16,7 @@ import { getAssignmentTimeState, AssignmentTimeState } from '../../../utils/assi
 import { GradientHeader, EmptyState, GRADIENTS } from '../../../theme/MobileDesignSystem';
 import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
 import { LoadingOverlay } from '../../../components/LoadingOverlay';
+import FaceCheckInModal from '../../../components/FaceCheckInModal';
 
 function getErrorMessage(err: any, fallback: string) {
   return err?.response?.data?.detail || err?.response?.data?.error || err?.message || fallback;
@@ -127,6 +128,7 @@ export default function ScheduleScreen() {
   }), [c]);
 
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [faceAssignment, setFaceAssignment] = useState<StaffScheduleAssignment | null>(null);
   const [snackbar, setSnackbar] = useState('');
   const [viewMode, setViewMode] = useState<(typeof VIEW_MODES)[number]>('Ngày');
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -354,7 +356,7 @@ export default function ScheduleScreen() {
   const handleRequestManualCheckIn = async (assignmentId: string) => {
     setActionLoadingId(`${assignmentId}:manual-checkin`);
     try {
-      await scheduleApi.requestManualCheckIn(assignmentId);
+      await scheduleApi.requestManualCheckIn(assignmentId, 'Yêu cầu check-in thủ công từ ứng dụng di động');
       setSnackbar('Đã gửi yêu cầu check-in thủ công');
       await refetchSchedule();
     } catch (err: any) {
@@ -489,6 +491,7 @@ export default function ScheduleScreen() {
           <AssignmentCard
             item={item}
             onCheckIn={(id) => runAttendanceAction(id, 'check-in')}
+            onFaceCheckIn={(it) => setFaceAssignment(it)}
             onCheckOut={(id) => runAttendanceAction(id, 'check-out')}
             onRequestManualCheckIn={handleRequestManualCheckIn}
             actionLoadingId={actionLoadingId}
@@ -531,6 +534,7 @@ export default function ScheduleScreen() {
             key={item.id}
             item={item}
             onCheckIn={(id) => runAttendanceAction(id, 'check-in')}
+            onFaceCheckIn={(it) => setFaceAssignment(it)}
             onCheckOut={(id) => runAttendanceAction(id, 'check-out')}
             onRequestManualCheckIn={handleRequestManualCheckIn}
             actionLoadingId={actionLoadingId}
@@ -807,6 +811,16 @@ export default function ScheduleScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      <FaceCheckInModal
+        visible={!!faceAssignment}
+        assignment={faceAssignment}
+        onClose={() => setFaceAssignment(null)}
+        onSuccess={(msg) => {
+          setSnackbar(msg);
+          refetchSchedule();
+        }}
+      />
 
       <NoticeSnackbar
         visible={!!snackbar}

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { NavigationContainer, DarkTheme as NavigationDarkTheme, DefaultTheme as NavigationDefaultTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -8,6 +8,7 @@ import { useTheme } from 'react-native-paper';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import { navigationRef } from './navigationRef';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 
 import ChangePasswordScreen from '../features/profile/screens/ChangePasswordScreen';
@@ -138,21 +139,24 @@ function HeaderNotificationButton({ navigation }: { navigation: any }) {
 
 function PatronTabNavigator() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  const bottomInset = Math.max(insets.bottom, Platform.OS === 'ios' ? 24 : 8);
 
   return (
     <PatronTab.Navigator
       screenOptions={({ navigation }) => ({
         tabBarStyle: {
           backgroundColor: theme.colors.surface,
-          borderTopWidth: 0,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: theme.colors.outlineVariant,
           elevation: 16,
           shadowColor: '#000',
-          shadowOffset: { width: 0, height: -4 },
-          shadowOpacity: 0.05,
-          shadowRadius: 12,
+          shadowOffset: { width: 0, height: -3 },
+          shadowOpacity: 0.08,
+          shadowRadius: 10,
           paddingTop: 8,
-          paddingBottom: 8,
-          height: Platform.OS === 'ios' ? 84 : 64,
+          paddingBottom: bottomInset,
+          height: 60 + bottomInset,
         },
         tabBarActiveTintColor: theme.colors.primary,
         tabBarInactiveTintColor: theme.colors.onSurfaceVariant,
@@ -221,21 +225,24 @@ function PatronTabNavigator() {
 
 function StaffTabNavigator() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  const bottomInset = Math.max(insets.bottom, Platform.OS === 'ios' ? 24 : 8);
 
   return (
     <StaffTab.Navigator
       screenOptions={({ navigation }) => ({
         tabBarStyle: {
           backgroundColor: theme.colors.surface,
-          borderTopWidth: 0,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: theme.colors.outlineVariant,
           elevation: 16,
           shadowColor: '#000',
-          shadowOffset: { width: 0, height: -4 },
-          shadowOpacity: 0.05,
-          shadowRadius: 12,
+          shadowOffset: { width: 0, height: -3 },
+          shadowOpacity: 0.08,
+          shadowRadius: 10,
           paddingTop: 8,
-          paddingBottom: 8,
-          height: Platform.OS === 'ios' ? 84 : 64,
+          paddingBottom: bottomInset,
+          height: 60 + bottomInset,
         },
         tabBarActiveTintColor: theme.colors.primary,
         tabBarInactiveTintColor: theme.colors.onSurfaceVariant,
@@ -507,11 +514,13 @@ function LoadingScreen() {
 
   return (
     <View style={[loadingStyles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={[loadingStyles.logoCircle, { backgroundColor: theme.colors.primary }]}>
-        <Text style={[loadingStyles.logoText, { color: theme.colors.onPrimary }]}>TV</Text>
-      </View>
+      <Image
+        source={theme.dark ? require('../../assets/logo-white.png') : require('../../assets/logo.png')}
+        style={loadingStyles.logoImage}
+        resizeMode="contain"
+      />
       <Animated.Text style={[loadingStyles.brand, { opacity, color: theme.colors.primary }]}>
-        Thư Viện
+        THƯ VIỆN ĐH CÔNG NGHIỆP TP.HCM
       </Animated.Text>
     </View>
   );
@@ -523,22 +532,14 @@ const loadingStyles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  logoCircle: {
-    width: 80,
+  logoImage: {
+    width: 260,
     height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginBottom: 20,
   },
-  logoText: {
-    fontSize: 32,
-    fontWeight: '800',
-    letterSpacing: 3,
-  },
   brand: {
-    fontSize: 20,
-    fontWeight: '600',
-    letterSpacing: 4,
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 1,
   },
 });

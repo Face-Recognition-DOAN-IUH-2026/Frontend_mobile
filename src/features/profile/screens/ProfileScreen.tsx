@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View, TouchableOpacity, Alert } from 'react-native';
+import { ScrollView, StyleSheet, View, TouchableOpacity, Alert, Platform, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Avatar,
@@ -74,10 +74,12 @@ const infoStyles = StyleSheet.create({
 
 export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   const theme = useTheme() as AppTheme;
+  const c = theme.colors;
   const styles = useMemo(() => createStyles(theme), [theme]);
   const { user, patron, logout, updateUser } = useAuth();
   const { mode, toggleTheme } = useMobileTheme();
   const [logoutVisible, setLogoutVisible] = useState(false);
+  const [cardModalVisible, setCardModalVisible] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   const roleLabel =
@@ -144,7 +146,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   const isStudent = user?.role === 'patron' && !!studentCode;
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={[]}>
       <LoadingOverlay loading={!user} message="Đang tải hồ sơ...">
         <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
           <GradientHeader
@@ -190,6 +192,32 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           >
             Chỉnh sửa hồ sơ
           </Button>
+
+          <SectionCard
+            title="Thẻ Thư Viện Điện Tử"
+            icon="smart-card-outline"
+            accentColor={theme.colors.primary}
+          >
+            <View style={styles.digitalCardRow}>
+              <View style={styles.digitalCardInfo}>
+                <Text variant="titleSmall" style={{ color: theme.colors.onSurface, fontWeight: '700' }}>
+                  {studentCode ? `MSSV: ${studentCode}` : `Mã người dùng: ${user?.id?.slice(0, 10)}`}
+                </Text>
+                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
+                  Mở mã thẻ để quét mượn sách hoặc qua cổng
+                </Text>
+              </View>
+              <Button
+                mode="contained"
+                icon="qrcode-scan"
+                onPress={() => setCardModalVisible(true)}
+                style={styles.cardOpenBtn}
+                compact
+              >
+                Xem thẻ
+              </Button>
+            </View>
+          </SectionCard>
 
           {isStudent ? (
             <SectionCard
@@ -381,6 +409,86 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
             <Button onPress={handleLogout} textColor={theme.colors.error}>Đăng xuất</Button>
           </Dialog.Actions>
         </Dialog>
+
+        {/* Digital Library Card Modal */}
+        <Dialog
+          visible={cardModalVisible}
+          onDismiss={() => setCardModalVisible(false)}
+          style={[styles.cardDialog, { backgroundColor: c.surface }]}
+        >
+          <Dialog.Content style={{ padding: 0 }}>
+            <View style={[styles.idCardContainer, { backgroundColor: c.primary }]}>
+              {/* Header */}
+              <View style={styles.idCardHeader}>
+                <View style={styles.idLogoCircle}>
+                  <Image
+                    source={require('../../../../assets/logo-white.png')}
+                    style={styles.idLogoImage}
+                    resizeMode="contain"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.idCardSchool}>ĐH CÔNG NGHIỆP TP.HCM</Text>
+                  <Text style={styles.idCardSub}>THẺ THƯ VIỆN ĐIỆN TỬ</Text>
+                </View>
+                <View style={styles.idActiveBadge}>
+                  <MaterialCommunityIcons name="check-circle" size={12} color="#10B981" />
+                  <Text style={styles.idActiveText}>HOẠT ĐỘNG</Text>
+                </View>
+              </View>
+
+              {/* Body */}
+              <View style={styles.idCardBody}>
+                {user?.avatar_url ? (
+                  <Avatar.Image size={64} source={{ uri: user.avatar_url }} style={styles.idCardAvatar} />
+                ) : (
+                  <Avatar.Text size={64} label={(displayName || 'U').slice(0, 1).toUpperCase()} color="#FFFFFF" style={[styles.idCardAvatar, { backgroundColor: 'rgba(255,255,255,0.25)' }]} />
+                )}
+                <View style={styles.idCardDetails}>
+                  <Text style={styles.idCardName}>{displayName}</Text>
+                  <Text style={styles.idCardCode}>{studentCode ? `MSSV: ${studentCode}` : `MÃ: ${user?.id?.slice(0, 12)}`}</Text>
+                  {patron?.faculty || patron?.className ? (
+                    <Text style={styles.idCardMeta}>
+                      {patron?.className ? `Lớp: ${patron.className}` : ''}
+                      {patron?.faculty && patron?.className ? ' · ' : ''}
+                      {patron?.faculty || ''}
+                    </Text>
+                  ) : (
+                    <Text style={styles.idCardMeta}>{user?.email}</Text>
+                  )}
+                  <Text style={styles.idCardExpiry}>
+                    Hạn dùng: {patron?.membership_expiry || patron?.membershipExpiry || 'Vô thời hạn'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Barcode Graphic */}
+              <View style={styles.barcodeWrapper}>
+                <View style={styles.barcodeLines}>
+                  {[3, 1, 2, 4, 1, 3, 2, 1, 4, 2, 1, 3, 1, 4, 2, 3, 1, 2, 4, 1, 3, 2, 1, 4, 2, 1, 3, 2, 4, 1, 3, 2, 1].map((w, idx) => (
+                    <View
+                      key={idx}
+                      style={{
+                        width: w,
+                        height: 38,
+                        backgroundColor: idx % 2 === 0 ? '#111827' : 'transparent',
+                        marginHorizontal: 0.5,
+                      }}
+                    />
+                  ))}
+                </View>
+                <Text style={styles.barcodeText}>
+                  {studentCode || user?.id || 'LIBRARY-CARD'}
+                </Text>
+              </View>
+            </View>
+          </Dialog.Content>
+          <Dialog.Actions style={{ justifyContent: 'center', paddingBottom: 12 }}>
+            <Button mode="contained" onPress={() => setCardModalVisible(false)} style={{ borderRadius: 10 }}>
+              Đóng thẻ
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
       </Portal>
     </SafeAreaView>
   );
@@ -400,6 +508,19 @@ function createStyles(theme: AppTheme) {
       padding: 16,
       paddingBottom: 28,
       gap: 12,
+    },
+    digitalCardRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingBottom: 14,
+      gap: 12,
+    },
+    digitalCardInfo: {
+      flex: 1,
+    },
+    cardOpenBtn: {
+      borderRadius: 10,
     },
     avatarWrapper: {
       position: 'relative',
@@ -488,6 +609,110 @@ function createStyles(theme: AppTheme) {
     },
     version: {
       color: c.onSurfaceVariant,
+    },
+    cardDialog: {
+      borderRadius: 20,
+      overflow: 'hidden',
+      padding: 0,
+    },
+    idCardContainer: {
+      borderRadius: 16,
+      margin: 12,
+      padding: 16,
+      gap: 14,
+    },
+    idCardHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    idLogoCircle: {
+      width: 52,
+      height: 32,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    idLogoImage: {
+      width: '100%',
+      height: '100%',
+    },
+    idCardSchool: {
+      color: '#FFFFFF',
+      fontWeight: '800',
+      fontSize: 11,
+      letterSpacing: 0.5,
+    },
+    idCardSub: {
+      color: 'rgba(255,255,255,0.8)',
+      fontSize: 9,
+      fontWeight: '600',
+      letterSpacing: 0.5,
+    },
+    idActiveBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: 'rgba(16, 185, 129, 0.2)',
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 8,
+    },
+    idActiveText: {
+      color: '#FFFFFF',
+      fontSize: 9,
+      fontWeight: '800',
+    },
+    idCardBody: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    idCardAvatar: {
+      borderWidth: 2,
+      borderColor: 'rgba(255,255,255,0.6)',
+    },
+    idCardDetails: {
+      flex: 1,
+      gap: 2,
+    },
+    idCardName: {
+      color: '#FFFFFF',
+      fontSize: 15,
+      fontWeight: '800',
+    },
+    idCardCode: {
+      color: 'rgba(255,255,255,0.95)',
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    idCardMeta: {
+      color: 'rgba(255,255,255,0.8)',
+      fontSize: 11,
+    },
+    idCardExpiry: {
+      color: 'rgba(255,255,255,0.7)',
+      fontSize: 10,
+      marginTop: 2,
+    },
+    barcodeWrapper: {
+      backgroundColor: '#FFFFFF',
+      borderRadius: 10,
+      padding: 10,
+      alignItems: 'center',
+      gap: 4,
+    },
+    barcodeLines: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: 40,
+    },
+    barcodeText: {
+      color: '#111827',
+      fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+      fontSize: 12,
+      fontWeight: '700',
+      letterSpacing: 2,
     },
   });
 }

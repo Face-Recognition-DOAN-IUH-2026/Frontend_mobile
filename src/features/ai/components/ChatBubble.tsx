@@ -41,8 +41,8 @@ function BookCardInline({ book, theme }: { book: any; theme: AppTheme }) {
   const [imageError, setImageError] = React.useState(false);
 
   return (
-    <View style={[inlineStyles.card, { backgroundColor: theme.dark ? '#1C1C2E' : '#FFFFFF', borderColor: theme.dark ? '#2A2A3C' : '#E5E7EB' }]}>
-      <View style={[inlineStyles.header, { backgroundColor: theme.dark ? '#2D2D44' : '#6366F1' }]}>
+    <View style={[inlineStyles.card, { backgroundColor: theme.dark ? theme.colors.surface : '#FFFFFF', borderColor: theme.colors.outlineVariant }]}>
+      <View style={[inlineStyles.header, { backgroundColor: theme.colors.primary }]}>
         <MaterialCommunityIcons name="book-open-variant" size={14} color="#FFFFFF" />
         <Text style={inlineStyles.headerLabel}>Thông tin sách</Text>
       </View>
@@ -192,10 +192,11 @@ export default function ChatBubble({ message }: ChatBubbleProps) {
 
 function createStyles(theme: AppTheme) {
   const isDark = theme.dark;
+  const c = theme.colors;
 
   return StyleSheet.create({
     container: {
-      marginVertical: 3,
+      marginVertical: 4,
     },
     userContainer: {
       alignItems: 'flex-end',
@@ -209,7 +210,7 @@ function createStyles(theme: AppTheme) {
       maxWidth: '82%',
     },
     userBubble: {
-      backgroundColor: isDark ? '#6366F1' : '#6366F1',
+      backgroundColor: c.primary,
       borderRadius: 18,
       borderBottomRightRadius: 4,
       paddingHorizontal: 14,
@@ -224,28 +225,30 @@ function createStyles(theme: AppTheme) {
       flexDirection: 'row',
       alignItems: 'flex-end',
       maxWidth: '88%',
-      gap: 6,
+      gap: 8,
     },
     assistantContent: {
       flex: 1,
     },
     assistantBubble: {
-      backgroundColor: isDark ? '#1C1C2E' : '#F3F4F6',
+      backgroundColor: isDark ? c.surface : '#F1F5F9',
       borderRadius: 18,
       borderBottomLeftRadius: 4,
       paddingHorizontal: 14,
       paddingVertical: 10,
+      borderWidth: 1,
+      borderColor: isDark ? c.outlineVariant : '#E2E8F0',
     },
     assistantText: {
-      color: isDark ? 'rgba(255,255,255,0.85)' : '#374151',
+      color: isDark ? c.onSurface : '#1E293B',
       fontSize: 14,
       lineHeight: 21,
     },
     avatarSmall: {
-      width: 24,
-      height: 24,
-      borderRadius: 12,
-      backgroundColor: isDark ? '#6366F1' : '#6366F1',
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: c.primary,
       alignItems: 'center',
       justifyContent: 'center',
     },

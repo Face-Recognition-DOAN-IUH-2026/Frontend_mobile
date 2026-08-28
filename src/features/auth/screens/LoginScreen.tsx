@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, HelperText, SegmentedButtons, Text, TextInput, useTheme } from 'react-native-paper';
 import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
@@ -62,13 +62,11 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
             <View style={styles.decorCircle2} />
             <View style={styles.decorCircle3} />
             <View style={styles.brandRow}>
-              <View style={styles.logoBox}>
-                <Text style={styles.logoText}>IUH</Text>
-              </View>
-              <View>
-                <Text variant="headlineMedium" style={styles.brandTitle}>THƯ VIỆN IUH</Text>
-                <Text variant="bodyMedium" style={styles.brandSubtitle}>Đại học Công nghiệp TP.HCM</Text>
-              </View>
+              <Image
+                source={require('../../../../assets/logo-white.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
             </View>
             <Text variant="bodyLarge" style={styles.welcomeText}>Hệ thống Thư viện Thông minh</Text>
           </View>
@@ -245,32 +243,14 @@ function createStyles(theme: AppTheme) {
       backgroundColor: 'rgba(255,255,255,0.04)',
     },
     brandRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 14,
-      zIndex: 1,
-    },
-    logoBox: {
-      width: 56,
-      height: 56,
-      borderRadius: 16,
-      backgroundColor: 'rgba(255,255,255,0.2)',
       alignItems: 'center',
       justifyContent: 'center',
+      zIndex: 1,
+      marginBottom: 8,
     },
-    logoText: {
-      color: '#FFFFFF',
-      fontSize: 22,
-      fontWeight: '900',
-      letterSpacing: 2,
-    },
-    brandTitle: {
-      color: '#FFFFFF',
-      fontWeight: '900',
-    },
-    brandSubtitle: {
-      color: 'rgba(255,255,255,0.75)',
-      marginTop: 2,
+    logoImage: {
+      width: 240,
+      height: 70,
     },
     welcomeText: {
       color: 'rgba(255,255,255,0.85)',

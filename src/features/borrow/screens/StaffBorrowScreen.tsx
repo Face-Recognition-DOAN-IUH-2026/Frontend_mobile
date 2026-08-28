@@ -11,6 +11,7 @@ import { devError } from '../../../utils/logger';
 import { GradientHeader, SectionCard, StatCard, EmptyState, GRADIENTS } from '../../../theme/MobileDesignSystem';
 import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
 import { LoadingOverlay } from '../../../components/LoadingOverlay';
+import { triggerHaptic } from '../../../utils/haptics';
 
 interface ScannedBorrowItem {
   barcode: string;
@@ -95,9 +96,11 @@ export default function StaffBorrowScreen() {
         copy_barcode: item.copy?.barcode || null,
         book,
       }]);
+      triggerHaptic.success();
       setScanToast(`Đã thêm: ${book.title}`);
       setManualIsbn('');
     } catch (error: any) {
+      triggerHaptic.warning();
       let msg = `Không tìm thấy sách: ${isbn}`;
       if (error.response?.status === 403) {
         msg = error.response?.data?.detail || 'Bạn không thể mượn sách lúc này';
@@ -161,6 +164,7 @@ export default function StaffBorrowScreen() {
       if (!item || !item.can_borrow) {
         const msg = item?.reason || 'Sách không thể mượn';
         const title = item?.book?.title || '';
+        triggerHaptic.error();
         setScanError(title ? `"${title}": ${msg}` : `${msg} (ISBN: ${barcode})`);
         setTimeout(() => setScanned(false), 500);
         return;
@@ -180,8 +184,10 @@ export default function StaffBorrowScreen() {
         copy_barcode: item.copy?.barcode || null,
         book,
       }]);
+      triggerHaptic.success();
       setScanToast(`Đã thêm: ${book.title}`);
     } catch (error: any) {
+      triggerHaptic.error();
       let msg = `Không tìm thấy sách: ${barcode}`;
       if (error.response?.status === 403) {
         msg = error.response?.data?.detail || 'Bạn không thể mượn sách lúc này';
