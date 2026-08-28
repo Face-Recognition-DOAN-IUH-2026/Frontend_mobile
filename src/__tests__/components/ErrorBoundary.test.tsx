@@ -13,8 +13,15 @@ function Boom(): React.ReactNode {
 }
 
 describe('ErrorBoundary', () => {
+  let consoleErrorSpy: jest.SpyInstance;
+
   beforeEach(() => {
     (reportError as jest.Mock).mockClear();
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
   });
 
   it('renders fallback UI when a child throws', async () => {
@@ -23,7 +30,7 @@ describe('ErrorBoundary', () => {
         <Boom />
       </ErrorBoundary>,
     );
-    expect(getByText('Da xay ra loi')).toBeTruthy();
+    expect(getByText('Đã xảy ra lỗi')).toBeTruthy();
   });
 
   it('reports the render error via reportError', async () => {

@@ -100,15 +100,36 @@ export default function NotificationScreen({ navigation }: NotificationScreenPro
 
     return (
       <TouchableOpacity activeOpacity={0.7} onPress={() => handlePress(item)}>
-        <Surface style={[styles.card, { backgroundColor: c.surface, borderColor: c.outline }]} elevation={0}>
-          <View style={[styles.spine, { backgroundColor: item.isRead ? c.custom.textDisabled : spineColor }]} />
-          <View style={[styles.iconCircle, { backgroundColor: `${iconBg}20` }]}>
-            <MaterialCommunityIcons name={icon.name} size={20} color={item.isRead ? c.custom.textDisabled : iconBg} />
+        <Surface
+          style={[
+            styles.card,
+            {
+              backgroundColor: item.isRead ? c.surface : (theme.dark ? '#16283D' : '#F0F7FF'),
+              borderColor: item.isRead ? c.outlineVariant : c.primary,
+            },
+          ]}
+          elevation={item.isRead ? 0 : 1}
+        >
+          <View style={[styles.spine, { backgroundColor: item.isRead ? c.outlineVariant : spineColor }]} />
+          <View style={[styles.iconCircle, { backgroundColor: `${iconBg}18` }]}>
+            <MaterialCommunityIcons name={icon.name} size={22} color={item.isRead ? c.onSurfaceVariant : iconBg} />
           </View>
           <View style={styles.content}>
-            <Text style={[styles.title, { color: item.isRead ? c.onSurfaceVariant : c.onSurface }]} numberOfLines={1}>
-              {item.title}
-            </Text>
+            <View style={styles.headerRow}>
+              <Text
+                style={[
+                  styles.title,
+                  {
+                    color: item.isRead ? c.onSurfaceVariant : c.onSurface,
+                    fontWeight: item.isRead ? '600' : '800',
+                  },
+                ]}
+                numberOfLines={1}
+              >
+                {item.title}
+              </Text>
+              {!item.isRead && <View style={[styles.unreadDot, { backgroundColor: c.primary }]} />}
+            </View>
             <Text style={[styles.body, { color: c.onSurfaceVariant }]} numberOfLines={expanded[item.id] ? undefined : 2}>
               {item.body}
             </Text>
@@ -132,13 +153,13 @@ export default function NotificationScreen({ navigation }: NotificationScreenPro
     <SafeAreaView style={[styles.container, { backgroundColor: c.background }]} edges={['bottom']}>
       <GradientHeader
         title="Thông báo"
-        subtitle={unreadCount > 0 ? `${unreadCount} chưa đọc` : 'Không có thông báo mới'}
+        subtitle={unreadCount > 0 ? `${unreadCount} thông báo chưa đọc` : 'Không có thông báo mới'}
         icon="bell"
         right={
           unreadCount > 0 ? (
             <TouchableOpacity activeOpacity={0.7} onPress={markAllAsRead} style={styles.markAllBtn}>
-              <MaterialCommunityIcons name="check-all" size={18} color="#e0e7ff" />
-              <Text style={[styles.markAllText, { color: "#e0e7ff" }]}>Đọc tất cả</Text>
+              <MaterialCommunityIcons name="check-all" size={18} color="#FFFFFF" />
+              <Text style={[styles.markAllText, { color: "#FFFFFF" }]}>Đọc tất cả</Text>
             </TouchableOpacity>
           ) : null
         }
@@ -161,6 +182,7 @@ export default function NotificationScreen({ navigation }: NotificationScreenPro
             <EmptyState
               icon="bell-outline"
               title={activeFilter === 'unread' ? 'Không có thông báo chưa đọc' : 'Không có thông báo mới'}
+              description="Các thông báo về mượn trả sách, lịch trực và hệ thống sẽ xuất hiện tại đây."
             />
           }
         />
@@ -176,13 +198,12 @@ function createStyles(theme: AppTheme) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 4,
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-      borderRadius: 8,
-      borderWidth: 0.5,
-      borderColor: 'rgba(255,255,255,0.3)',
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 10,
+      backgroundColor: 'rgba(255,255,255,0.2)',
     },
-    markAllText: { fontSize: 12, fontWeight: '600' },
+    markAllText: { fontSize: 12, fontWeight: '700' },
     filterRow: {
       flexDirection: 'row',
       paddingHorizontal: 16,
@@ -191,29 +212,40 @@ function createStyles(theme: AppTheme) {
       gap: 8,
     },
     listContent: {
-      paddingBottom: 20,
+      paddingBottom: 24,
     },
     card: {
       marginHorizontal: 16,
       marginTop: 10,
-      borderRadius: 10,
+      borderRadius: 16,
       flexDirection: 'row',
       overflow: 'hidden',
-      borderWidth: 0.5,
+      borderWidth: 1,
     },
     spine: { width: 4 },
     iconCircle: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
+      width: 42,
+      height: 42,
+      borderRadius: 14,
       alignItems: 'center',
       justifyContent: 'center',
-      margin: 10,
+      margin: 12,
       marginRight: 0,
     },
-    content: { flex: 1, padding: 10, paddingRight: 14 },
-    title: { fontWeight: '600', fontSize: 14, lineHeight: 18 },
-    body: { fontSize: 12, marginTop: 2, lineHeight: 16 },
+    content: { flex: 1, padding: 12, paddingRight: 14, gap: 2 },
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 8,
+    },
+    title: { fontSize: 14, lineHeight: 18 },
+    unreadDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+    },
+    body: { fontSize: 12, marginTop: 2, lineHeight: 17 },
     expandBtn: { marginTop: 4 },
     expandText: { fontSize: 12, fontWeight: '600' },
     time: { fontSize: 11, marginTop: 4 },

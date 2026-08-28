@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { Audio } from 'expo-av';
+import { Audio, AVPlaybackStatus } from 'expo-av';
 
 interface UseAudioStreamPlayerReturn {
   isPlaying: boolean;
@@ -31,7 +31,7 @@ export function useAudioStreamPlayer(): UseAudioStreamPlayerReturn {
 
       soundRef.current = sound;
 
-      sound.setOnPlaybackStatusUpdate((status) => {
+      sound.setOnPlaybackStatusUpdate((status: AVPlaybackStatus) => {
         if (status.isLoaded && status.didJustFinish) {
           setIsPlaying(false);
           soundRef.current = null;

@@ -13,6 +13,7 @@ import { useNetwork } from '../../../context/NetworkContext';
 import {
   GradientHeader,
   SectionCard,
+  FilterPill,
   EmptyState,
   GRADIENTS,
 } from '../../../theme/MobileDesignSystem';
@@ -28,6 +29,16 @@ interface BookCatalogScreenProps {
 
 const SPINE_COLORS = ['#1E6091', '#059669', '#D97706', '#2563EB', '#DC2626', '#154E78', '#2980B9', '#B45309'];
 
+const CATEGORIES = [
+  'Tất cả',
+  'Công nghệ',
+  'Kinh tế',
+  'Kỹ thuật',
+  'Ngoại ngữ',
+  'Khoa học',
+  'Văn học',
+];
+
 function getSpineColor(id: string): string {
   let hash = 0;
   for (let i = 0; i < id.length; i++) {
@@ -41,6 +52,7 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
   const c = theme.colors;
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('Tất cả');
   const [snackMsg, setSnackMsg] = useState('');
   const [snackVisible, setSnackVisible] = useState(false);
   const [reservingId, setReservingId] = useState<string | null>(null);
@@ -76,15 +88,28 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
   };
 
   const filtered = useMemo(() => {
-    if (!searchQuery.trim()) return books;
-    const q = searchQuery.toLowerCase();
-    return books.filter(
-      (b) =>
-        b.title?.toLowerCase().includes(q) ||
-        b.author?.toLowerCase().includes(q) ||
-        b.isbn?.includes(q)
-    );
-  }, [books, searchQuery]);
+    let result = books;
+    if (selectedCategory && selectedCategory !== 'Tất cả') {
+      const cat = selectedCategory.toLowerCase();
+      result = result.filter(
+        (b) =>
+          b.category?.toLowerCase().includes(cat) ||
+          b.title?.toLowerCase().includes(cat) ||
+          b.description?.toLowerCase().includes(cat)
+      );
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(
+        (b) =>
+          b.title?.toLowerCase().includes(q) ||
+          b.author?.toLowerCase().includes(q) ||
+          b.isbn?.includes(q) ||
+          b.category?.toLowerCase().includes(q)
+      );
+    }
+    return result;
+  }, [books, selectedCategory, searchQuery]);
 
   const openDetail = async (book: Book) => {
     setDetailVisible(true);
@@ -166,7 +191,7 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: c.background }]} edges={['bottom']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: c.background }]} edges={[]}>
       <ScrollView
         style={styles.flex}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
@@ -186,6 +211,22 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
           />
         </View>
 
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.categoryScroll}
+          contentContainerStyle={styles.categoryContent}
+        >
+          {CATEGORIES.map((cat) => (
+            <FilterPill
+              key={cat}
+              label={cat}
+              active={selectedCategory === cat}
+              onPress={() => setSelectedCategory(cat)}
+            />
+          ))}
+        </ScrollView>
+
         {loadError ? (
           <View style={styles.stateWrap}>
             <EmptyState icon="cloud-off-outline" message={loadError} />
@@ -196,7 +237,7 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
         ) : filtered.length === 0 ? (
           <EmptyState
             icon="book-search"
-            message={searchQuery ? 'Không tìm thấy sách phù hợp' : 'Thư viện chưa có sách nào'}
+            message={searchQuery || selectedCategory !== 'Tất cả' ? 'Không tìm thấy sách phù hợp' : 'Thư viện chưa có sách nào'}
           />
         ) : (
           filtered.map((book) => {
@@ -325,6 +366,21 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
                     Báo khi có sách
                   </Button>
                 )}
+
+                <Button
+                  mode="outlined"
+                  icon="robot"
+                  onPress={() => {
+                    setDetailVisible(false);
+                    navigation.navigate('AIChat', {
+                      initialPrompt: `Hãy tóm tắt nội dung chính và đánh giá cuốn sách "${detailBook.title}" (Tác giả: ${detailBook.author || 'Nhiều tác giả'}).`,
+                    });
+                  }}
+                  style={styles.detailAiButton}
+                  textColor={c.primary}
+                >
+                  Hỏi trợ lý AI về sách này
+                </Button>
               </View>
             </ScrollView>
           ) : (
@@ -358,6 +414,8 @@ function createStyles(theme: AppTheme) {
     container: { flex: 1 },
     flex: { flex: 1 },
     searchWrap: { marginTop: 12, paddingHorizontal: 16 },
+    categoryScroll: { marginTop: 10, maxHeight: 44 },
+    categoryContent: { paddingHorizontal: 16, gap: 8, alignItems: 'center' },
     stateWrap: { alignItems: 'center', marginTop: 32 },
     stateButton: { borderRadius: 8, marginTop: 12 },
     stateButtonLabel: { fontSize: 14 },
@@ -416,5 +474,6 @@ function createStyles(theme: AppTheme) {
     detailActions: { gap: 8 },
     detailBorrowButton: { borderRadius: 10 },
     detailReserveButton: { borderRadius: 10 },
+    detailAiButton: { borderRadius: 10, borderColor: c.primary },
   });
 }

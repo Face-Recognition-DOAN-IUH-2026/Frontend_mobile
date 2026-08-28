@@ -14,8 +14,8 @@ export const scheduleApi = {
     return response.data;
   },
 
-  checkIn: async (id: string, lat?: number, lng?: number): Promise<unknown> => {
-    const body: Record<string, unknown> = { method: 'mobile' };
+  checkIn: async (id: string, lat?: number, lng?: number, method: string = 'mobile'): Promise<unknown> => {
+    const body: Record<string, unknown> = { method };
     if (lat != null && lng != null) {
       body.lat = lat;
       body.lng = lng;
@@ -29,8 +29,11 @@ export const scheduleApi = {
     return response.data;
   },
 
-  requestManualCheckIn: async (assignmentId: string, reason?: string): Promise<any> => {
-    const response = await api.post('/schedules/attendance/manual-checkin', { assignmentId, reason });
+  requestManualCheckIn: async (assignmentId: string, note?: string): Promise<any> => {
+    const response = await api.post('/schedules/attendance/manual-checkin', {
+      assignmentId,
+      note: note && note.trim() ? note.trim() : 'Yêu cầu check-in thủ công từ ứng dụng di động',
+    });
     return response.data;
   },
 

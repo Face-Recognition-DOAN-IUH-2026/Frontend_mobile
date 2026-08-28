@@ -21,6 +21,8 @@ export interface Book {
   isbn: string;
   title: string;
   author?: string;
+  category?: string;
+  description?: string;
   cover_url?: string;
   shelf_location?: string;
   is_available?: boolean;

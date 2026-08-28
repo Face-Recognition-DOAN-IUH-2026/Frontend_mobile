@@ -149,6 +149,70 @@ export function FilterPill({
   );
 }
 
+/* ─── Quick Action Button (Hero shortcuts) ─── */
+export function QuickActionButton({
+  label,
+  icon,
+  color,
+  badge,
+  onPress,
+}: {
+  label: string;
+  icon: string;
+  color?: string;
+  badge?: number | string;
+  onPress: () => void;
+}) {
+  const theme = useTheme() as AppTheme;
+  const c = theme.colors;
+  const btnColor = color || c.primary;
+
+  return (
+    <View style={dhStyles.quickActionWrap} onTouchEnd={onPress}>
+      <View style={[dhStyles.quickActionIconWrap, { backgroundColor: btnColor + '18', borderColor: btnColor + '30' }]}>
+        <MaterialCommunityIcons name={icon as any} size={24} color={btnColor} />
+        {badge !== undefined && badge !== 0 && (
+          <View style={[dhStyles.quickActionBadge, { backgroundColor: c.error }]}>
+            <Text style={dhStyles.quickActionBadgeText}>{badge}</Text>
+          </View>
+        )}
+      </View>
+      <Text variant="labelSmall" style={[dhStyles.quickActionLabel, { color: c.onSurface }]} numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+/* ─── Status Badge ─── */
+export function StatusBadge({
+  label,
+  type = 'primary',
+}: {
+  label: string;
+  type?: 'primary' | 'success' | 'warning' | 'error' | 'neutral';
+}) {
+  const theme = useTheme() as AppTheme;
+  const c = theme.colors;
+
+  const colorMap = {
+    primary: { bg: c.primary + '18', text: c.primary, dot: c.primary },
+    success: { bg: c.custom.success + '18', text: c.custom.success, dot: c.custom.success },
+    warning: { bg: c.custom.warning + '18', text: c.custom.warning, dot: c.custom.warning },
+    error:   { bg: c.error + '18', text: c.error, dot: c.error },
+    neutral: { bg: c.surfaceVariant, text: c.onSurfaceVariant, dot: c.onSurfaceVariant },
+  };
+
+  const style = colorMap[type] || colorMap.primary;
+
+  return (
+    <View style={[dhStyles.badgeWrap, { backgroundColor: style.bg }]}>
+      <View style={[dhStyles.badgeDot, { backgroundColor: style.dot }]} />
+      <Text style={[dhStyles.badgeText, { color: style.text }]}>{label}</Text>
+    </View>
+  );
+}
+
 /* ─── Empty State ─── */
 export function EmptyState({
   icon,
@@ -323,6 +387,63 @@ const dhStyles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1,
+  },
+
+  quickActionWrap: {
+    alignItems: 'center',
+    gap: 6,
+    width: 68,
+  },
+  quickActionIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    position: 'relative',
+  },
+  quickActionBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  quickActionBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  quickActionLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+
+  badgeWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  badgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
 
   empty: {
