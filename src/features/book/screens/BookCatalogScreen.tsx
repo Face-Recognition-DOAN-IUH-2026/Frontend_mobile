@@ -1,10 +1,11 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { View, Image, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
+import { View, Image, StyleSheet, ScrollView, RefreshControl, Alert, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, Button, useTheme, Portal, Modal } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
+import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
 import { borrowApi, joinWaitlist, leaveWaitlist } from '../../../api/borrow';
 import { Book, BookWithStats } from '../../../types';
 import { AppTheme } from '../../../theme/DarkTheme';
@@ -22,6 +23,8 @@ import { SearchField } from '../../../components/SearchField';
 import { LoadingOverlay } from '../../../components/LoadingOverlay';
 import SwipeReserveRow from '../../../components/SwipeReserveRow';
 import { UndoBar } from '../../../components/UndoBar';
+import { triggerHaptic } from '../../../utils/haptics';
+import { BookCardSkeleton } from '../../../components/SkeletonLoader';
 
 interface BookCatalogScreenProps {
   navigation: any;
@@ -62,6 +65,27 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
   const [detailVisible, setDetailVisible] = useState(false);
   const [detailBook, setDetailBook] = useState<BookWithStats | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [scannerVisible, setScannerVisible] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
+
+  const handleOpenScanner = async () => {
+    triggerHaptic.medium();
+    if (!permission?.granted) {
+      const { granted } = await requestPermission();
+      if (!granted) {
+        Alert.alert('Cần quyền camera', 'Vui lòng cấp quyền truy cập camera để quét mã vạch bìa sách.');
+        return;
+      }
+    }
+    setScannerVisible(true);
+  };
+
+  const handleBarcodeScanned = ({ data }: BarcodeScanningResult) => {
+    if (!data) return;
+    triggerHaptic.success();
+    setScannerVisible(false);
+    setSearchQuery(data.trim());
+  };
 
   const {
     data: books = [],
@@ -202,13 +226,22 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
           icon="book-open-page-variant"
         />
 
-        <View style={styles.searchWrap}>
-          <SearchField
-            value={searchQuery}
-            onChange={setSearchQuery}
-            placeholder="Tên, tác giả, ISBN..."
-            onClear={() => setSearchQuery('')}
-          />
+        <View style={styles.searchRowWrap}>
+          <View style={{ flex: 1 }}>
+            <SearchField
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder="Tên, tác giả, ISBN..."
+              onClear={() => setSearchQuery('')}
+            />
+          </View>
+          <TouchableOpacity
+            style={[styles.barcodeScanBtn, { backgroundColor: c.primary }]}
+            onPress={handleOpenScanner}
+            activeOpacity={0.8}
+          >
+            <MaterialCommunityIcons name="barcode-scan" size={20} color="#FFFFFF" />
+          </TouchableOpacity>
         </View>
 
         <ScrollView
@@ -222,12 +255,22 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
               key={cat}
               label={cat}
               active={selectedCategory === cat}
-              onPress={() => setSelectedCategory(cat)}
+              onPress={() => {
+                triggerHaptic.selection();
+                setSelectedCategory(cat);
+              }}
             />
           ))}
         </ScrollView>
 
-        {loadError ? (
+        {refreshing && books.length === 0 ? (
+          <View style={styles.skeletonWrap}>
+            <BookCardSkeleton />
+            <BookCardSkeleton />
+            <BookCardSkeleton />
+            <BookCardSkeleton />
+          </View>
+        ) : loadError ? (
           <View style={styles.stateWrap}>
             <EmptyState icon="cloud-off-outline" message={loadError} />
             <Button mode="outlined" onPress={() => refetch()} style={styles.stateButton} labelStyle={styles.stateButtonLabel} icon="refresh">
@@ -389,6 +432,45 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
             </View>
           )}
         </Modal>
+
+        {/* Camera Barcode Scanner Modal */}
+        <Modal
+          visible={scannerVisible}
+          onDismiss={() => setScannerVisible(false)}
+          contentContainerStyle={styles.scannerModal}
+        >
+          <View style={styles.scannerContainer}>
+            <View style={styles.scannerHeader}>
+              <Text variant="titleMedium" style={styles.scannerTitle}>
+                Quét Mã Vạch / ISBN Sách
+              </Text>
+              <TouchableOpacity onPress={() => setScannerVisible(false)} style={styles.scannerCloseBtn}>
+                <MaterialCommunityIcons name="close" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.cameraBox}>
+              <CameraView
+                style={StyleSheet.absoluteFill}
+                facing="back"
+                barcodeScannerSettings={{
+                  barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'qr'],
+                }}
+                onBarcodeScanned={handleBarcodeScanned}
+              />
+              <View style={styles.scanReticle}>
+                <View style={[styles.reticleCorner, styles.tl]} />
+                <View style={[styles.reticleCorner, styles.tr]} />
+                <View style={[styles.reticleCorner, styles.bl]} />
+                <View style={[styles.reticleCorner, styles.br]} />
+              </View>
+            </View>
+
+            <Text style={styles.scannerInstruction}>
+              Hướng camera vào mã vạch sau bìa sách hoặc mã ISBN
+            </Text>
+          </View>
+        </Modal>
       </Portal>
 
       <NoticeSnackbar
@@ -413,7 +495,29 @@ function createStyles(theme: AppTheme) {
   return StyleSheet.create({
     container: { flex: 1 },
     flex: { flex: 1 },
-    searchWrap: { marginTop: 12, paddingHorizontal: 16 },
+    searchRowWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: 12,
+      paddingHorizontal: 16,
+      gap: 8,
+    },
+    barcodeScanBtn: {
+      width: 48,
+      height: 48,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      elevation: 2,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.15,
+      shadowRadius: 4,
+    },
+    skeletonWrap: {
+      paddingHorizontal: 16,
+      marginTop: 10,
+    },
     categoryScroll: { marginTop: 10, maxHeight: 44 },
     categoryContent: { paddingHorizontal: 16, gap: 8, alignItems: 'center' },
     stateWrap: { alignItems: 'center', marginTop: 32 },
@@ -475,5 +579,60 @@ function createStyles(theme: AppTheme) {
     detailBorrowButton: { borderRadius: 10 },
     detailReserveButton: { borderRadius: 10 },
     detailAiButton: { borderRadius: 10, borderColor: c.primary },
+    scannerModal: {
+      margin: 16,
+      borderRadius: 20,
+      backgroundColor: '#0F172A',
+      overflow: 'hidden',
+    },
+    scannerContainer: {
+      padding: 16,
+      alignItems: 'center',
+    },
+    scannerHeader: {
+      width: '100%',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 12,
+    },
+    scannerTitle: {
+      color: '#FFFFFF',
+      fontWeight: '800',
+    },
+    scannerCloseBtn: {
+      padding: 4,
+    },
+    cameraBox: {
+      width: '100%',
+      height: 280,
+      borderRadius: 16,
+      overflow: 'hidden',
+      position: 'relative',
+      backgroundColor: '#000000',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    scanReticle: {
+      width: 220,
+      height: 140,
+      position: 'relative',
+    },
+    reticleCorner: {
+      position: 'absolute',
+      width: 20,
+      height: 20,
+      borderColor: '#38BDF8',
+    },
+    tl: { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 6 },
+    tr: { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 6 },
+    bl: { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 6 },
+    br: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 6 },
+    scannerInstruction: {
+      color: 'rgba(255,255,255,0.8)',
+      fontSize: 12,
+      marginTop: 12,
+      textAlign: 'center',
+    },
   });
 }

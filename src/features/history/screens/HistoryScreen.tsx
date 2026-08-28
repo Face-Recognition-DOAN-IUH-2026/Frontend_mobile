@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { View, Image, StyleSheet, ScrollView, RefreshControl, Animated } from 'react-native';
+import { View, Image, StyleSheet, ScrollView, RefreshControl, Animated, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, Surface, Button, useTheme } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -10,6 +10,7 @@ import { BorrowRecord } from '../../../types';
 import { AppTheme } from '../../../theme/DarkTheme';
 import { formatDate, getDaysUntil } from '../../../utils/dateUtils';
 import { devError } from '../../../utils/logger';
+import { triggerHaptic } from '../../../utils/haptics';
 import {
   GradientHeader,
   SectionCard,
@@ -87,6 +88,37 @@ export default function HistoryScreen({ navigation }: HistoryScreenProps) {
 
   const onRefresh = async () => {
     await refetch();
+  };
+
+  const [renewingId, setRenewingId] = useState<string | null>(null);
+
+  const handleRenew = (record: BorrowRecord) => {
+    triggerHaptic.medium();
+    Alert.alert(
+      'Xác nhận gia hạn sách',
+      `Bạn có muốn gia hạn cuốn sách "${record.book?.title || record.book_id}" thêm thời gian không?`,
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Gia hạn ngay',
+          onPress: async () => {
+            try {
+              setRenewingId(record.id);
+              const res = await borrowApi.renewBorrow(record.id);
+              triggerHaptic.success();
+              Alert.alert('Thành công', res.message || 'Gia hạn sách thành công!');
+              refetch();
+            } catch (err: any) {
+              triggerHaptic.error();
+              const msg = err?.response?.data?.detail || err?.response?.data?.message || 'Không thể gia hạn sách vào lúc này';
+              Alert.alert('Gia hạn thất bại', msg);
+            } finally {
+              setRenewingId(null);
+            }
+          },
+        },
+      ],
+    );
   };
 
   const filtered = safeRecords.filter((r: BorrowRecord) => {
@@ -232,22 +264,38 @@ export default function HistoryScreen({ navigation }: HistoryScreenProps) {
                         </View>
                       )}
 
-                      <View style={styles.badgeRow}>
-                        <View style={[styles.statusBadge, { backgroundColor: spineColor + '18' }]}>
-                          <MaterialCommunityIcons
-                            name={isReturned ? 'check-circle' : overdue ? 'alert-circle' : 'clock-outline'}
-                            size={10}
-                            color={spineColor}
-                          />
-                          <Text style={[styles.statusText, { color: spineColor }]}>
-                            {isReturned ? 'Đã trả' : overdue ? 'Quá hạn' : 'Đang mượn'}
-                          </Text>
+                      <View style={[styles.badgeRow, { justifyContent: 'space-between', alignItems: 'center' }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <View style={[styles.statusBadge, { backgroundColor: spineColor + '18' }]}>
+                            <MaterialCommunityIcons
+                              name={isReturned ? 'check-circle' : overdue ? 'alert-circle' : 'clock-outline'}
+                              size={10}
+                              color={spineColor}
+                            />
+                            <Text style={[styles.statusText, { color: spineColor }]}>
+                              {isReturned ? 'Đã trả' : overdue ? 'Quá hạn' : 'Đang mượn'}
+                            </Text>
+                          </View>
+                          {record.note ? (
+                            <Text style={[styles.noteText, { color: c.primary }]} numberOfLines={1}>
+                              {record.note}
+                            </Text>
+                          ) : null}
                         </View>
-                        {record.note ? (
-                          <Text style={[styles.noteText, { color: c.primary }]} numberOfLines={1}>
-                            {record.note}
-                          </Text>
-                        ) : null}
+                        {!isReturned && !overdue && (
+                          <Button
+                            mode="contained-tonal"
+                            compact
+                            loading={renewingId === record.id}
+                            disabled={renewingId === record.id}
+                            icon="calendar-refresh"
+                            onPress={() => handleRenew(record)}
+                            style={{ borderRadius: 8 }}
+                            labelStyle={{ fontSize: 11 }}
+                          >
+                            Gia hạn
+                          </Button>
+                        )}
                       </View>
                     </View>
                   </View>

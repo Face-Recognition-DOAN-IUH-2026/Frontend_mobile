@@ -1,7 +1,7 @@
+import React, { useCallback, useMemo, useState } from 'react';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useFocusEffect } from '@react-navigation/native';
-import React, { useCallback, useMemo } from 'react';
-import { Image, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Image, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar, Button, Chip, Surface, Text, useTheme } from 'react-native-paper';
 import { useQuery } from '@tanstack/react-query';
@@ -9,6 +9,7 @@ import { borrowApi } from '../../../api/borrow';
 import { scheduleApi } from '../../../api/schedule';
 import { useAccessRealtime } from '../hooks/useAccessRealtime';
 import { useAuth } from '../../../context/AuthContext';
+import { triggerHaptic } from '../../../utils/haptics';
 import { AppTheme } from '../../../theme/DarkTheme';
 import {
   GradientHeader,
@@ -81,6 +82,37 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 
   const onRefresh = async () => {
     await Promise.all([refetchBorrows(), refetchSchedule()]);
+  };
+
+  const [renewingId, setRenewingId] = useState<string | null>(null);
+
+  const handleRenew = (record: BorrowRecord) => {
+    triggerHaptic.medium();
+    Alert.alert(
+      'Xác nhận gia hạn sách',
+      `Bạn có muốn gia hạn cuốn sách "${record.book?.title || record.book_id}" thêm thời gian không?`,
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Gia hạn ngay',
+          onPress: async () => {
+            try {
+              setRenewingId(record.id);
+              const res = await borrowApi.renewBorrow(record.id);
+              triggerHaptic.success();
+              Alert.alert('Thành công', res.message || 'Gia hạn sách thành công!');
+              refetchBorrows();
+            } catch (err: any) {
+              triggerHaptic.error();
+              const msg = err?.response?.data?.detail || err?.response?.data?.message || 'Không thể gia hạn sách vào lúc này';
+              Alert.alert('Gia hạn thất bại', msg);
+            } finally {
+              setRenewingId(null);
+            }
+          },
+        },
+      ],
+    );
   };
 
   const activeBorrows = borrows.filter((item) => item.status === 'borrowed');
@@ -460,7 +492,23 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                             {record.book?.author ? (
                               <Text variant="bodySmall" style={styles.mutedText} numberOfLines={1}>{record.book.author}</Text>
                             ) : null}
-                            <Text variant="bodySmall" style={styles.mutedText}>Hạn trả: {formatDate(record.due_at)}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+                              <Text variant="bodySmall" style={styles.mutedText}>Hạn trả: {formatDate(record.due_at)}</Text>
+                              {!overdue && (
+                                <Button
+                                  mode="contained-tonal"
+                                  compact
+                                  loading={renewingId === record.id}
+                                  disabled={renewingId === record.id}
+                                  icon="calendar-refresh"
+                                  onPress={() => handleRenew(record)}
+                                  style={{ borderRadius: 8 }}
+                                  labelStyle={{ fontSize: 11 }}
+                                >
+                                  Gia hạn
+                                </Button>
+                              )}
+                            </View>
                           </View>
                         </View>
                       </Surface>
