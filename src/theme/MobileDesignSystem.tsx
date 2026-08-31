@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, StyleSheet, ViewStyle } from 'react-native';
+import { View, StyleSheet, ViewStyle, Pressable } from 'react-native';
 import { Text, Avatar, Surface, useTheme } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import type { AppTheme } from './DarkTheme';
+import { MotionHaptics, SPRING_CONFIGS, MOTION_TIMINGS, isReducedMotionActive } from './motion';
 
 /* ─── Gradient Header ─── */
 export function GradientHeader({
@@ -126,15 +127,20 @@ export function FilterPill({
   const c = theme.colors;
 
   return (
-    <View
-      style={[
+    <Pressable
+      onPress={() => {
+        MotionHaptics.selection();
+        onPress();
+      }}
+      style={({ pressed }) => [
         dhStyles.pill,
         {
           backgroundColor: active ? c.primary : 'transparent',
           borderColor: active ? c.primary : c.outline,
+          transform: [{ scale: pressed ? 0.94 : 1 }],
+          opacity: pressed ? 0.85 : 1,
         },
       ]}
-      onTouchEnd={onPress}
     >
       <Text
         variant="labelSmall"
@@ -145,7 +151,7 @@ export function FilterPill({
       >
         {label}
       </Text>
-    </View>
+    </Pressable>
   );
 }
 
@@ -168,7 +174,19 @@ export function QuickActionButton({
   const btnColor = color || c.primary;
 
   return (
-    <View style={dhStyles.quickActionWrap} onTouchEnd={onPress}>
+    <Pressable
+      onPress={() => {
+        MotionHaptics.tap();
+        onPress();
+      }}
+      style={({ pressed }) => [
+        dhStyles.quickActionWrap,
+        {
+          transform: [{ scale: pressed ? 0.92 : 1 }],
+          opacity: pressed ? 0.8 : 1,
+        },
+      ]}
+    >
       <View style={[dhStyles.quickActionIconWrap, { backgroundColor: btnColor + '18', borderColor: btnColor + '30' }]}>
         <MaterialCommunityIcons name={icon as any} size={24} color={btnColor} />
         {badge !== undefined && badge !== 0 && (
@@ -180,7 +198,7 @@ export function QuickActionButton({
       <Text variant="labelSmall" style={[dhStyles.quickActionLabel, { color: c.onSurface }]} numberOfLines={1}>
         {label}
       </Text>
-    </View>
+    </Pressable>
   );
 }
 
@@ -452,3 +470,6 @@ const dhStyles = StyleSheet.create({
     paddingVertical: 48,
   },
 });
+
+export { SPRING_CONFIGS, MOTION_TIMINGS, MotionHaptics, isReducedMotionActive } from './motion';
+
