@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useFocusEffect } from '@react-navigation/native';
-import { Alert, Image, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Image, RefreshControl, ScrollView, StyleSheet, View, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar, Button, Chip, Surface, Text, useTheme } from 'react-native-paper';
 import { useQuery } from '@tanstack/react-query';
@@ -389,11 +389,19 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         {isStaffScanner ? (
           <View style={styles.staffGrid}>
             {staffActions.map((action) => (
-              <Surface
+              <Pressable
                 key={action.route}
-                style={[styles.staffCard, { borderColor: theme.colors.outline }]}
-                elevation={0}
-                onTouchEnd={() => navigation.navigate(action.route)}
+                style={({ pressed }) => [
+                  styles.staffCard,
+                  {
+                    transform: [{ scale: pressed ? 0.95 : 1 }],
+                    opacity: pressed ? 0.88 : 1,
+                  },
+                ]}
+                onPress={() => {
+                  triggerHaptic.selection();
+                  navigation.navigate(action.route);
+                }}
               >
                 <View style={[styles.staffAccent, { backgroundColor: action.gradient[0] }]} />
                 <View style={styles.staffCardInner}>
@@ -407,7 +415,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                     {action.description}
                   </Text>
                 </View>
-              </Surface>
+              </Pressable>
             ))}
           </View>
         ) : (
