@@ -114,4 +114,9 @@ export const borrowApi = {
     const response = await api.get('/borrow/config');
     return response.data;
   },
+
+  renewBorrow: async (borrowId: string): Promise<{ success: boolean; message: string; due_at?: string; renewal_count?: number }> => {
+    const response = await api.post('/borrow/renew', { record_id: borrowId, borrow_id: borrowId });
+    return response.data;
+  },
 };

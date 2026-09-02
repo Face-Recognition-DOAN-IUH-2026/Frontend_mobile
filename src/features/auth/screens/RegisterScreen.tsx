@@ -374,16 +374,19 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
 
   if (step === 'scan') {
     return (
-      <SafeAreaView style={styles.container} edges={['bottom']}>
+      <View style={{ flex: 1, backgroundColor: '#0F172A' }}>
         <StudentCardScanner
           onScanned={handleScanned}
           onError={showError}
           onSkip={() => {
             setStep('form');
           }}
+          onBack={() => {
+            navigation.navigate('Login');
+          }}
         />
         <NoticeSnackbar visible={!!snackbar} message={snackbar} severity={snackbarSeverity} onDismiss={() => setSnackbar('')} />
-      </SafeAreaView>
+      </View>
     );
   }
 

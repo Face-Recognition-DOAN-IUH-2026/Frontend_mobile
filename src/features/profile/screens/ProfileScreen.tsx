@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View, TouchableOpacity, Alert, Platform, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -22,6 +22,7 @@ import { AppTheme } from '../../../theme/DarkTheme';
 import { authApi } from '../../../api/auth';
 import { GradientHeader, SectionCard } from '../../../theme/MobileDesignSystem';
 import { LoadingOverlay } from '../../../components/LoadingOverlay';
+import { triggerHaptic } from '../../../utils/haptics';
 
 interface ProfileScreenProps {
   navigation: any;
@@ -81,6 +82,29 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   const [logoutVisible, setLogoutVisible] = useState(false);
   const [cardModalVisible, setCardModalVisible] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [tokenSecondsLeft, setTokenSecondsLeft] = useState(30);
+  const [tokenSeed, setTokenSeed] = useState(Date.now());
+
+  useEffect(() => {
+    if (!cardModalVisible) return;
+    setTokenSecondsLeft(30);
+    const interval = setInterval(() => {
+      setTokenSecondsLeft((prev) => {
+        if (prev <= 1) {
+          setTokenSeed(Date.now());
+          return 30;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [cardModalVisible]);
+
+  const handleRefreshCardToken = () => {
+    triggerHaptic.selection();
+    setTokenSeed(Date.now());
+    setTokenSecondsLeft(30);
+  };
 
   const roleLabel =
     user?.role === 'admin'
@@ -462,6 +486,20 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                 </View>
               </View>
 
+              {/* Dynamic Security Bar */}
+              <View style={styles.dynamicTokenBar}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <MaterialCommunityIcons name="shield-check" size={14} color="#10B981" />
+                  <Text style={styles.dynamicSecurityText}>
+                    Mã đổi sau: <Text style={{ fontWeight: '800', color: '#10B981' }}>{tokenSecondsLeft}s</Text>
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={handleRefreshCardToken} style={styles.refreshBadge}>
+                  <MaterialCommunityIcons name="refresh" size={13} color="#FFFFFF" />
+                  <Text style={styles.refreshBadgeText}>Làm mới</Text>
+                </TouchableOpacity>
+              </View>
+
               {/* Barcode Graphic */}
               <View style={styles.barcodeWrapper}>
                 <View style={styles.barcodeLines}>
@@ -478,7 +516,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                   ))}
                 </View>
                 <Text style={styles.barcodeText}>
-                  {studentCode || user?.id || 'LIBRARY-CARD'}
+                  {`IUH-${studentCode || user?.id?.slice(0, 8) || 'CARD'}-${Math.floor(tokenSeed / 30000).toString().slice(-4)}`}
                 </Text>
               </View>
             </View>
@@ -700,6 +738,35 @@ function createStyles(theme: AppTheme) {
       padding: 10,
       alignItems: 'center',
       gap: 4,
+    },
+    dynamicTokenBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: 'rgba(0,0,0,0.2)',
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      marginTop: 2,
+    },
+    dynamicSecurityText: {
+      color: 'rgba(255,255,255,0.9)',
+      fontSize: 11,
+      fontWeight: '600',
+    },
+    refreshBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      backgroundColor: 'rgba(255,255,255,0.2)',
+      paddingHorizontal: 7,
+      paddingVertical: 3,
+      borderRadius: 6,
+    },
+    refreshBadgeText: {
+      color: '#FFFFFF',
+      fontSize: 10,
+      fontWeight: '700',
     },
     barcodeLines: {
       flexDirection: 'row',
