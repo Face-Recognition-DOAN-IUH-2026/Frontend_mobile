@@ -150,7 +150,13 @@ export const authApi = {
   },
 
   refreshToken: async (refreshToken: string): Promise<{ access_token: string; refresh_token?: string; token_type?: string }> => {
-    const response = await axios.post(`${API_BASE_URL}/auth/refresh`, { refresh_token: refreshToken }, { timeout: 15000 });
+    // Refresh is authenticated exclusively by the refresh token in the body.
+    // Do not let a stale access-token default header leak into this request.
+    const response = await axios.post(
+      `${API_BASE_URL}/auth/refresh`,
+      { refresh_token: refreshToken },
+      { headers: { Authorization: undefined }, timeout: 15000 },
+    );
     return response.data;
   },
 

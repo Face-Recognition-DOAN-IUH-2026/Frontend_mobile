@@ -9,32 +9,143 @@ interface ChatBubbleProps {
   message: AIMessage;
 }
 
-function parseBookCards(content: string): Array<{ type: 'text' | 'book_card'; text?: string; book?: any }> {
-  const parts: Array<{ type: 'text' | 'book_card'; text?: string; book?: any }> = [];
-  const regex = /:::book_card\s*\n?(\{[\s\S]*?\})\s*\n?:::/g;
-  let lastIndex = 0;
-  let match;
+type BubblePart =
+  | { type: 'text'; text: string }
+  | { type: 'book_card'; book: any }
+  | { type: 'schedule'; schedule: { schedule: Array<{ days: string; hours: string }>; note?: string } };
 
-  while ((match = regex.exec(content)) !== null) {
-    if (match.index > lastIndex) {
-      const text = content.slice(lastIndex, match.index).trim();
-      if (text) parts.push({ type: 'text', text });
-    }
+function extractMobileSchedule(text: string): {
+  before: string;
+  schedule: any | null;
+  after: string;
+} {
+  const codeBlockMatch = text.match(/```(?:json)?\s*(\{[\s\S]*?"schedule"\s*:\s*\[[\s\S]*?\][\s\S]*?\})\s*```/);
+  if (codeBlockMatch) {
+    try {
+      const parsed = JSON.parse(codeBlockMatch[1]);
+      if (Array.isArray(parsed.schedule)) {
+        const idx = text.indexOf(codeBlockMatch[0]);
+        return {
+          before: text.substring(0, idx).trim(),
+          schedule: parsed,
+          after: text.substring(idx + codeBlockMatch[0].length).trim(),
+        };
+      }
+    } catch {}
+  }
+
+  const rawMatch = text.match(/\{[\s\S]*?"schedule"\s*:\s*\[[\s\S]*?\][\s\S]*?\}/);
+  if (rawMatch) {
+    try {
+      const parsed = JSON.parse(rawMatch[0]);
+      if (Array.isArray(parsed.schedule)) {
+        const idx = text.indexOf(rawMatch[0]);
+        return {
+          before: text.substring(0, idx).trim(),
+          schedule: parsed,
+          after: text.substring(idx + rawMatch[0].length).trim(),
+        };
+      }
+    } catch {}
+  }
+
+  return { before: text, schedule: null, after: '' };
+}
+
+function parseMessageParts(rawContent: string): BubblePart[] {
+  if (!rawContent) return [];
+
+  // Check schedule JSON block
+  const sched = extractMobileSchedule(rawContent);
+  if (sched.schedule) {
+    const beforeParts = sched.before ? parseMessageParts(sched.before) : [];
+    const afterParts = sched.after ? parseMessageParts(sched.after) : [];
+    return [
+      ...beforeParts,
+      { type: 'schedule', schedule: sched.schedule },
+      ...afterParts,
+    ];
+  }
+
+  // Check book card
+  const bookRegex = /:::book_card\s*\n?(\{[\s\S]*?\})\s*\n?:::/;
+  const match = rawContent.match(bookRegex);
+  if (match) {
+    const idx = rawContent.indexOf(match[0]);
+    const beforeText = rawContent.substring(0, idx).trim();
+    const afterText = rawContent.substring(idx + match[0].length).trim();
+    const beforeParts = beforeText ? parseMessageParts(beforeText) : [];
+    const afterParts = afterText ? parseMessageParts(afterText) : [];
     try {
       const book = JSON.parse(match[1]);
-      parts.push({ type: 'book_card', book });
-    } catch {
-      parts.push({ type: 'text', text: match[0] });
-    }
-    lastIndex = match.index + match[0].length;
+      return [
+        ...beforeParts,
+        { type: 'book_card', book },
+        ...afterParts,
+      ];
+    } catch {}
   }
 
-  if (lastIndex < content.length) {
-    const text = content.slice(lastIndex).trim();
-    if (text) parts.push({ type: 'text', text });
-  }
+  const trimmed = rawContent.trim();
+  return trimmed ? [{ type: 'text', text: trimmed }] : [];
+}
 
-  return parts.length > 0 ? parts : [{ type: 'text', text: content }];
+function ScheduleCardInline({ scheduleData, theme }: { scheduleData: any; theme: AppTheme }) {
+  const isDark = theme.dark;
+  const c = theme.colors;
+
+  return (
+    <View style={[inlineStyles.card, { backgroundColor: isDark ? c.surface : '#FFFFFF', borderColor: c.outlineVariant }]}>
+      <View style={[inlineStyles.header, { backgroundColor: c.primary, justifyContent: 'space-between' }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <MaterialCommunityIcons name="clock-outline" size={15} color="#FFFFFF" />
+          <Text style={inlineStyles.headerLabel}>Giờ mở cửa thư viện IUH</Text>
+        </View>
+        <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+          <Text style={{ fontSize: 9, color: '#FFFFFF', fontWeight: '700' }}>Chính thức</Text>
+        </View>
+      </View>
+      <View style={{ padding: 10, gap: 6 }}>
+        {Array.isArray(scheduleData.schedule) &&
+          scheduleData.schedule.map((item: any, idx: number) => {
+            let days = (item.days || item.day || '').trim();
+            days = days
+              .replace(/Monday\s*-\s*Friday/i, 'Thứ Hai - Thứ Sáu')
+              .replace(/Saturday\s*-\s*Sunday/i, 'Thứ Bảy - Chủ Nhật')
+              .replace(/Monday/i, 'Thứ Hai')
+              .replace(/Tuesday/i, 'Thứ Ba')
+              .replace(/Wednesday/i, 'Thứ Tư')
+              .replace(/Thursday/i, 'Thứ Năm')
+              .replace(/Friday/i, 'Thứ Sáu')
+              .replace(/Saturday/i, 'Thứ Bảy')
+              .replace(/Sunday/i, 'Chủ Nhật');
+            return (
+              <View
+                key={idx}
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  paddingVertical: 6,
+                  paddingHorizontal: 10,
+                  borderRadius: 8,
+                  backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)',
+                }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '600', color: c.onSurface }}>{days}</Text>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: c.primary }}>{item.hours || item.time}</Text>
+              </View>
+            );
+          })}
+        {scheduleData.note ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+            <MaterialCommunityIcons name="information-outline" size={13} color={c.onSurfaceVariant} />
+            <Text style={{ fontSize: 11, color: c.onSurfaceVariant, flex: 1 }}>{scheduleData.note}</Text>
+          </View>
+        ) : null}
+      </View>
+    </View>
+  );
 }
 
 function BookCardInline({ book, theme }: { book: any; theme: AppTheme }) {
@@ -157,7 +268,7 @@ export default function ChatBubble({ message }: ChatBubbleProps) {
   const theme = useTheme() as AppTheme;
   const styles = useMemo(() => createStyles(theme), [theme]);
   const isUser = message.role === 'user';
-  const parts = useMemo(() => parseBookCards(message.content), [message.content]);
+  const parts = useMemo(() => parseMessageParts(message.content), [message.content]);
 
   return (
     <View style={[styles.container, isUser ? styles.userContainer : styles.assistantContainer]}>
@@ -177,11 +288,17 @@ export default function ChatBubble({ message }: ChatBubbleProps) {
               if (part.type === 'book_card' && part.book) {
                 return <BookCardInline key={idx} book={part.book} theme={theme} />;
               }
-              return part.text ? (
-                <View key={idx} style={styles.assistantBubble}>
-                  <Text style={styles.assistantText}>{part.text}</Text>
-                </View>
-              ) : null;
+              if (part.type === 'schedule' && part.schedule) {
+                return <ScheduleCardInline key={idx} scheduleData={part.schedule} theme={theme} />;
+              }
+              if (part.type === 'text' && part.text) {
+                return (
+                  <View key={idx} style={styles.assistantBubble}>
+                    <Text style={styles.assistantText}>{part.text}</Text>
+                  </View>
+                );
+              }
+              return null;
             })}
           </View>
         </View>

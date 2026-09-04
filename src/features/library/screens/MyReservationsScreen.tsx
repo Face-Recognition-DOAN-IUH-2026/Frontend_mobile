@@ -116,7 +116,7 @@ export default function MyReservationsScreen({ navigation }: MyReservationsScree
       >
         <GradientHeader
           title="Sách chờ nhận thông báo"
-          subtitle={entries.length > 0 ? `${entries.length} đang chờ` : 'Ch chưa có sách nào'}
+          subtitle={entries.length > 0 ? `${entries.length} đang chờ` : 'Chưa có sách nào'}
           icon="bell-ring-outline"
         />
 

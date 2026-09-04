@@ -108,6 +108,17 @@ export default function AIChatScreen({ navigation, route }: AIChatScreenProps) {
     const msg = (text || input).trim();
     if (!msg || loading) return;
 
+    if (!user) {
+      const authMessage: AIMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: 'Phiên đăng nhập đã hết hạn hoặc bạn chưa đăng nhập. Vui lòng đăng nhập lại để trò chuyện cùng trợ lý AI.',
+        timestamp: new Date(),
+      };
+      addMessage(authMessage);
+      return;
+    }
+
     const userMessage: AIMessage = {
       id: Date.now().toString(),
       role: 'user',
@@ -144,10 +155,23 @@ export default function AIChatScreen({ navigation, route }: AIChatScreenProps) {
         setConfirmVisible(true);
       }
     } catch (error: any) {
+      const status = error?.response?.status;
+      let errorText = 'Xin lỗi, đã xảy ra lỗi. Vui lòng thử lại.';
+      if (status === 401) {
+        errorText = 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại để tiếp tục trò chuyện cùng trợ lý AI.';
+      } else if (status === 403) {
+        errorText = 'Bạn không có quyền thực hiện thao tác này.';
+      } else if (status === 429) {
+        errorText = 'Hệ thống AI đang bận xử lý nhiều yêu cầu, vui lòng thử lại sau giây lát.';
+      } else if (status === 503) {
+        errorText = 'Dịch vụ AI tạm thời không khả dụng, vui lòng thử lại sau.';
+      } else if (error?.response?.data?.message) {
+        errorText = error.response.data.message;
+      }
       const errorMessage: AIMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: 'Xin lỗi, đã xảy ra lỗi. Vui lòng thử lại.',
+        content: errorText,
         timestamp: new Date(),
       };
       addMessage(errorMessage);
