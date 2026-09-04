@@ -5,7 +5,7 @@ import { notificationApi } from '../api/notification';
 import { getAccessToken } from '../api/secureStorage';
 import { useAuth } from './AuthContext';
 import { Notification } from '../types';
-import { devError } from '../utils/logger';
+import { devError, devWarn } from '../utils/logger';
 import { queryClient } from '../lib/queryClient';
 
 // ─── Guard: expo-notifications needs native modules not available in Expo Go ───
@@ -76,8 +76,18 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       const expoPushToken = tokenData.data;
 
       await notificationApi.registerDeviceToken(expoPushToken, Platform.OS as 'ios' | 'android');
-    } catch (err) {
-      devError('[Notification] Failed to register push token:', err);
+    } catch (err: any) {
+      const msg = err?.message || String(err);
+      if (
+        msg.includes('FirebaseApp is not initialized') ||
+        msg.includes('googleServicesFile') ||
+        msg.includes('Firebase Messaging') ||
+        msg.includes('DEFAULT_APP_NOT_INITIALIZED')
+      ) {
+        devWarn('[Notification] Push token registration skipped (FCM not configured in dev build)');
+      } else {
+        devError('[Notification] Failed to register push token:', err);
+      }
     }
   }, []);
 

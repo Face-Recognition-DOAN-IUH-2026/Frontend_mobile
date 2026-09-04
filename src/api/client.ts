@@ -110,7 +110,11 @@ api.interceptors.response.use(
       const refreshToken = await getRefreshToken();
       if (refreshToken) {
         try {
-          const { data } = await refreshApi.post('/auth/refresh', { refresh_token: refreshToken });
+          const { data } = await refreshApi.post(
+            '/auth/refresh',
+            { refresh_token: refreshToken },
+            { headers: { Authorization: undefined } },
+          );
           const newAccessToken = data.access_token;
           const newRefreshToken = data.refresh_token;
           await setAccessToken(newAccessToken);

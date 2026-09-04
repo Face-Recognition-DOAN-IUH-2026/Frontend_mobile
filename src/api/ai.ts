@@ -14,9 +14,9 @@ import {
 
 export const aiApi = {
   async chat(message: string, sessionId?: string, role?: string, patronId?: string): Promise<AIChatResponse> {
-    const endpoint = role === 'patron' ? '/ai/patrons/chat'
+    const endpoint = role === 'admin' ? '/ai/admin/chat'
                    : role === 'staff' ? '/ai/staff/chat'
-                   : '/ai/admin/chat';
+                   : '/ai/patrons/chat';
     const body: Record<string, any> = { message };
     if (sessionId) body.sessionId = sessionId;
     if (patronId && role !== 'patron') body.patronId = patronId;
@@ -25,10 +25,9 @@ export const aiApi = {
   },
 
   async confirm(sessionId: string, action: 'approve' | 'reject', role?: string): Promise<AIConfirmResponse> {
-    const endpoint = role === 'patron' ? '/ai/patrons/confirm'
+    const endpoint = role === 'admin' ? '/ai/admin/confirm'
                    : role === 'staff' ? '/ai/staff/confirm'
-                   : role === 'admin' ? '/ai/admin/confirm'
-                   : '/ai/confirm';
+                   : '/ai/patrons/confirm';
     const { data } = await api.post(endpoint, { sessionId, action });
     return data;
   },

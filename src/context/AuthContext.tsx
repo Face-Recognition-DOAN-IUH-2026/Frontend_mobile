@@ -82,44 +82,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const restoreUserFromToken = useCallback(async () => {
     try {
-      const accessToken = await getAccessToken();
-      if (!accessToken) {
-        setIsLoading(false);
-        return;
-      }
+      let accessToken = await getAccessToken();
+      let payload = accessToken ? decodeJwtPayload(accessToken) : null;
+      const isExpired = !payload || (payload.exp !== undefined && payload.exp * 1000 < Date.now());
 
-      const payload = decodeJwtPayload(accessToken);
-      if (!payload) {
-        setIsLoading(false);
-        return;
-      }
-
-      const role = (payload.roles?.[0] || payload.role || 'patron') as UserRole;
-      const isExpired = payload.exp && payload.exp * 1000 < Date.now();
-
+      // Match the web flow: recover a session using its refresh token whenever
+      // the access token is missing, malformed, or expired.
       if (isExpired) {
         const refreshToken = await getRefreshToken();
-        if (refreshToken) {
-          try {
-            const result = await authApi.refreshToken(refreshToken);
-            await setAccessToken(result.access_token);
-            if (result.refresh_token) {
-              await setRefreshToken(result.refresh_token);
-            }
-          } catch {
-            devError('[Auth] Refresh token failed on restore');
-            await clearTokens();
-            setUser(null);
-            setIsLoading(false);
-            return;
+        if (!refreshToken) {
+          await clearTokens();
+          setUser(null);
+          setIsLoading(false);
+          return;
+        }
+
+        try {
+          const result = await authApi.refreshToken(refreshToken);
+          accessToken = result.access_token;
+          payload = decodeJwtPayload(accessToken);
+          if (!payload) throw new Error('Refresh returned an invalid access token');
+
+          await setAccessToken(accessToken);
+          if (result.refresh_token) {
+            await setRefreshToken(result.refresh_token);
           }
-        } else {
+        } catch {
+          devError('[Auth] Refresh token failed on restore');
           await clearTokens();
           setUser(null);
           setIsLoading(false);
           return;
         }
       }
+
+      if (!payload) {
+        await clearTokens();
+        setUser(null);
+        return;
+      }
+
+      const role = (payload.roles?.[0] || payload.role || 'patron') as UserRole;
 
       // Set basic user from token immediately
       setUser({
