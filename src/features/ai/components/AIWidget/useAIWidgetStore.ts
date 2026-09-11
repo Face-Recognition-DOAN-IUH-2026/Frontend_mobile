@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { aiApi } from '../../../../api/ai';
+import { getSessionGeneration } from '../../../../api/secureStorage';
 import { AICommandCenterSummary, AIMessage, CompanionChunk, CompanionState, VisemeData } from '../../../../types/ai';
 
 interface AIWidgetStore {
@@ -75,6 +76,7 @@ export const useAIWidgetStore = create<AIWidgetStore>()(
       setCurrentAudio: (audio) => set({ currentAudio: audio }),
 
       sendMessage: async (message: string) => {
+        const generation = getSessionGeneration();
         const userMessage: AIMessage = {
           id: `user-${Date.now()}`,
           role: 'user',
@@ -97,6 +99,7 @@ export const useAIWidgetStore = create<AIWidgetStore>()(
             undefined,
             chatSessionId,
             (chunk: CompanionChunk) => {
+              if (generation !== getSessionGeneration()) return;
               switch (chunk.type) {
                 case 'text':
                   accumulatedText += chunk.data.content;
@@ -131,6 +134,7 @@ export const useAIWidgetStore = create<AIWidgetStore>()(
               }
             },
             (error) => {
+              if (generation !== getSessionGeneration()) return;
               console.error('Companion stream error:', error);
               set((state) => ({
                 messages: [
@@ -148,6 +152,7 @@ export const useAIWidgetStore = create<AIWidgetStore>()(
             },
           );
         } catch {
+          if (generation !== getSessionGeneration()) return;
           const errorMessage: AIMessage = {
             id: `error-${Date.now()}`,
             role: 'assistant',
@@ -164,6 +169,7 @@ export const useAIWidgetStore = create<AIWidgetStore>()(
       },
 
       sendVoiceMessage: async (audioBase64: string) => {
+        const generation = getSessionGeneration();
         const userMessage: AIMessage = {
           id: `user-${Date.now()}`,
           role: 'user',
@@ -186,6 +192,7 @@ export const useAIWidgetStore = create<AIWidgetStore>()(
             audioBase64,
             chatSessionId,
             (chunk: CompanionChunk) => {
+              if (generation !== getSessionGeneration()) return;
               switch (chunk.type) {
                 case 'text':
                   accumulatedText += chunk.data.content;
@@ -220,6 +227,7 @@ export const useAIWidgetStore = create<AIWidgetStore>()(
               }
             },
             (error) => {
+              if (generation !== getSessionGeneration()) return;
               console.error('Companion stream error:', error);
               set((state) => ({
                 messages: [
@@ -252,16 +260,16 @@ export const useAIWidgetStore = create<AIWidgetStore>()(
         }
       },
 
-      clearMessages: () => set({ messages: [], chatSessionId: undefined }),
+      clearMessages: () => set({ messages: [], chatSessionId: undefined, lastSummary: null, audioQueue: [], currentAudio: null, isLoadingChat: false, companionState: 'idle', isOpen: false }),
     }),
     {
       name: 'ai-widget-storage',
+      version: 1,
+      migrate: () => ({}),
       storage,
       partialize: (state) => ({
         isMinimized: state.isMinimized,
         activeTab: state.activeTab,
-        messages: state.messages,
-        chatSessionId: state.chatSessionId,
       }),
     }
   )

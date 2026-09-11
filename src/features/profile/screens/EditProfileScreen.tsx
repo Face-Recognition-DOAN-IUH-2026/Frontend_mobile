@@ -17,7 +17,10 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
   const theme = useTheme() as AppTheme;
   const c = theme.colors;
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const { user, patron, updateUser } = useAuth();
+  // P2-6: destructure updatePatron so patron-specific fields (phone,
+  // permanent_address) stay in sync after a save — they are NOT part of
+  // the User type and updateUser alone does not reach the patron slice.
+  const { user, patron, updateUser, updatePatron } = useAuth();
 
   const [fullName, setFullName] = useState(user?.full_name || '');
   const [phone, setPhone] = useState(patron?.phone || '');
@@ -39,10 +42,18 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
     try {
       await authApi.updateProfile({
         full_name: fullName.trim(),
-        phone: phone.trim() || undefined,
-        permanent_address: address.trim() || undefined,
+        phone: phone.trim(),
+        permanent_address: address.trim(),
       });
+      // Sync User slice (full_name is the only User field updated here)
       updateUser({ full_name: fullName.trim() });
+      // Sync Patron slice for fields that live only on patron. (P2-6)
+      // Always send the full value (even empty string) so the server
+      // receives an explicit clear intent rather than a missing key.
+      updatePatron({
+        phone: phone.trim(),
+        permanent_address: address.trim(),
+      });
       Alert.alert('Thành công', 'Cập nhật thông tin thành công', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);

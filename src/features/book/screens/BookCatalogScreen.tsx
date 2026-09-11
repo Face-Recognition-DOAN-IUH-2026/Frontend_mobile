@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, Button, useTheme, Portal, Modal } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useFocusEffect } from '@react-navigation/native';
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
 import { borrowApi, joinWaitlist, leaveWaitlist } from '../../../api/borrow';
 import { Book, BookWithStats } from '../../../types';
@@ -88,15 +88,24 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
   };
 
   const {
-    data: books = [],
+    data: bookPages,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
     error: booksError,
     isFetching,
     refetch,
-  } = useQuery<Book[], Error>({
-    queryKey: ['books'],
-    queryFn: () => borrowApi.getBooks(0, 200),
+  } = useInfiniteQuery({
+    queryKey: ['books', searchQuery.trim()],
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) => borrowApi.getBooksPage(pageParam, 50, searchQuery.trim()),
+    getNextPageParam: (lastPage, pages) => {
+      const loaded = pages.reduce((sum, page) => sum + page.items.length, 0);
+      return lastPage.items.length && loaded < lastPage.total ? loaded : undefined;
+    },
     staleTime: 5 * 60 * 1000,
   });
+  const books = useMemo(() => bookPages?.pages.flatMap(page => page.items) || [], [bookPages]);
 
   const loadError = booksError?.message || null;
   const refreshing = isFetching;
@@ -120,16 +129,6 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
           b.category?.toLowerCase().includes(cat) ||
           b.title?.toLowerCase().includes(cat) ||
           b.description?.toLowerCase().includes(cat)
-      );
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter(
-        (b) =>
-          b.title?.toLowerCase().includes(q) ||
-          b.author?.toLowerCase().includes(q) ||
-          b.isbn?.includes(q) ||
-          b.category?.toLowerCase().includes(q)
       );
     }
     return result;
@@ -337,6 +336,7 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
             );
           })
         )}
+        {hasNextPage && <Button loading={isFetchingNextPage} disabled={isFetchingNextPage} onPress={() => fetchNextPage()}>Tải thêm sách</Button>}
       </ScrollView>
 
       <Portal>

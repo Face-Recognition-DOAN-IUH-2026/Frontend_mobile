@@ -3,6 +3,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Text, TextInput, useTheme } from 'react-native-paper';
 import api from '../../../api/client';
+import { waitForEnrollment } from '../../../api/enrollment';
 import { authApi } from '../../../api/auth';
 import AutoFaceCapture from '../../../components/AutoFaceCapture';
 import StudentCardScanner, { ScannedCardData } from '../../../components/StudentCardScanner';
@@ -357,11 +358,12 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
       } as any);
       formData.append('consent_given', consentGiven ? 'true' : 'false');
 
-      await api.post(`/patrons/${registeredUser.id}/enroll-batch`, formData, {
+      const { data } = await api.post(`/patrons/${registeredUser.id}/enroll-batch`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 130000,
       });
 
+      await waitForEnrollment(data.job_id);
       showSuccess('Đăng ký tài khoản và khuôn mặt thành công');
       navigation.replace('Login');
     } catch (error: any) {

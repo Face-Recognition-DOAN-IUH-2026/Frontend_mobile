@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useLayoutEffect } from 'react';
+import { useAIWidgetStore } from './useAIWidgetStore';
 import { View, StyleSheet } from 'react-native';
 import { Portal } from 'react-native-paper';
 import { useAuth } from '../../../../context/AuthContext';
@@ -7,6 +8,7 @@ import AIWidgetPanel from './AIWidgetPanel';
 
 export default function AIWidget() {
   const { user, isAuthenticated, isLoading } = useAuth();
+  useLayoutEffect(() => { useAIWidgetStore.getState().clearMessages(); }, [user?.id]);
 
   if (isLoading) return null;
   if (!isAuthenticated || !user) return null;

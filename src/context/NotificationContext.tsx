@@ -114,12 +114,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             setUnreadCount((prev) => prev + 1);
             queryClient.invalidateQueries({ queryKey: ['notifications'] });
           },
-          () => {},
+          (status) => { if (status === 'connected') reconnectAttempts.current = 0; },
         )
         .then((ws) => {
           if (!mountedRef.current) { ws.close(); return; }
           wsRef.current = ws;
-          reconnectAttempts.current = 0;
           ws.onclose = () => {
             wsRef.current = null;
             if (mountedRef.current) {

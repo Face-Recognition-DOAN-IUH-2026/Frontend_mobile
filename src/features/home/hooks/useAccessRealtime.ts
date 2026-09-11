@@ -15,7 +15,14 @@ export function useAccessRealtime(enabled = true) {
 
     let active = true;
     let ws: WebSocket | null = null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let attempts = 0;
+    const reconnect = () => {
+      if (!active || timer) return;
+      timer = setTimeout(() => { timer = undefined; connect(); }, Math.min(1000 * 2 ** attempts++, 30000));
+    };
 
+    const connect = () => {
     connectAccessRealtime(
       (event) => {
         if (!active) return;
@@ -23,17 +30,24 @@ export function useAccessRealtime(enabled = true) {
       },
       (next) => {
         if (active) setStatus(next);
+        if (next === 'connected') attempts = 0;
+        if (next === 'closed') reconnect();
       },
     )
       .then((socket) => {
         if (active) ws = socket;
+        else socket.close();
       })
       .catch(() => {
         if (active) setStatus('error');
+        reconnect();
       });
+    };
+    connect();
 
     return () => {
       active = false;
+      clearTimeout(timer);
       ws?.close();
     };
   }, [enabled]);
