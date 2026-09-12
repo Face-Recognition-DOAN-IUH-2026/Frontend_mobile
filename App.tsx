@@ -24,8 +24,12 @@ function ensureErrorHandlers() {
 }
 ensureErrorHandlers();
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
+try {
+  if (Platform.OS === 'android' && UIManager?.setLayoutAnimationEnabledExperimental) {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+  }
+} catch {
+  // safe fallback
 }
 
 function AppContent() {
