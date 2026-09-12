@@ -30,6 +30,10 @@ export const leaveWaitlist = async (waitlistId: string): Promise<void> => {
 };
 
 export const borrowApi = {
+  getBooksPage: async (skip: number, limit: number, search: string): Promise<{ items: Book[]; total: number }> => {
+    const { data } = await api.get('/borrow/books', { params: { skip, limit, search } });
+    return data;
+  },
   borrowBook: async (barcode: string): Promise<BorrowResponse> => {
     const response = await api.post<BorrowResponse>('/borrow/', { barcode });
     return response.data;

@@ -21,10 +21,14 @@ function isNotificationsAvailable(): boolean {
 
 const NOTIFS_AVAILABLE = isNotificationsAvailable();
 
+import { HazardAlertData } from '../components/EmergencyFireAlertModal';
+
 interface NotificationContextValue {
   notifications: Notification[];
   unreadCount: number;
   isLoading: boolean;
+  activeHazard: HazardAlertData | null;
+  dismissHazard: () => void;
   fetchNotifications: (unreadOnly?: boolean) => Promise<void>;
   fetchUnreadCount: () => Promise<void>;
   markAsRead: (id: string) => Promise<void>;
@@ -43,10 +47,15 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [activeHazard, setActiveHazard] = useState<HazardAlertData | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
   const reconnectAttempts = useRef(0);
+
+  const dismissHazard = useCallback(() => {
+    setActiveHazard(null);
+  }, []);
 
   const cleanup = useCallback(() => {
     if (reconnectTimer.current) {
@@ -63,6 +72,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   const registerPushToken = useCallback(async () => {
     if (!NOTIFS_AVAILABLE) return; // Skip in Expo Go
+    if (!(await hasToken())) return;
     try {
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
       let finalStatus = existingStatus;
@@ -93,6 +103,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   const unregisterPushToken = useCallback(async () => {
     if (!NOTIFS_AVAILABLE) return; // Skip in Expo Go
+    if (!(await hasToken())) return;
     try {
       const tokenData = await Notifications.getExpoPushTokenAsync();
       await notificationApi.unregisterDeviceToken(tokenData.data);
@@ -113,13 +124,21 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             setNotifications((prev) => [notification, ...prev]);
             setUnreadCount((prev) => prev + 1);
             queryClient.invalidateQueries({ queryKey: ['notifications'] });
+
+            // Khi nhận cảnh báo cháy từ WebSocket
+            if (notification.type === 'hazard_fire' || notification.data?.type === 'hazard_fire') {
+              const hazardInfo: HazardAlertData = (notification.data as HazardAlertData) || {
+                location: notification.body,
+                hazard_type: 'fire',
+              };
+              setActiveHazard(hazardInfo);
+            }
           },
-          () => {},
+          (status) => { if (status === 'connected') reconnectAttempts.current = 0; },
         )
         .then((ws) => {
           if (!mountedRef.current) { ws.close(); return; }
           wsRef.current = ws;
-          reconnectAttempts.current = 0;
           ws.onclose = () => {
             wsRef.current = null;
             if (mountedRef.current) {
@@ -253,6 +272,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             setUnreadCount((prev) => prev + 1);
             queryClient.invalidateQueries({ queryKey: ['notifications'] });
           }
+
+          // Kiểm tra xem push notification này có phải cảnh báo cháy không
+          if (data?.type === 'hazard_fire' || data?.hazard_type) {
+            setActiveHazard(data as HazardAlertData);
+          }
         });
       } catch (err) {
         devError('[Notification] Native module unavailable:', err);
@@ -276,6 +300,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         notifications,
         unreadCount,
         isLoading,
+        activeHazard,
+        dismissHazard,
         fetchNotifications,
         fetchUnreadCount,
         markAsRead,

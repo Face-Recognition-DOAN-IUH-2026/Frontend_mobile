@@ -1,6 +1,7 @@
 module.exports = {
   ...require('@react-native/jest-preset'),
   testMatch: ['**/__tests__/**/*.test.[jt]s?(x)'],
+  setupFilesAfterEnv: ['<rootDir>/jest.haptics.js'],
   transform: {
     ...require('@react-native/jest-preset').transform,
     '^.+\\.(ts|tsx)$': ['ts-jest', { tsconfig: 'tsconfig.jest.json' }],

@@ -1,5 +1,11 @@
 import { useState, useRef, useCallback } from 'react';
-import { Audio } from 'expo-av';
+import {
+  AudioModule,
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+} from 'expo-audio';
+import type { AudioRecorder } from 'expo-audio';
 
 interface UseVoiceRecorderReturn {
   isRecording: boolean;
@@ -13,68 +19,61 @@ export function useVoiceRecorder(): UseVoiceRecorderReturn {
   const [isRecording, setIsRecording] = useState(false);
   const [audioBase64, setAudioBase64] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  const recorderRef = useRef<AudioRecorder | null>(null);
 
   const startRecording = useCallback(async () => {
     try {
       setError(null);
       setAudioBase64(null);
 
-      const permission = await Audio.requestPermissionsAsync();
+      const permission = await requestRecordingPermissionsAsync();
       if (!permission.granted) {
-        setError('Camera permission is required for recording');
+        setError('Quyền microphone là bắt buộc để ghi âm');
         return;
       }
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
       });
 
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-
-      recordingRef.current = recording;
+      const recorder = new AudioModule.AudioRecorder(RecordingPresets.HIGH_QUALITY);
+      await recorder.prepareToRecordAsync();
+      recorder.record();
+      recorderRef.current = recorder;
       setIsRecording(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start recording');
+      setError(err instanceof Error ? err.message : 'Không thể bắt đầu ghi âm');
       setIsRecording(false);
     }
   }, []);
 
   const stopRecording = useCallback(async () => {
-    return new Promise<void>(async (resolve) => {
-      if (recordingRef.current && isRecording) {
-        try {
-          await recordingRef.current.stopAndUnloadAsync();
-          const uri = recordingRef.current.getURI();
+    if (recorderRef.current && isRecording) {
+      try {
+        await recorderRef.current.stop();
+        const uri = recorderRef.current.uri;
 
-          if (uri) {
-            const response = await fetch(uri);
-            const blob = await response.blob();
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              const base64 = (reader.result as string).split(',')[1];
-              setAudioBase64(base64);
-              setIsRecording(false);
-              resolve();
-            };
-            reader.readAsDataURL(blob);
-          } else {
+        if (uri) {
+          const response = await fetch(uri);
+          const blob = await response.blob();
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64 = (reader.result as string).split(',')[1];
+            setAudioBase64(base64);
             setIsRecording(false);
-            resolve();
-          }
-        } catch (err) {
-          setError(err instanceof Error ? err.message : 'Failed to stop recording');
+          };
+          reader.readAsDataURL(blob);
+        } else {
           setIsRecording(false);
-          resolve();
         }
-      } else {
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Không thể dừng ghi âm');
         setIsRecording(false);
-        resolve();
       }
-    });
+    } else {
+      setIsRecording(false);
+    }
   }, [isRecording]);
 
   return {

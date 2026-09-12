@@ -3,28 +3,22 @@ import { getAccessToken, getRefreshToken, setAccessToken, setRefreshToken, clear
 import { devError } from '../utils/logger';
 import { API_BASE_URL } from '../config/api';
 import bus from '../lib/event-bus';
-
-let _pendingRequests: Array<{
-  config: AxiosRequestConfig;
-  resolve: (val: unknown) => void;
-  reject: (err: unknown) => void;
-}> = [];
+import { getSessionGeneration, saveSessionTokens } from './secureStorage';
 
 let _isRefreshing = false;
-let _refreshSubscribers: Array<(token: string) => void> = [];
+let refreshController: AbortController | null = null;
+let _refreshSubscribers: Array<{ resolve: (token: string) => void; reject: (error: unknown) => void }> = [];
 
 function onTokenRefreshed(newToken: string) {
-  _refreshSubscribers.forEach((cb) => cb(newToken));
+  const subscribers = _refreshSubscribers;
   _refreshSubscribers = [];
-}
-
-function addRefreshSubscriber(cb: (token: string) => void) {
-  _refreshSubscribers.push(cb);
+  subscribers.forEach(({ resolve }) => resolve(newToken));
 }
 
 export function cancelPendingRequests() {
-  const queue = [..._pendingRequests];
-  _pendingRequests = [];
+  refreshController?.abort();
+  refreshController = null;
+  const queue = _refreshSubscribers;
   _isRefreshing = false;
   _refreshSubscribers = [];
   queue.forEach(({ reject }) => reject(new Error('Session expired')));
@@ -85,7 +79,7 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
       const endpoint = originalRequest?.url || 'unknown';
       const method = originalRequest?.method?.toUpperCase() || 'GET';
       devError(`[API] 401 received for ${method} ${endpoint}`);
@@ -95,45 +89,67 @@ api.interceptors.response.use(
         return Promise.reject(error);
       }
 
+      originalRequest._retry = true;
       if (_isRefreshing) {
-        return new Promise((resolve, reject) => {
-          addRefreshSubscriber((token: string) => {
+        return new Promise<string>((resolve, reject) => {
+          _refreshSubscribers.push({ resolve, reject });
+        }).then((token) => {
             originalRequest.headers = { ...originalRequest.headers, Authorization: `Bearer ${token}` };
-            resolve(api(originalRequest));
-          });
+            return api(originalRequest);
         });
       }
 
-      originalRequest._retry = true;
       _isRefreshing = true;
+      const controller = new AbortController();
+      const generation = getSessionGeneration();
+      refreshController = controller;
 
-      const refreshToken = await getRefreshToken();
-      if (refreshToken) {
-        try {
-          const { data } = await refreshApi.post(
-            '/auth/refresh',
-            { refresh_token: refreshToken },
-            { headers: { Authorization: undefined } },
-          );
-          const newAccessToken = data.access_token;
-          const newRefreshToken = data.refresh_token;
-          await setAccessToken(newAccessToken);
-          if (newRefreshToken) {
-            await setRefreshToken(newRefreshToken);
-          }
+      try {
+        // Fast-path: if both tokens are already gone the user has intentionally
+        // logged out. Do NOT attempt a refresh and do NOT emit auth:expired —
+        // the navigation to login is already handled by the logout() call.
+        const [existingAccess, existingRefresh] = await Promise.all([
+          getAccessToken(),
+          getRefreshToken(),
+        ]);
+        if (!existingAccess && !existingRefresh) {
           _isRefreshing = false;
-          onTokenRefreshed(newAccessToken);
-          originalRequest.headers = { ...originalRequest.headers, Authorization: `Bearer ${newAccessToken}` };
-          return api(originalRequest);
-        } catch (refreshErr: any) {
-          devError('[API] Refresh token failed:', refreshErr);
+          refreshController = null;
+          cancelPendingRequests();
+          return Promise.reject(error);
         }
-      }
 
-      _isRefreshing = false;
-      cancelPendingRequests();
-      try { await clearTokens(); } catch { /* ignore */ }
-      bus.emit('auth:expired');
+        const refreshToken = existingRefresh ?? await getRefreshToken();
+        if (controller.signal.aborted) throw new Error('Session expired');
+        if (!refreshToken) throw { response: { status: 401 } };
+        const { data } = await refreshApi.post(
+          '/auth/refresh',
+          { refresh_token: refreshToken },
+          { headers: { Authorization: undefined }, signal: controller.signal },
+        );
+        const newAccessToken = data.access_token;
+        if (controller.signal.aborted) throw new Error('Session expired');
+        if (typeof newAccessToken !== 'string' || !newAccessToken) throw new Error('Invalid refresh response');
+        const newRefreshToken = data.refresh_token;
+        await saveSessionTokens(newAccessToken, newRefreshToken, generation);
+        if (controller.signal.aborted || generation !== getSessionGeneration()) throw new Error('Session changed');
+        _isRefreshing = false;
+        refreshController = null;
+        onTokenRefreshed(newAccessToken);
+        originalRequest.headers = { ...originalRequest.headers, Authorization: `Bearer ${newAccessToken}` };
+        return api(originalRequest);
+      } catch (refreshErr: any) {
+        _isRefreshing = false;
+        refreshController = null;
+        if (controller.signal.aborted) return Promise.reject(refreshErr);
+        devError('[API] Refresh token failed:', refreshErr);
+        cancelPendingRequests();
+        if (refreshErr?.response?.status === 401 || refreshErr?.response?.status === 403) {
+          try { await clearTokens(); } catch { /* ignore */ }
+          bus.emit('auth:expired');
+        }
+        return Promise.reject(refreshErr);
+      }
     }
     return Promise.reject(error);
   }

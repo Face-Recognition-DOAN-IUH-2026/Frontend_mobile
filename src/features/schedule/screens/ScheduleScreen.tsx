@@ -17,6 +17,7 @@ import { GradientHeader, EmptyState, GRADIENTS } from '../../../theme/MobileDesi
 import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
 import { LoadingOverlay } from '../../../components/LoadingOverlay';
 import FaceCheckInModal from '../../../components/FaceCheckInModal';
+import { useAuth } from '../../../context/AuthContext';
 
 function getErrorMessage(err: any, fallback: string) {
   return err?.response?.data?.detail || err?.response?.data?.error || err?.message || fallback;
@@ -148,6 +149,9 @@ export default function ScheduleScreen() {
 
   const currentDate = weekDays[currentIndex];
 
+  const { isAuthenticated, user } = useAuth();
+  const isStaff = user?.role === 'admin' || user?.role === 'staff';
+
   const {
     data: scheduleResult,
     error: scheduleError,
@@ -156,6 +160,7 @@ export default function ScheduleScreen() {
   } = useQuery({
     queryKey: ['mySchedule', weekRange.from, weekRange.to],
     queryFn: () => scheduleApi.getMySchedules(weekRange.from, weekRange.to),
+    enabled: isAuthenticated && isStaff,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -319,7 +324,7 @@ export default function ScheduleScreen() {
     return sections;
   }, [assignments, pickerMonth, pickerYear]);
 
-  useFocusEffect(useCallback(() => { refetchSchedule(); }, [refetchSchedule]));
+  useFocusEffect(useCallback(() => { if (isAuthenticated && isStaff) refetchSchedule(); }, [isAuthenticated, isStaff, refetchSchedule]));
 
   const onRefresh = async () => {
     await refetchSchedule();

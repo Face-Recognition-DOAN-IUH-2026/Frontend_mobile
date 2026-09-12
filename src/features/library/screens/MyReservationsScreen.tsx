@@ -14,6 +14,7 @@ import SwipeReserveRow from '../../../components/SwipeReserveRow';
 import { useUndo } from '../../../lib/useUndo';
 import { devError } from '../../../utils/logger';
 import { useNetwork } from '../../../context/NetworkContext';
+import { useAuth } from '../../../context/AuthContext';
 
 interface MyReservationsScreenProps {
   navigation: any;
@@ -23,6 +24,7 @@ export default function MyReservationsScreen({ navigation }: MyReservationsScree
   const theme = useTheme() as AppTheme;
   const c = theme.colors;
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const { isAuthenticated } = useAuth();
   const [snackMsg, setSnackMsg] = useState('');
   const [snackVisible, setSnackVisible] = useState(false);
   const { hiddenIds, confirmingId, undo, cancelUndo, markConfirmed } = useUndo({ duration: 5000 });
@@ -37,6 +39,7 @@ export default function MyReservationsScreen({ navigation }: MyReservationsScree
   } = useQuery({
     queryKey: ['myReservations'],
     queryFn: () => getMyWaitlist(),
+    enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -46,8 +49,10 @@ export default function MyReservationsScreen({ navigation }: MyReservationsScree
 
   useFocusEffect(
     useCallback(() => {
-      refetch();
-    }, [refetch])
+      if (isAuthenticated) {
+        refetch();
+      }
+    }, [isAuthenticated, refetch])
   );
 
   const handleCancel = useCallback((entry: WaitlistEntry) => {

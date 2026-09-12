@@ -19,6 +19,8 @@ import {
   GRADIENTS,
 } from '../../../theme/MobileDesignSystem';
 
+import { useAuth } from '../../../context/AuthContext';
+
 interface HistoryScreenProps {
   navigation: any;
 }
@@ -58,6 +60,7 @@ export default function HistoryScreen({ navigation }: HistoryScreenProps) {
   const theme = useTheme() as AppTheme;
   const c = theme.colors;
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const { isAuthenticated } = useAuth();
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
   const [showHeader, setShowHeader] = useState(false);
 
@@ -69,6 +72,7 @@ export default function HistoryScreen({ navigation }: HistoryScreenProps) {
   } = useQuery<BorrowRecord[], Error>({
     queryKey: ['borrowHistory'],
     queryFn: () => borrowApi.getHistory(),
+    enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -82,8 +86,10 @@ export default function HistoryScreen({ navigation }: HistoryScreenProps) {
 
   useFocusEffect(
     useCallback(() => {
-      refetch();
-    }, [refetch]),
+      if (isAuthenticated) {
+        refetch();
+      }
+    }, [isAuthenticated, refetch]),
   );
 
   const onRefresh = async () => {

@@ -6,6 +6,7 @@ import CameraFallback from '../../../components/CameraFallback';
 import { LoadingOverlay } from '../../../components/LoadingOverlay';
 import { GradientHeader } from '../../../theme/MobileDesignSystem';
 import api from '../../../api/client';
+import { waitForEnrollment } from '../../../api/enrollment';
 import { useAuth } from '../../../context/AuthContext';
 import { useTheme } from 'react-native-paper';
 import { AppTheme } from '../../../theme/DarkTheme';
@@ -54,11 +55,12 @@ export default function FaceCameraScreen({ navigation }: FaceCameraScreenProps) 
       } as any);
       formData.append('consent_given', 'true');
 
-      await api.post(`/patrons/${patronId}/enroll-batch`, formData, {
+      const { data } = await api.post(`/patrons/${patronId}/enroll-batch`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 130000,
       });
 
+      await waitForEnrollment(data.job_id);
       Alert.alert('Thành công', 'Đăng ký khuôn mặt thành công!', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);

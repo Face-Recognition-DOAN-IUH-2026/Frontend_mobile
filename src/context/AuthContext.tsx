@@ -20,6 +20,8 @@ import { queryClient } from '../lib/queryClient';
 import { getAccessToken, getRefreshToken, setAccessToken, setRefreshToken, clearTokens } from '../api/secureStorage';
 import { cancelPendingRequests } from '../api/client';
 import bus from '../lib/event-bus';
+import { getSessionGeneration, saveSessionTokens } from '../api/secureStorage';
+import { useAIWidgetStore } from '../features/ai/components/AIWidget/useAIWidgetStore';
 
 interface JwtPayload {
   sub?: string;
@@ -40,6 +42,7 @@ export interface Patron {
   avatar_url?: string;
   avatarUrl?: string;
   permanent_address?: string;
+  phone?: string;
   faculty?: string;
   student_code?: string;
   password_auto_generated?: boolean;
@@ -56,6 +59,7 @@ interface AuthContextType {
   faceLogin: (imageUri: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (patch: Partial<User>) => void;
+  updatePatron: (patch: Partial<Patron>) => void;
   restoreUserFromToken: () => Promise<void>;
 }
 
@@ -81,6 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const restoreUserFromToken = useCallback(async () => {
+    const generation = getSessionGeneration();
     try {
       let accessToken = await getAccessToken();
       let payload = accessToken ? decodeJwtPayload(accessToken) : null;
@@ -103,14 +108,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           payload = decodeJwtPayload(accessToken);
           if (!payload) throw new Error('Refresh returned an invalid access token');
 
-          await setAccessToken(accessToken);
-          if (result.refresh_token) {
-            await setRefreshToken(result.refresh_token);
-          }
-        } catch {
+          await saveSessionTokens(accessToken, result.refresh_token, generation);
+        } catch (error: any) {
+          if (generation !== getSessionGeneration()) return;
           devError('[Auth] Refresh token failed on restore');
-          await clearTokens();
+          if (error?.response?.status === 401 || error?.response?.status === 403) await clearTokens();
           setUser(null);
+          setPatron(null);
           setIsLoading(false);
           return;
         }
@@ -122,6 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      if (generation !== getSessionGeneration()) return;
       const role = (payload.roles?.[0] || payload.role || 'patron') as UserRole;
 
       // Set basic user from token immediately
@@ -135,10 +140,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Fetch full profile to get avatar_url and other fields not in JWT
       try {
         if (role === 'admin' || role === 'staff') {
+          setPatron(null);
           const userData = await authApi.getCurrentUser();
+          if (generation !== getSessionGeneration()) return;
           setUser((prev) => prev ? { ...prev, avatar_url: userData.avatar_url || userData.avatarUrl } : null);
         } else {
           const patronData = await authApi.getCurrentPatron();
+          if (generation !== getSessionGeneration()) return;
+          setPatron(patronData);
           setUser((prev) => prev ? { ...prev, avatar_url: patronData.avatar_url || patronData.avatarUrl } : null);
         }
       } catch {
@@ -229,6 +238,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch {}
     }
     cancelPendingRequests();
+    // Clear AI widget conversation from RAM so the next user on the same
+    // device does not see the previous session's history. (P1-2)
+    useAIWidgetStore.getState().clearMessages();
     await authApi.logout();
     queryClient.clear();
     setUser(null);
@@ -237,6 +249,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateUser = (patch: Partial<User>) => {
     setUser((prev) => (prev ? { ...prev, ...patch } : prev));
+    setPatron((prev) => (prev ? { ...prev, ...patch } : prev));
+  };
+
+  // P2-6: dedicated updater so EditProfileScreen can sync patron-specific
+  // fields (phone, permanent_address) that are not part of the User type.
+  const updatePatron = (patch: Partial<Patron>) => {
+    setPatron((prev) => (prev ? { ...prev, ...patch } : prev));
   };
 
   return (
@@ -251,6 +270,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         faceLogin,
         logout,
         updateUser,
+        updatePatron,
         restoreUserFromToken,
       }}
     >
@@ -266,4 +286,3 @@ export function useAuth() {
   }
   return context;
 }
-

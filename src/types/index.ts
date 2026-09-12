@@ -1,6 +1,8 @@
 export type UserRole = 'admin' | 'staff' | 'patron';
 
 export interface User {
+  phone?: string;
+  permanent_address?: string;
   id: string;
   email: string;
   full_name?: string;

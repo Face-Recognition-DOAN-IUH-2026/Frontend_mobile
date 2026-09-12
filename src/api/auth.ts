@@ -82,6 +82,8 @@ export const authApi = {
     if (!response.data.user) {
       throw new Error('Invalid response: missing user data');
     }
+    await setAccessToken(response.data.access_token);
+    if (response.data.refresh_token) await setRefreshToken(response.data.refresh_token);
     return response.data;
   },
 

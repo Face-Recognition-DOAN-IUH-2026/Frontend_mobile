@@ -151,8 +151,7 @@ export default function AIChatScreen({ navigation, route }: AIChatScreenProps) {
       addMessage(assistantMessage);
 
       if (response.requiresConfirmation && response.pendingAction) {
-        setPendingAction(response.pendingAction);
-        setConfirmVisible(true);
+        addMessage({ id: `${Date.now()}-readonly`, role: 'assistant', content: 'AI hiện chỉ hỗ trợ tra cứu. Vui lòng thực hiện thao tác trực tiếp trên ứng dụng.', timestamp: new Date() });
       }
     } catch (error: any) {
       const status = error?.response?.status;

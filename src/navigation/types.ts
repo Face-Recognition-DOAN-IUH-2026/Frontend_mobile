@@ -18,6 +18,7 @@ export type PatronTabParamList = {
 
 export type StaffTabParamList = {
   Home: undefined;
+  Schedule: undefined;
   AIChat: undefined;
   Profile: undefined;
 };

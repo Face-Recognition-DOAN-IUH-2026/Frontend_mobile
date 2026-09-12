@@ -39,7 +39,7 @@ type StaffAction = {
 export default function HomeScreen({ navigation }: HomeScreenProps) {
   const theme = useTheme() as AppTheme;
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const { user, patron } = useAuth();
+  const { user, patron, isAuthenticated } = useAuth();
   const isStaffScanner = user?.role === 'admin' || user?.role === 'staff';
   const { events: accessEvents, status: accessWsStatus } = useAccessRealtime(isStaffScanner);
 
@@ -54,7 +54,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   } = useQuery<BorrowRecord[], Error>({
     queryKey: ['activeBorrows'],
     queryFn: () => borrowApi.getHistory('borrowed'),
-    enabled: !isStaffScanner,
+    enabled: isAuthenticated && !isStaffScanner,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -65,7 +65,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   } = useQuery({
     queryKey: ['todaySchedule', today],
     queryFn: () => scheduleApi.getMySchedules(today, tomorrow),
-    enabled: isStaffScanner,
+    enabled: isAuthenticated && isStaffScanner,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -75,9 +75,11 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 
   useFocusEffect(
     useCallback(() => {
-      refetchBorrows();
-      refetchSchedule();
-    }, [refetchBorrows, refetchSchedule]),
+      if (isAuthenticated) {
+        refetchBorrows();
+        refetchSchedule();
+      }
+    }, [isAuthenticated, refetchBorrows, refetchSchedule]),
   );
 
   const onRefresh = async () => {
