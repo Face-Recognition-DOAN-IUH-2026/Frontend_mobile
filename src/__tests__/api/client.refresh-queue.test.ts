@@ -38,7 +38,7 @@ describe('concurrent refresh', () => {
     const first = handleError(unauthorized('/users/me'));
     const second = handleError(unauthorized('/borrow/history'));
     const result = Promise.allSettled([first, second]);
-    await Promise.resolve();
+    for (let i = 0; i < 10; i++) await Promise.resolve();
     fail({ response: { status: 401 } });
     expect((await result).map(item => item.status)).toEqual(['rejected', 'rejected']);
     expect(clearTokens).toHaveBeenCalledTimes(1);

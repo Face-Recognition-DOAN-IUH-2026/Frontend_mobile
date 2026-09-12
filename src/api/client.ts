@@ -99,53 +99,57 @@ api.interceptors.response.use(
         });
       }
 
-      // Fast-path: if both tokens are already gone the user has intentionally
-      // logged out. Do NOT attempt a refresh and do NOT emit auth:expired —
-      // the navigation to login is already handled by the logout() call.
-      const [existingAccess, existingRefresh] = await Promise.all([
-        getAccessToken(),
-        getRefreshToken(),
-      ]);
-      if (!existingAccess && !existingRefresh) {
-        _isRefreshing = false;
-        return Promise.reject(error);
-      }
-
       _isRefreshing = true;
       const controller = new AbortController();
       const generation = getSessionGeneration();
       refreshController = controller;
 
-        try {
-          const refreshToken = existingRefresh ?? await getRefreshToken();
-          if (controller.signal.aborted) throw new Error('Session expired');
-          if (!refreshToken) throw { response: { status: 401 } };
-          const { data } = await refreshApi.post(
-            '/auth/refresh',
-            { refresh_token: refreshToken },
-            { headers: { Authorization: undefined }, signal: controller.signal },
-          );
-          const newAccessToken = data.access_token;
-          if (controller.signal.aborted) throw new Error('Session expired');
-          if (typeof newAccessToken !== 'string' || !newAccessToken) throw new Error('Invalid refresh response');
-          const newRefreshToken = data.refresh_token;
-          await saveSessionTokens(newAccessToken, newRefreshToken, generation);
-          if (controller.signal.aborted || generation !== getSessionGeneration()) throw new Error('Session changed');
+      try {
+        // Fast-path: if both tokens are already gone the user has intentionally
+        // logged out. Do NOT attempt a refresh and do NOT emit auth:expired —
+        // the navigation to login is already handled by the logout() call.
+        const [existingAccess, existingRefresh] = await Promise.all([
+          getAccessToken(),
+          getRefreshToken(),
+        ]);
+        if (!existingAccess && !existingRefresh) {
           _isRefreshing = false;
           refreshController = null;
-          onTokenRefreshed(newAccessToken);
-          originalRequest.headers = { ...originalRequest.headers, Authorization: `Bearer ${newAccessToken}` };
-          return api(originalRequest);
-        } catch (refreshErr: any) {
-          if (controller.signal.aborted) return Promise.reject(refreshErr);
-          devError('[API] Refresh token failed:', refreshErr);
           cancelPendingRequests();
-          if (refreshErr?.response?.status === 401 || refreshErr?.response?.status === 403) {
-            try { await clearTokens(); } catch { /* ignore */ }
-            bus.emit('auth:expired');
-          }
-          return Promise.reject(refreshErr);
+          return Promise.reject(error);
         }
+
+        const refreshToken = existingRefresh ?? await getRefreshToken();
+        if (controller.signal.aborted) throw new Error('Session expired');
+        if (!refreshToken) throw { response: { status: 401 } };
+        const { data } = await refreshApi.post(
+          '/auth/refresh',
+          { refresh_token: refreshToken },
+          { headers: { Authorization: undefined }, signal: controller.signal },
+        );
+        const newAccessToken = data.access_token;
+        if (controller.signal.aborted) throw new Error('Session expired');
+        if (typeof newAccessToken !== 'string' || !newAccessToken) throw new Error('Invalid refresh response');
+        const newRefreshToken = data.refresh_token;
+        await saveSessionTokens(newAccessToken, newRefreshToken, generation);
+        if (controller.signal.aborted || generation !== getSessionGeneration()) throw new Error('Session changed');
+        _isRefreshing = false;
+        refreshController = null;
+        onTokenRefreshed(newAccessToken);
+        originalRequest.headers = { ...originalRequest.headers, Authorization: `Bearer ${newAccessToken}` };
+        return api(originalRequest);
+      } catch (refreshErr: any) {
+        _isRefreshing = false;
+        refreshController = null;
+        if (controller.signal.aborted) return Promise.reject(refreshErr);
+        devError('[API] Refresh token failed:', refreshErr);
+        cancelPendingRequests();
+        if (refreshErr?.response?.status === 401 || refreshErr?.response?.status === 403) {
+          try { await clearTokens(); } catch { /* ignore */ }
+          bus.emit('auth:expired');
+        }
+        return Promise.reject(refreshErr);
+      }
     }
     return Promise.reject(error);
   }
