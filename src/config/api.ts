@@ -2,26 +2,31 @@ import { Platform } from 'react-native';
 
 const ENV_API_URL = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/+$/, '');
 
+const DEFAULT_FALLBACK_URL = 'http://192.168.1.149:80/api';
+
 function getDevHost(): string {
   return Platform.OS === 'ios' ? 'localhost' : '10.0.2.2';
 }
 
 function getApiBaseUrl(): string {
   if (ENV_API_URL) {
-    const url = new URL(ENV_API_URL);
-    if (!['http:', 'https:'].includes(url.protocol) || !url.pathname.endsWith('/api') || url.search || url.hash) {
-      throw new Error('EXPO_PUBLIC_API_URL must be an HTTP(S) URL ending in /api, without query or fragment.');
+    try {
+      const url = new URL(ENV_API_URL);
+      if (['http:', 'https:'].includes(url.protocol) && url.pathname.endsWith('/api') && !url.search && !url.hash) {
+        return ENV_API_URL;
+      }
+    } catch {
+      // ignore parsing error and continue to fallback
     }
-    return ENV_API_URL;
   }
   if (__DEV__) return `http://${getDevHost()}:80/api`;
-  throw new Error('EXPO_PUBLIC_API_URL is not set. Application cannot start without a configured API URL.');
+  return DEFAULT_FALLBACK_URL;
 }
 
 function getApiBaseNoPath(): string {
   if (ENV_API_URL) return ENV_API_URL.replace(/\/api\/?$/, '');
   if (__DEV__) return `http://${getDevHost()}:80`;
-  throw new Error('EXPO_PUBLIC_API_URL is not set.');
+  return DEFAULT_FALLBACK_URL.replace(/\/api\/?$/, '');
 }
 
 export const API_BASE_URL = getApiBaseUrl();

@@ -31,6 +31,9 @@ export async function reportError(params: ReportErrorParams): Promise<void> {
 
 // Global error handler for unhandled errors
 export function setupGlobalErrorHandlers() {
+  if (typeof ErrorUtils === 'undefined' || !ErrorUtils.getGlobalHandler) {
+    return;
+  }
   const originalHandler = ErrorUtils.getGlobalHandler();
 
   ErrorUtils.setGlobalHandler((error: Error, isFatal?: boolean) => {
