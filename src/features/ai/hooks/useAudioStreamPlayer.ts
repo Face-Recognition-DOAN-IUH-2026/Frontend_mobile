@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { Audio, AVPlaybackStatus } from 'expo-av';
+import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
 
 interface UseAudioStreamPlayerReturn {
   isPlaying: boolean;
@@ -11,50 +11,43 @@ interface UseAudioStreamPlayerReturn {
 export function useAudioStreamPlayer(): UseAudioStreamPlayerReturn {
   const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const soundRef = useRef<Audio.Sound | null>(null);
+  const playerRef = useRef<AudioPlayer | null>(null);
+
+  const stop = useCallback(async () => {
+    if (playerRef.current) {
+      try {
+        playerRef.current.pause();
+      } catch {}
+      playerRef.current = null;
+    }
+    setIsPlaying(false);
+  }, []);
 
   const play = useCallback(async (audioBase64: string) => {
     try {
       setError(null);
       await stop();
 
-      const binaryString = atob(audioBase64);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
+      const player = createAudioPlayer({
+        uri: `data:audio/wav;base64,${audioBase64}`,
+      });
 
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: `data:audio/wav;base64,${audioBase64}` },
-        { shouldPlay: true }
-      );
+      playerRef.current = player;
 
-      soundRef.current = sound;
-
-      sound.setOnPlaybackStatusUpdate((status: AVPlaybackStatus) => {
-        if (status.isLoaded && status.didJustFinish) {
+      player.addListener('playbackStatusUpdate', (status) => {
+        if (status.didJustFinish) {
           setIsPlaying(false);
-          soundRef.current = null;
+          playerRef.current = null;
         }
       });
 
+      player.play();
       setIsPlaying(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to play audio');
+      setError(err instanceof Error ? err.message : 'Không thể phát âm thanh');
       setIsPlaying(false);
     }
-  }, []);
-
-  const stop = useCallback(async () => {
-    if (soundRef.current) {
-      try {
-        await soundRef.current.stopAsync();
-        await soundRef.current.unloadAsync();
-      } catch {}
-      soundRef.current = null;
-    }
-    setIsPlaying(false);
-  }, []);
+  }, [stop]);
 
   return {
     isPlaying,
