@@ -2,7 +2,7 @@ import { Platform } from 'react-native';
 
 const ENV_API_URL = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/+$/, '');
 
-const DEFAULT_FALLBACK_URL = 'http://192.168.1.149:80/api';
+const DEFAULT_FALLBACK_URL = 'http://192.168.1.222:80/api';
 
 function getDevHost(): string {
   return Platform.OS === 'ios' ? 'localhost' : '10.0.2.2';
