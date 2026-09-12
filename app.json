@@ -3,7 +3,6 @@
     "name": "Thư Viện",
     "slug": "LibraryMobileApp",
     "version": "1.0.0",
-    "newArchEnabled": false,
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -51,7 +50,6 @@
         "expo-build-properties",
         {
           "android": {
-            "newArchEnabled": false,
             "usesCleartextTraffic": true
           },
           "ios": {
