@@ -64,6 +64,19 @@ export const notificationApi = {
         const payload = JSON.parse(String(message.data));
         if (payload?.event === 'notification_created' && payload.data) {
           onNotification(payload.data as Notification);
+        } else if (payload?.event === 'hazard_alert' || payload?.type === 'hazard_fire') {
+          const hazardData = payload.data || payload;
+          const notif: Notification = {
+            id: 'hazard-' + Date.now(),
+            userId: '',
+            type: 'hazard_fire',
+            title: '🚨 BÁO ĐỘNG CHÁY KHẨN CẤP',
+            body: `Phát hiện nguy cơ cháy tại ${hazardData.location || 'khu vực Thư viện'}`,
+            data: hazardData,
+            isRead: false,
+            createdAt: new Date().toISOString(),
+          };
+          onNotification(notif);
         }
       } catch {
         // Ignore heartbeat/invalid messages

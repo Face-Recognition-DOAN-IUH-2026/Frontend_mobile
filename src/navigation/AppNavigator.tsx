@@ -33,6 +33,7 @@ import MyReservationsScreen from '../features/library/screens/MyReservationsScre
 import BookCatalogScreen from '../features/book/screens/BookCatalogScreen';
 import EditProfileScreen from '../features/profile/screens/EditProfileScreen';
 import LibraryTourScreen from '../features/library/screens/LibraryTourScreen';
+import EmergencyFireAlertModal from '../components/EmergencyFireAlertModal';
 
 import { isStaffRole, isPatronRole } from './roleGuard';
 import { AuthStackParamList, PatronStackParamList, StaffStackParamList, PatronTabParamList, StaffTabParamList } from './types';
@@ -264,6 +265,17 @@ function StaffTabNavigator() {
         }}
       />
       <StaffTab.Screen
+        name="Schedule"
+        component={ScheduleScreen}
+        options={{
+          title: 'Lịch trực',
+          headerShown: false,
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="calendar-clock" size={size} color={color} />
+          ),
+        }}
+      />
+      <StaffTab.Screen
         name="AIChat"
         component={AIChatScreen}
         options={{
@@ -456,6 +468,7 @@ function StaffStackNavigator() {
 export default function AppNavigator() {
   const theme = useTheme();
   const { isAuthenticated, isLoading, user } = useAuth();
+  const { activeHazard, dismissHazard } = useNotification();
 
   const navigationTheme = useMemo(() => {
     const base = theme.dark ? NavigationDarkTheme : NavigationDefaultTheme;
@@ -493,6 +506,12 @@ export default function AppNavigator() {
           )}
         </RootStack.Navigator>
       </NavigationContainer>
+      <EmergencyFireAlertModal
+        visible={!!activeHazard}
+        hazard={activeHazard}
+        isStaff={isStaff}
+        onDismiss={dismissHazard}
+      />
     </>
   );
 }
