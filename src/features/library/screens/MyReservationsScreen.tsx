@@ -103,10 +103,9 @@ export default function MyReservationsScreen({ navigation }: MyReservationsScree
 
   const getStatusLabel = (status: string): string => {
     switch (status) {
-      case 'waiting': return 'Đang chờ';
-      case 'notified': return 'Đã thông báo';
+      case 'waiting': return 'Đang theo dõi';
+      case 'notified': return 'Sách đã có sẵn';
       case 'fulfilled': return 'Đã mượn';
-      case 'expired': return 'Đã hết hạn';
       default: return status;
     }
   };
@@ -121,9 +120,16 @@ export default function MyReservationsScreen({ navigation }: MyReservationsScree
       >
         <GradientHeader
           title="Sách chờ nhận thông báo"
-          subtitle={entries.length > 0 ? `${entries.length} đang chờ` : 'Chưa có sách nào'}
+          subtitle={entries.length > 0 ? `${entries.length} sách đang theo dõi` : 'Chưa có sách nào'}
           icon="bell-ring-outline"
         />
+
+        <Surface style={[styles.infoBanner, { backgroundColor: c.surfaceVariant, borderColor: c.outline }]} elevation={0}>
+          <MaterialCommunityIcons name="information-outline" size={18} color={c.primary} style={{ marginRight: 8 }} />
+          <Text style={[styles.infoBannerText, { color: c.onSurfaceVariant }]}>
+            Khi có sách được trả về, bạn sẽ nhận được thông báo ngay. Thư viện phục vụ theo nguyên tắc bạn đọc đến trước phục vụ trước (không giữ chỗ).
+          </Text>
+        </Surface>
 
         {loadError ? (
           <EmptyState
@@ -134,7 +140,7 @@ export default function MyReservationsScreen({ navigation }: MyReservationsScree
         ) : entries.length === 0 ? (
           <EmptyState icon="bell-off-outline" title="Bạn chưa đăng ký nhận thông báo nào" />
         ) : (
-          <SectionCard title="Sách đang chờ" icon="bell-check-outline" accentColor={GRADIENTS.indigo[0]}>
+          <SectionCard title="Danh sách theo dõi" icon="bell-check-outline" accentColor={GRADIENTS.indigo[0]}>
             {entries
               .filter((entry) => !hiddenIds.includes(entry.id))
               .map((entry) => {
@@ -246,5 +252,20 @@ function createStyles(theme: AppTheme) {
       borderRadius: 4,
     },
     statusBadgeText: { fontSize: 11, fontWeight: '700' },
+    infoBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginHorizontal: 16,
+      marginTop: 12,
+      marginBottom: 4,
+      padding: 12,
+      borderRadius: 8,
+      borderWidth: 0.5,
+    },
+    infoBannerText: {
+      flex: 1,
+      fontSize: 12,
+      lineHeight: 16,
+    },
   });
 }
