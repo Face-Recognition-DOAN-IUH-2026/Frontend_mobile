@@ -51,9 +51,19 @@ describe('mapAuthError - login error mapping', () => {
     expect(mapAuthError(err)).toBe('Custom message');
   });
 
-  it('maps err.message fallback', () => {
+  it('maps axios Network Error to Vietnamese connection message', () => {
     const err = { message: 'Network Error' };
-    expect(mapAuthError(err)).toBe('Network Error');
+    expect(mapAuthError(err)).toBe('Không thể kết nối server. Vui lòng kiểm tra mạng.');
+  });
+
+  it('maps ERR_NETWORK code to Vietnamese connection message', () => {
+    const err = { code: 'ERR_NETWORK', message: 'Network Error' };
+    expect(mapAuthError(err)).toBe('Không thể kết nối server. Vui lòng kiểm tra mạng.');
+  });
+
+  it('maps generic err.message fallback', () => {
+    const err = { message: 'Some custom failure' };
+    expect(mapAuthError(err)).toBe('Some custom failure');
   });
 
   it('defaults to Dang nhap that bai', () => {

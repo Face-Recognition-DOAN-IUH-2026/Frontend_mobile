@@ -23,12 +23,18 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [snackVisible, setSnackVisible] = useState(false);
   const { patronLogin, staffLogin } = useAuth();
+
+  const showError = (message: string) => {
+    setError(message);
+    setSnackVisible(true);
+  };
 
   const handleLogin = async () => {
     const identifier = loginMode === 'staff' ? email.trim() : studentCode.trim();
     if (!identifier || !password.trim()) {
-      setError(loginMode === 'staff'
+      showError(loginMode === 'staff'
         ? 'Vui lòng nhập email và mật khẩu'
         : 'Vui lòng nhập mã sinh viên và mật khẩu');
       return;
@@ -36,6 +42,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
 
     setIsLoading(true);
     setError('');
+    setSnackVisible(false);
     try {
       if (loginMode === 'staff') {
         await staffLogin(email.trim(), password);
@@ -43,8 +50,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
         await patronLogin(studentCode.trim(), password);
       }
     } catch (err: any) {
-      const message = mapAuthError(err);
-      setError(message);
+      showError(mapAuthError(err));
     } finally {
       setIsLoading(false);
     }
@@ -184,10 +190,10 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
       </KeyboardAvoidingView>
 
       <NoticeSnackbar
-        visible={!!error}
+        visible={snackVisible}
         message={error}
         severity="error"
-        onDismiss={() => setError('')}
+        onDismiss={() => setSnackVisible(false)}
       />
     </SafeAreaView>
   );

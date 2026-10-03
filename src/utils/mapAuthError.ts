@@ -37,6 +37,9 @@ export function mapAuthError(err: any): string {
   if (err?.code === 'ECONNABORTED') {
     return 'Kết nối quá lâu. Vui lòng thử lại.';
   }
+  if (err?.code === 'ERR_NETWORK' || err?.message === 'Network Error' || err?.message === 'TypeError: Network request failed') {
+    return 'Không thể kết nối server. Vui lòng kiểm tra mạng.';
+  }
   if (err?.message && typeof err.message === 'string' && err.message.trim()) {
     return err.message;
   }
