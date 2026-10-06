@@ -20,6 +20,7 @@ import { AppTheme } from '../../../theme/DarkTheme';
 import { BorrowRecord, StaffPatronActiveBorrowsResponse } from '../../../types';
 import { formatDate, getDaysUntil, isOverdue } from '../../../utils/dateUtils';
 import { getErrorMessage } from '../../../utils/errorUtils';
+import { CONDITION_LABELS } from '../../../constants/copy';
 import {
   GradientHeader,
   SectionCard,
@@ -62,15 +63,11 @@ export default function ReturnScreen() {
   const [permission, requestPermission] = useCameraPermissions();
 
   const CONDITION_OPTIONS = useMemo(() => [
-    { label: 'Còn mới', value: 'Còn mới' },
-    { label: 'Bình thường', value: 'Bình thường' },
-    { label: 'Sách cũ', value: 'Sách cũ' },
-    { label: 'Rách bìa', value: 'Rách bìa' },
-    { label: 'Rách trang', value: 'Rách trang' },
-    { label: 'Thiếu trang', value: 'Thiếu trang' },
-    { label: 'Ẩm mốc', value: 'Ẩm mốc' },
-    { label: 'Viết/bôi bẩn', value: 'Viết/bôi bẩn' },
-    { label: 'Hư hỏng nặng', value: 'Hư hỏng nặng' },
+    { label: 'Mới', value: 'new' },
+    { label: 'Bình thường', value: 'good' },
+    { label: 'Hư nhẹ', value: 'minor_damage' },
+    { label: 'Hư nặng', value: 'major_damage' },
+    { label: 'Thất lạc', value: 'lost' },
   ], []);
 
   const activeRecords = staffLookup?.records ?? [];
@@ -157,24 +154,34 @@ export default function ReturnScreen() {
 
   const handleBarCodeScanned = (result: BarcodeScanningResult) => {
     if (scanned || !result.data) return;
-    const code = normalizeBookCode(result.data);
-    if (!code || !/^\d{10,13}$/.test(code)) return;
+    const rawCode = result.data.trim();
+    if (!rawCode) return;
+    const code = normalizeBookCode(rawCode);
+    if (!code) return;
     setScanned(true);
     setTimeout(() => setScanned(false), 1200);
     let toast = '';
     setScannedReturns((prev) => {
-      if (prev.some((item) => item.isbn === code)) {
-        toast = `Sách ${code} đã có trong danh sách`;
+      if (prev.some((item) => item.isbn === rawCode || normalizeBookCode(item.isbn) === code)) {
+        toast = `Sách ${rawCode} đã có trong danh sách`;
         triggerHaptic.warning();
         return prev;
       }
-      const match = activeRecords.find((r) => normalizeBookCode(r.book?.isbn) === code);
+      const match = activeRecords.find((r) => {
+        const copyBarcode = r.copy?.barcode?.trim().toLowerCase();
+        const rawTarget = rawCode.toLowerCase();
+        if (copyBarcode && copyBarcode === rawTarget) return true;
+        return (
+          normalizeBookCode(r.book?.isbn) === code ||
+          (copyBarcode ? normalizeBookCode(copyBarcode) === code : false)
+        );
+      });
       if (match) {
-        toast = `Đã thêm: ${match.book?.title || code}`;
+        toast = `Đã thêm: ${match.book?.title || rawCode}`;
         triggerHaptic.success();
-        return [...prev, { isbn: code, record: match, condition: '' }];
+        return [...prev, { isbn: rawCode, record: match, condition: '' }];
       }
-      toast = `Không tìm thấy sách đang mượn: ${code}`;
+      toast = `Không tìm thấy sách đang mượn: ${rawCode}`;
       triggerHaptic.error();
       return prev;
     });
@@ -201,7 +208,7 @@ export default function ReturnScreen() {
               {record.book?.title || record.book_id}
             </Text>
             <Text variant="bodySmall" style={styles.mutedText} selectable>
-              ISBN {record.book?.isbn || record.book_id}
+              {record.copy?.barcode ? `Mã bản sao: ${record.copy.barcode}` : `ISBN: ${record.book?.isbn || record.book_id}`}
             </Text>
           </View>
           <Chip compact style={overdue ? styles.errorChip : styles.primaryChip} textStyle={overdue ? styles.errorChipText : styles.primaryChipText}>
@@ -247,7 +254,7 @@ export default function ReturnScreen() {
               style={styles.camera}
               facing="back"
               barcodeScannerSettings={{
-                barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
+                barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'qr'],
               }}
               onBarcodeScanned={handleBarCodeScanned}
             />
@@ -283,7 +290,7 @@ export default function ReturnScreen() {
                   <Text variant="bodySmall" style={styles.cardTitle} numberOfLines={1}>
                     {item.record.book?.title || item.record.book_id}
                   </Text>
-                  <Text style={styles.scannedIsbn}>{item.isbn}</Text>
+                  <Text style={styles.scannedIsbn}>{item.record.copy?.barcode || item.isbn}</Text>
                 </View>
                 <Menu
                   visible={conditionMenuIsbn === item.isbn}
@@ -297,7 +304,7 @@ export default function ReturnScreen() {
                       contentStyle={styles.scannedConditionContent}
                       icon={item.condition ? 'check-circle' : 'note-plus-outline'}
                     >
-                      {item.condition || 'Tình trạng'}
+                      {item.condition ? CONDITION_LABELS[item.condition] || item.condition : 'Tình trạng'}
                     </Button>
                   }
                   anchorPosition="bottom"

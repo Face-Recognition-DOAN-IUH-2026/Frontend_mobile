@@ -17,7 +17,7 @@ export default function ChangePasswordScreen({ navigation }: ChangePasswordScree
   const theme = useTheme() as AppTheme;
   const c = theme.colors;
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const { user } = useAuth();
+  const { user, mustChangePassword, setMustChangePassword, updateUser } = useAuth();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -48,8 +48,19 @@ export default function ChangePasswordScreen({ navigation }: ChangePasswordScree
       }
 
       await authApi.changePassword(user.id, currentPassword, newPassword);
+      if (mustChangePassword) {
+        setMustChangePassword(false);
+        updateUser({ password_auto_generated: false } as any);
+      }
       Alert.alert('Thành công', 'Mật khẩu đã được thay đổi', [
-        { text: 'OK', onPress: () => navigation.goBack() },
+        {
+          text: 'OK',
+          onPress: () => {
+            if (navigation.canGoBack()) {
+              navigation.goBack();
+            }
+          },
+        },
       ]);
     } catch (error: any) {
       devError('Change password error:', error);

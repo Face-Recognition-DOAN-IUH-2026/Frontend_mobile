@@ -50,6 +50,8 @@ export interface BorrowRecord {
   return_method?: string;
   note?: string;
   book?: Book;
+  copy?: { id: string; barcode: string; condition?: string | null; status?: string | null; shelf_location?: string | null } | null;
+  return_condition?: string;
 }
 
 export interface BorrowResponse {
@@ -272,7 +274,7 @@ export interface LookupBorrowSlipItem {
   can_borrow: boolean;
   reason: string | null;
   book: BookWithStats | null;
-  copy: { id: string; book_id: string; barcode: string; is_available: boolean; shelf_location: string | null } | null;
+  copy: { id: string; book_id: string; barcode: string; is_available: boolean; shelf_location: string | null; condition?: string | null; status?: string | null } | null;
 }
 
 export interface LookupBorrowSlipResponse {

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View, TouchableOpacity, Alert, Platform, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -20,8 +20,11 @@ import { useAuth } from '../../../context/AuthContext';
 import { useMobileTheme } from '../../../context/ThemeContext';
 import { AppTheme } from '../../../theme/DarkTheme';
 import { authApi } from '../../../api/auth';
+import { paymentApi } from '../../../api/payment';
+import { PatronFineItem, PaymentOrderResponse } from '../../../types/payment';
 import { GradientHeader, SectionCard } from '../../../theme/MobileDesignSystem';
 import { LoadingOverlay } from '../../../components/LoadingOverlay';
+import MobileVietQrPaymentModal from '../../../components/MobileVietQrPaymentModal';
 import { triggerHaptic } from '../../../utils/haptics';
 
 interface ProfileScreenProps {
@@ -84,6 +87,49 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   const [uploading, setUploading] = useState(false);
   const [tokenSecondsLeft, setTokenSecondsLeft] = useState(30);
   const [tokenSeed, setTokenSeed] = useState(Date.now());
+  const [fines, setFines] = useState<PatronFineItem[]>([]);
+  const [loadingFines, setLoadingFines] = useState(false);
+  const [payingFine, setPayingFine] = useState(false);
+  const [qrPaymentOrder, setQrPaymentOrder] = useState<PaymentOrderResponse | null>(null);
+
+  const loadFines = useCallback(async () => {
+    try {
+      setLoadingFines(true);
+      const data = await paymentApi.getMyFines();
+      setFines(data);
+    } catch {
+      // Best-effort
+    } finally {
+      setLoadingFines(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadFines();
+  }, [loadFines]);
+
+  const totalDebt = fines.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+
+  const handlePayFines = async () => {
+    if (fines.length === 0) return;
+    triggerHaptic.selection();
+    setPayingFine(true);
+    try {
+      const order = await paymentApi.createPaymentOrder(fines.map((f) => f.record_id));
+      setQrPaymentOrder(order);
+    } catch {
+      Alert.alert('Lỗi', 'Không thể tạo mã thanh toán VietQR lúc này.');
+    } finally {
+      setPayingFine(false);
+    }
+  };
+
+  const handlePaymentSuccess = async (orderCode: string) => {
+    setQrPaymentOrder(null);
+    triggerHaptic.success();
+    Alert.alert('Thành công', `Thanh toán VietQR thành công! (Mã GD: ${orderCode}). Thẻ thư viện đã được mở khóa.`);
+    await loadFines();
+  };
 
   useEffect(() => {
     if (!cardModalVisible) return;
@@ -241,6 +287,52 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                 Xem thẻ
               </Button>
             </View>
+          </SectionCard>
+
+          <SectionCard
+            title="Công Nợ & Phí Phạt Thư Viện"
+            icon="cash-multiple"
+            accentColor={fines.length > 0 ? '#B85C4A' : '#4A8C5C'}
+          >
+            {loadingFines ? (
+              <View style={{ paddingVertical: 12, alignItems: 'center' }}>
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+              </View>
+            ) : fines.length === 0 ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingBottom: 14 }}>
+                <MaterialCommunityIcons name="check-circle-outline" size={24} color="#4A8C5C" />
+                <View style={{ flex: 1 }}>
+                  <Text variant="titleSmall" style={{ fontWeight: '700', color: '#4A8C5C' }}>
+                    Không có khoản nợ nào
+                  </Text>
+                  <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                    Thẻ thư viện của bạn đang hoạt động bình thường.
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              <View style={{ gap: 12, paddingHorizontal: 16, paddingBottom: 14 }}>
+                <View style={{ backgroundColor: '#B85C4A15', padding: 12, borderRadius: 12 }}>
+                  <Text variant="titleSmall" style={{ fontWeight: '800', color: '#B85C4A' }}>
+                    Đang nợ: {totalDebt.toLocaleString('vi-VN')} đ ({fines.length} khoản)
+                  </Text>
+                  <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
+                    Vui lòng thanh toán trực tuyến qua VietQR Napas 247 để mở khóa thẻ thư viện tự động.
+                  </Text>
+                </View>
+                <Button
+                  mode="contained"
+                  icon="qrcode-scan"
+                  loading={payingFine}
+                  disabled={payingFine}
+                  onPress={handlePayFines}
+                  style={{ borderRadius: 12, backgroundColor: theme.colors.primary }}
+                  contentStyle={{ height: 42 }}
+                >
+                  Thanh toán ngay bằng VietQR
+                </Button>
+              </View>
+            )}
           </SectionCard>
 
           {isStudent ? (
@@ -528,6 +620,15 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           </Dialog.Actions>
         </Dialog>
       </Portal>
+
+      <MobileVietQrPaymentModal
+        visible={!!qrPaymentOrder}
+        order={qrPaymentOrder}
+        patronName={displayName}
+        studentCode={studentCode}
+        onDismiss={() => setQrPaymentOrder(null)}
+        onSuccess={handlePaymentSuccess}
+      />
     </SafeAreaView>
   );
 }

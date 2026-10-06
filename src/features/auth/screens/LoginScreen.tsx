@@ -176,13 +176,14 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
               </Button>
 
               {loginMode === 'patron' ? (
-                <Button
-                  mode="text"
-                  onPress={() => navigation.navigate('Register')}
-                  labelStyle={styles.registerLabel}
-                >
-                  Chưa có tài khoản? Đăng ký ngay
-                </Button>
+                <View style={styles.patronNoticeBox}>
+                  <Text variant="bodySmall" style={styles.patronNoticeTitle}>
+                    Tài khoản do thư viện cấp theo mã sinh viên
+                  </Text>
+                  <Text variant="labelSmall" style={styles.patronNoticeSub}>
+                    Lần đầu đăng nhập, dùng mật khẩu mặc định: 11111111 và đổi mật khẩu mới.
+                  </Text>
+                </View>
               ) : null}
             </View>
           </View>
@@ -347,6 +348,23 @@ function createStyles(theme: AppTheme) {
     registerLabel: {
       fontSize: 14,
       fontWeight: '600',
+    },
+    patronNoticeBox: {
+      backgroundColor: theme.colors.surfaceVariant || 'rgba(0,0,0,0.04)',
+      padding: 12,
+      borderRadius: 12,
+      alignItems: 'center',
+      marginTop: 4,
+    },
+    patronNoticeTitle: {
+      color: theme.colors.onSurface,
+      fontWeight: '600',
+      textAlign: 'center',
+    },
+    patronNoticeSub: {
+      color: theme.colors.onSurfaceVariant,
+      textAlign: 'center',
+      marginTop: 2,
     },
   });
 }

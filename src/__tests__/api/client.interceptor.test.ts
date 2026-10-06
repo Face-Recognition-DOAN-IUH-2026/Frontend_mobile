@@ -64,9 +64,8 @@ describe('api client interceptor - auth endpoints should not refresh', () => {
     expect(shouldSkipAuthRefresh('/auth/login')).toBe(true);
     expect(shouldSkipAuthRefresh('/patrons/login')).toBe(true);
     expect(shouldSkipAuthRefresh('/auth/refresh')).toBe(true);
-    expect(shouldSkipAuthRefresh('/patrons/register')).toBe(true);
-    expect(shouldSkipAuthRefresh('/auth/pre-register-otp')).toBe(true);
-    expect(shouldSkipAuthRefresh('/patrons/check-exists')).toBe(true);
+    expect(shouldSkipAuthRefresh('/auth/forgot-password')).toBe(true);
+    expect(shouldSkipAuthRefresh('/auth/face-login')).toBe(true);
     expect(shouldSkipAuthRefresh('/users/me')).toBe(false);
     expect(shouldSkipAuthRefresh('/borrow/history')).toBe(false);
   });

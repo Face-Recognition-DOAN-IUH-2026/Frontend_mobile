@@ -3,7 +3,6 @@ import { Notification } from '../types';
 
 export type AuthStackParamList = {
   Login: undefined;
-  Register: undefined;
   FaceLogin: undefined;
   ForgotPassword: undefined;
 };
@@ -58,6 +57,7 @@ export type RootStackParamList = {
   Auth: NavigatorScreenParams<AuthStackParamList>;
   Patron: NavigatorScreenParams<PatronStackParamList>;
   Staff: NavigatorScreenParams<StaffStackParamList>;
+  ForceChangePassword: undefined;
 };
 
 declare global {

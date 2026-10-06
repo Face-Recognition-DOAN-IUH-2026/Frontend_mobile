@@ -13,11 +13,15 @@ import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
 import { LoadingOverlay } from '../../../components/LoadingOverlay';
 import { triggerHaptic } from '../../../utils/haptics';
 
+import { CONDITION_LABELS } from '../../../constants/copy';
+
 interface ScannedBorrowItem {
   barcode: string;
   isbn: string;
   copy_id: string | null;
   copy_barcode: string | null;
+  copy_condition?: string | null;
+  copy_status?: string | null;
   book: Book;
   alreadyBorrowed?: boolean;
 }
@@ -89,11 +93,19 @@ export default function StaffBorrowScreen() {
         cover_url: item.book!.cover_url || undefined,
         shelf_location: item.book!.shelf_location || undefined,
       };
+
+      if (scannedItems.some((i) => i.book?.id === book.id)) {
+        setScanError(`Đầu sách "${book.title}" đã có trong danh sách mượn`);
+        setManualIsbn('');
+        return;
+      }
       setScannedItems((prev) => [...prev, {
         barcode: isbn,
         isbn,
         copy_id: item.copy?.id || null,
         copy_barcode: item.copy?.barcode || null,
+        copy_condition: item.copy?.condition || null,
+        copy_status: item.copy?.status || null,
         book,
       }]);
       triggerHaptic.success();
@@ -134,11 +146,20 @@ export default function StaffBorrowScreen() {
       return;
     }
 
-    const normalizeCode = (v: string | undefined | null) => v?.replace(/[\s-]+/g, '').replace(/\.0+$/, '') ?? '';
+    const normalizeCode = (v: string | undefined | null) => v?.replace(/[\s-]+/g, '').replace(/\.0+$/, '').toLowerCase() ?? '';
     const barcodeNormalized = normalizeCode(barcode);
-    const alreadyBorrowedRecord = activeRecords.find(
-      (r) => normalizeCode(r.book?.isbn) === barcodeNormalized || normalizeCode(r.book_id) === barcodeNormalized
-    );
+    const libMatch = barcodeNormalized.match(/^lib(\d{10,13})(\d+)?$/i);
+    const targetIsbn = libMatch ? libMatch[1] : barcodeNormalized;
+    const alreadyBorrowedRecord = activeRecords.find((r) => {
+      const rIsbn = normalizeCode(r.book?.isbn);
+      const rCopyBarcode = normalizeCode((r as any).copy?.barcode);
+      return (
+        rIsbn === barcodeNormalized ||
+        normalizeCode(r.book_id) === barcodeNormalized ||
+        rCopyBarcode === barcodeNormalized ||
+        (!!libMatch && rIsbn === targetIsbn)
+      );
+    });
 
     if (alreadyBorrowedRecord) {
       const book: Book = {
@@ -160,12 +181,17 @@ export default function StaffBorrowScreen() {
         patron_id: patronId!,
         items: [{ barcode, isbn: barcode }],
       });
-      const item = result.items.find((i) => i.barcode === barcode);
+      const item = result.items.find((i) =>
+        i.barcode === barcode ||
+        normalizeCode(i.barcode) === barcodeNormalized ||
+        normalizeCode(i.copy?.barcode) === barcodeNormalized ||
+        normalizeCode(i.isbn) === barcodeNormalized
+      ) || result.items[0];
       if (!item || !item.can_borrow) {
         const msg = item?.reason || 'Sách không thể mượn';
         const title = item?.book?.title || '';
         triggerHaptic.error();
-        setScanError(title ? `"${title}": ${msg}` : `${msg} (ISBN: ${barcode})`);
+        setScanError(title ? `"${title}": ${msg}` : `${msg} (Mã: ${barcode})`);
         setTimeout(() => setScanned(false), 500);
         return;
       }
@@ -177,11 +203,20 @@ export default function StaffBorrowScreen() {
         cover_url: item.book!.cover_url || undefined,
         shelf_location: item.book!.shelf_location || undefined,
       };
+
+      if (scannedItems.some((i) => i.book?.id === book.id)) {
+        triggerHaptic.warning();
+        setScanError(`Đầu sách "${book.title}" đã có trong danh sách mượn`);
+        setTimeout(() => setScanned(false), 800);
+        return;
+      }
       setScannedItems((prev) => [...prev, {
         barcode,
         isbn: barcode,
         copy_id: item.copy?.id || null,
         copy_barcode: item.copy?.barcode || null,
+        copy_condition: item.copy?.condition || null,
+        copy_status: item.copy?.status || null,
         book,
       }]);
       triggerHaptic.success();
@@ -422,7 +457,7 @@ export default function StaffBorrowScreen() {
               facing="back"
               onCameraReady={() => setCameraReady(true)}
               barcodeScannerSettings={{
-                barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
+                barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'qr'],
               }}
               onBarcodeScanned={cameraReady && !scanned ? handleBarCodeScanned : undefined}
             />
@@ -482,12 +517,12 @@ export default function StaffBorrowScreen() {
           <TextInput
             value={manualIsbn}
             onChangeText={setManualIsbn}
-            placeholder="Nhập ISBN thủ công..."
+            placeholder="Quét hoặc nhập mã bản sao (LIB-...) hoặc ISBN..."
             mode="outlined"
             style={styles.manualInput}
             outlineStyle={styles.inputOutline}
             activeOutlineColor={c.primary}
-            keyboardType="numeric"
+            autoCapitalize="characters"
             onSubmitEditing={lookupManualIsbn}
           />
           <Button
@@ -551,7 +586,16 @@ export default function StaffBorrowScreen() {
                       ) : null}
                     </View>
                     {item.book.author ? <Text style={styles.itemAuthor} numberOfLines={1}>{item.book.author}</Text> : null}
-                    <Text style={styles.itemIsbn}>{item.barcode}</Text>
+                    <View style={styles.copyRow}>
+                      <Text style={styles.itemIsbn}>{item.copy_barcode || item.barcode}</Text>
+                      {item.copy_condition ? (
+                        <View style={styles.copyConditionTag}>
+                          <Text style={styles.copyConditionText}>
+                            {CONDITION_LABELS[item.copy_condition] || item.copy_condition}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
                     {item.alreadyBorrowed ? (
                       <Text style={styles.alreadyBorrowedNote}>Sách này đang được mượn — sẽ không thêm vào phiếu</Text>
                     ) : null}
@@ -684,7 +728,10 @@ function createStyles(theme: AppTheme) {
     itemInfo: { flex: 1, marginLeft: 12 },
     itemTitle: { fontSize: 14, fontWeight: '600', color: c.onSurface },
     itemAuthor: { fontSize: 12, color: c.onSurfaceVariant, marginTop: 2 },
-    itemIsbn: { fontSize: 11, color: c.primary, marginTop: 2, fontFamily: 'monospace' },
+    itemIsbn: { fontSize: 11, color: c.primary, fontFamily: 'monospace' },
+    copyRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' },
+    copyConditionTag: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6, backgroundColor: c.surfaceVariant },
+    copyConditionText: { fontSize: 10, fontWeight: '600', color: c.primary },
     itemTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
     alreadyBorrowedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, backgroundColor: 'rgba(196, 78, 78, 0.15)' },
     alreadyBorrowedText: { color: c.error, fontSize: 10, fontWeight: '700' },

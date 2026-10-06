@@ -14,21 +14,11 @@ export interface PatronLoginRequest {
   password: string;
 }
 
-export interface PatronRegisterRequest {
-  student_code: string;
-  password: string;
-  full_name: string;
-  email: string;
-  class_name?: string;
-  course?: string;
-  permanent_address?: string;
-  verification_token?: string;
-}
-
 export interface LoginResponse {
   access_token: string;
   refresh_token: string;
   token_type: string;
+  require_password_change?: boolean;
   user?: any;
 }
 
@@ -36,6 +26,7 @@ export interface PatronLoginResponse {
   access_token: string;
   refresh_token?: string;
   token_type: string;
+  require_password_change?: boolean;
   user: any;
 }
 
@@ -67,47 +58,6 @@ export const authApi = {
     return response.data;
   },
 
-  patronRegister: async (data: PatronRegisterRequest): Promise<PatronLoginResponse> => {
-    const params: any = {
-      student_code: data.student_code,
-      password: data.password,
-      full_name: data.full_name,
-      email: data.email,
-    };
-    if (data.class_name) params.class_name = data.class_name;
-    if (data.course) params.course = data.course;
-    if (data.permanent_address) params.permanent_address = data.permanent_address;
-    if (data.verification_token) params.verification_token = data.verification_token;
-    const response = await api.post<PatronLoginResponse>('/patrons/register', params);
-    if (!response.data.user) {
-      throw new Error('Invalid response: missing user data');
-    }
-    await setAccessToken(response.data.access_token);
-    if (response.data.refresh_token) await setRefreshToken(response.data.refresh_token);
-    return response.data;
-  },
-
-  preRegisterOtp: async (email: string): Promise<void> => {
-    await api.post('/auth/pre-register-otp', { email });
-  },
-
-  preRegisterVerify: async (email: string, code: string): Promise<{ verification_token: string }> => {
-    const response = await api.post<{ verification_token: string }>('/auth/pre-register-verify', { email, code });
-    return response.data;
-  },
-
-  checkExists: async (studentCode: string, email: string): Promise<{ student_code_exists: boolean; email_exists: boolean }> => {
-    const response = await api.post<{ student_code_exists: boolean; email_exists: boolean }>('/patrons/check-exists', {
-      student_code: studentCode,
-      email,
-    });
-    return response.data;
-  },
-
-  checkStudentCode: async (code: string): Promise<{ exists: boolean }> => {
-    const response = await api.get<{ exists: boolean }>(`/patrons/check-code/${code}`);
-    return response.data;
-  },
 
   faceLogin: async (imageUri: string): Promise<FaceLoginResponse> => {
     const formData = new FormData();
