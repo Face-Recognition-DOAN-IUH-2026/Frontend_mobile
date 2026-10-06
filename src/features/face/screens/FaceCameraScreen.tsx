@@ -88,6 +88,7 @@ export default function FaceCameraScreen({ navigation }: FaceCameraScreenProps) 
           <AutoFaceCapture
             onFilesReady={handleFilesReady}
             onError={(msg) => setCameraError(msg)}
+            onCancel={() => navigation.goBack()}
           />
         )}
         {isUploading ? (

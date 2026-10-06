@@ -83,6 +83,7 @@ src/
       faceLogin.test.ts
     features/
       auth/
+        LoginScreen.behavior.test.tsx
         LoginScreen.test.tsx
     home/
       useAccessRealtime.test.ts
@@ -128,6 +129,8 @@ src/
     UndoBar.tsx
   config/
     api.ts
+  constants/
+    copy.ts
   context/
     AuthContext.tsx
     NetworkContext.tsx
@@ -1139,6 +1142,55 @@ export const openLibraryApi = {
     }
   },
 };
+</file>
+
+<file path="src/constants/copy.ts">
+export const CONDITION_CODES = ["new", "good", "minor_damage", "major_damage", "lost"] as const;
+export type CopyCondition = typeof CONDITION_CODES[number];
+
+export const CONDITION_LABELS: Record<string, string> = {
+  new: "Mới",
+  good: "Bình thường",
+  minor_damage: "Hư nhẹ",
+  major_damage: "Hư nặng",
+  lost: "Thất lạc",
+};
+
+export const COPY_STATUS_CODES = ["available", "borrowed", "maintenance", "disposed"] as const;
+export type CopyStatus = typeof COPY_STATUS_CODES[number];
+
+export const COPY_STATUS_LABELS: Record<string, string> = {
+  available: "Sẵn sàng",
+  borrowed: "Đang mượn",
+  maintenance: "Bảo quản",
+  disposed: "Loại bỏ",
+};
+</file>
+
+<file path="src/utils/errorUtils.ts">
+export function getErrorMessage(err: unknown): string {
+  if (!err) return 'Lỗi không xác định';
+  if (typeof err === 'string') return err;
+
+  const response = (err as any)?.response;
+  const detail = response?.data?.detail || response?.data?.error;
+
+  if (detail) {
+    if (typeof detail === 'string') return detail;
+    if (Array.isArray(detail)) {
+      return detail
+        .map((d: any) =>
+          typeof d === 'string' ? d : `${d.loc?.join('.')}: ${d.msg}`
+        )
+        .join('; ');
+    }
+    if (typeof detail === 'object') {
+      return detail.msg || detail.message || JSON.stringify(detail);
+    }
+  }
+
+  return (err as any)?.message || (err as any)?.msg || String(err);
+}
 </file>
 
 <file path=".gitignore">
@@ -2267,6 +2319,133 @@ describe('UndoBar', () => {
 });
 </file>
 
+<file path="src/__tests__/features/auth/LoginScreen.behavior.test.tsx">
+import React from 'react';
+import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import LoginScreen from '../../../features/auth/screens/LoginScreen';
+
+const mockPatronLogin = jest.fn();
+const mockStaffLogin = jest.fn();
+
+jest.mock('../../../context/AuthContext', () => ({
+  useAuth: () => ({
+    patronLogin: (a: string, b: string) => mockPatronLogin(a, b),
+    staffLogin: (a: string, b: string) => mockStaffLogin(a, b),
+  }),
+}));
+
+jest.mock('react-native-safe-area-context', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    SafeAreaProvider: ({ children }: any) => React.createElement(View, null, children),
+    useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+    SafeAreaView: View,
+  };
+});
+
+jest.mock('@expo/vector-icons/MaterialCommunityIcons', () => {
+  const React = require('react');
+  const { Text } = require('react-native');
+  return (props: any) => React.createElement(Text, { testID: `icon-${props.name}` }, props.name);
+});
+
+function invalidCredentialsError() {
+  return Object.assign(new Error('Request failed with status code 401'), {
+    response: { status: 401, data: { error: 'Invalid credentials' } },
+  });
+}
+
+function networkError() {
+  return Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK', response: undefined });
+}
+
+const navigation = { navigate: jest.fn() };
+
+async function fillAndSubmit(utils: any) {
+  const inputs = utils.container.queryAll(
+    (i: any) => typeof i.props?.onChangeText === 'function',
+  );
+  await fireEvent.changeText(inputs[0], 'SV123');
+  await fireEvent.changeText(inputs[1], 'wrong-pass');
+  await fireEvent.press(utils.getByText('Đăng nhập'));
+}
+
+describe('LoginScreen - behavioral error feedback', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('shows Vietnamese error message when credentials are rejected', async () => {
+    mockPatronLogin.mockRejectedValue(invalidCredentialsError());
+
+    const utils = await render(<LoginScreen navigation={navigation} />);
+    await fillAndSubmit(utils);
+
+    await waitFor(() => {
+      expect(utils.getAllByText('Sai tài khoản hoặc mật khẩu').length).toBeGreaterThan(0);
+    });
+  });
+
+  it('shows network error message when server is unreachable', async () => {
+    mockPatronLogin.mockRejectedValue(networkError());
+
+    const utils = await render(<LoginScreen navigation={navigation} />);
+    await fillAndSubmit(utils);
+
+    await waitFor(() => {
+      expect(
+        utils.getAllByText('Không thể kết nối server. Vui lòng kiểm tra mạng.').length,
+      ).toBeGreaterThan(0);
+    });
+  });
+
+  it('shows validation message when fields are empty', async () => {
+    const utils = await render(<LoginScreen navigation={navigation} />);
+    await fireEvent.press(utils.getByText('Đăng nhập'));
+
+    await waitFor(() => {
+      expect(utils.getAllByText('Vui lòng nhập mã sinh viên và mật khẩu').length).toBeGreaterThan(0);
+    });
+    expect(mockPatronLogin).not.toHaveBeenCalled();
+  });
+
+  it('clears previous error after a successful retry', async () => {
+    mockPatronLogin.mockRejectedValueOnce(invalidCredentialsError());
+
+    const utils = await render(<LoginScreen navigation={navigation} />);
+    await fillAndSubmit(utils);
+    await waitFor(() => {
+      expect(utils.getAllByText('Sai tài khoản hoặc mật khẩu').length).toBeGreaterThan(0);
+    });
+
+    mockPatronLogin.mockResolvedValueOnce(undefined);
+    await fillAndSubmit(utils);
+
+    await waitFor(() => {
+      expect(utils.queryByText('Sai tài khoản hoặc mật khẩu')).toBeNull();
+    });
+  });
+
+  it('keeps inline helper error after snackbar is dismissed', async () => {
+    mockPatronLogin.mockRejectedValue(invalidCredentialsError());
+
+    const utils = await render(<LoginScreen navigation={navigation} />);
+    await fillAndSubmit(utils);
+    await waitFor(() => {
+      expect(utils.getAllByText('Sai tài khoản hoặc mật khẩu').length).toBeGreaterThan(0);
+    });
+
+    await fireEvent.press(utils.getByText('OK'));
+
+    await waitFor(() => {
+      expect(utils.queryByText('OK')).toBeNull();
+    });
+    expect(utils.getAllByText('Sai tài khoản hoặc mật khẩu').length).toBeGreaterThan(0);
+  });
+});
+</file>
+
 <file path="src/__tests__/features/auth/LoginScreen.test.tsx">
 // @ts-nocheck
 import fs from 'fs';
@@ -2507,72 +2686,6 @@ describe('error-reporter', () => {
       expect.stringContaining('/errors/report'),
       expect.objectContaining({ method: 'POST' }),
     );
-  });
-});
-</file>
-
-<file path="src/__tests__/utils/mapAuthError.test.ts">
-import { mapAuthError } from '../../utils/mapAuthError';
-
-describe('mapAuthError - login error mapping', () => {
-  it('maps Invalid credentials to Vietnamese message', () => {
-    const err = { response: { data: { error: 'Invalid credentials' } } };
-    expect(mapAuthError(err)).toBe('Sai tài khoản hoặc mật khẩu');
-  });
-
-  it('maps Account is disabled', () => {
-    const err = { response: { data: { error: 'Account is disabled' } } };
-    expect(mapAuthError(err)).toBe('Tài khoản đã bị khóa');
-  });
-
-  it('maps Membership has expired', () => {
-    const err = { response: { data: { error: 'Membership has expired' } } };
-    expect(mapAuthError(err)).toBe('Thẻ thư viện đã hết hạn');
-  });
-
-  it('maps string data error directly', () => {
-    const err = { response: { data: 'Some string error' } };
-    expect(mapAuthError(err)).toBe('Some string error');
-  });
-
-  it('maps detail string', () => {
-    const err = { response: { data: { detail: 'Lỗi từ server' } } };
-    expect(mapAuthError(err)).toBe('Lỗi từ server');
-  });
-
-  it('maps detail array', () => {
-    const err = { response: { data: { detail: ['Lỗi 1'] } } };
-    expect(mapAuthError(err)).toBe('Lỗi 1');
-  });
-
-  it('maps message array', () => {
-    const err = { response: { data: { message: ['Bad request'] } } };
-    expect(mapAuthError(err)).toBe('Bad request');
-  });
-
-  it('maps ECONNABORTED timeout', () => {
-    const err = { code: 'ECONNABORTED' };
-    expect(mapAuthError(err)).toBe('Kết nối quá lâu. Vui lòng thử lại.');
-  });
-
-  it('maps network error without response', () => {
-    const err = {};
-    expect(mapAuthError(err)).toBe('Không thể kết nối server. Vui lòng kiểm tra mạng.');
-  });
-
-  it('maps detail string fallback to message', () => {
-    const err = { response: { data: { message: 'Custom message' } } };
-    expect(mapAuthError(err)).toBe('Custom message');
-  });
-
-  it('maps err.message fallback', () => {
-    const err = { message: 'Network Error' };
-    expect(mapAuthError(err)).toBe('Network Error');
-  });
-
-  it('defaults to Dang nhap that bai', () => {
-    const err = { response: { data: {} } };
-    expect(mapAuthError(err)).toBe('Đăng nhập thất bại');
   });
 });
 </file>
@@ -6772,32 +6885,6 @@ export function getAssignmentTimeState(item: StaffScheduleAssignment): Assignmen
 }
 </file>
 
-<file path="src/utils/errorUtils.ts">
-export function getErrorMessage(err: unknown): string {
-  if (!err) return 'Lỗi không xác định';
-  if (typeof err === 'string') return err;
-
-  const response = (err as any)?.response;
-  const detail = response?.data?.detail || response?.data?.error;
-
-  if (detail) {
-    if (typeof detail === 'string') return detail;
-    if (Array.isArray(detail)) {
-      return detail
-        .map((d: any) =>
-          typeof d === 'string' ? d : `${d.loc?.join('.')}: ${d.msg}`
-        )
-        .join('; ');
-    }
-    if (typeof detail === 'object') {
-      return detail.msg || detail.message || JSON.stringify(detail);
-    }
-  }
-
-  return (err as any)?.message || (err as any)?.msg || String(err);
-}
-</file>
-
 <file path="src/utils/logger.ts">
 export function devLog(...args: unknown[]) {
   if (__DEV__) {
@@ -6818,56 +6905,6 @@ export function devError(...args: unknown[]) {
     // eslint-disable-next-line no-console
     console.error(...args);
   }
-}
-</file>
-
-<file path="src/utils/mapAuthError.ts">
-export function mapAuthError(err: any): string {
-  if (err?.response?.data) {
-    const data = err.response.data;
-    if (typeof data === 'string' && data.trim()) {
-      return data;
-    }
-    if (data.error) {
-      const backendError = data.error;
-      if (backendError === 'Invalid credentials') {
-        return 'Sai tài khoản hoặc mật khẩu';
-      }
-      if (backendError === 'Account is disabled') {
-        return 'Tài khoản đã bị khóa';
-      }
-      if (backendError === 'Membership has expired') {
-        return 'Thẻ thư viện đã hết hạn';
-      }
-      if (typeof backendError === 'string' && backendError.trim()) {
-        return backendError;
-      }
-    }
-    if (data.detail) {
-      if (typeof data.detail === 'string' && data.detail.trim()) {
-        return data.detail;
-      }
-      if (Array.isArray(data.detail) && data.detail.length > 0) {
-        return data.detail[0];
-      }
-    }
-    if (Array.isArray(data.message) && data.message.length > 0) {
-      return data.message[0];
-    }
-    if (data.message && typeof data.message === 'string' && data.message.trim()) {
-      return data.message;
-    }
-  }
-  if (err?.code === 'ECONNABORTED') {
-    return 'Kết nối quá lâu. Vui lòng thử lại.';
-  }
-  if (err?.message && typeof err.message === 'string' && err.message.trim()) {
-    return err.message;
-  }
-  if (!err?.response) {
-    return 'Không thể kết nối server. Vui lòng kiểm tra mạng.';
-  }
-  return 'Đăng nhập thất bại';
 }
 </file>
 
@@ -7828,6 +7865,82 @@ describe('useAccessRealtime', () => {
       }
     });
     expect(result.current.events).toHaveLength(8);
+  });
+});
+</file>
+
+<file path="src/__tests__/utils/mapAuthError.test.ts">
+import { mapAuthError } from '../../utils/mapAuthError';
+
+describe('mapAuthError - login error mapping', () => {
+  it('maps Invalid credentials to Vietnamese message', () => {
+    const err = { response: { data: { error: 'Invalid credentials' } } };
+    expect(mapAuthError(err)).toBe('Sai tài khoản hoặc mật khẩu');
+  });
+
+  it('maps Account is disabled', () => {
+    const err = { response: { data: { error: 'Account is disabled' } } };
+    expect(mapAuthError(err)).toBe('Tài khoản đã bị khóa');
+  });
+
+  it('maps Membership has expired', () => {
+    const err = { response: { data: { error: 'Membership has expired' } } };
+    expect(mapAuthError(err)).toBe('Thẻ thư viện đã hết hạn');
+  });
+
+  it('maps string data error directly', () => {
+    const err = { response: { data: 'Some string error' } };
+    expect(mapAuthError(err)).toBe('Some string error');
+  });
+
+  it('maps detail string', () => {
+    const err = { response: { data: { detail: 'Lỗi từ server' } } };
+    expect(mapAuthError(err)).toBe('Lỗi từ server');
+  });
+
+  it('maps detail array', () => {
+    const err = { response: { data: { detail: ['Lỗi 1'] } } };
+    expect(mapAuthError(err)).toBe('Lỗi 1');
+  });
+
+  it('maps message array', () => {
+    const err = { response: { data: { message: ['Bad request'] } } };
+    expect(mapAuthError(err)).toBe('Bad request');
+  });
+
+  it('maps ECONNABORTED timeout', () => {
+    const err = { code: 'ECONNABORTED' };
+    expect(mapAuthError(err)).toBe('Kết nối quá lâu. Vui lòng thử lại.');
+  });
+
+  it('maps network error without response', () => {
+    const err = {};
+    expect(mapAuthError(err)).toBe('Không thể kết nối server. Vui lòng kiểm tra mạng.');
+  });
+
+  it('maps detail string fallback to message', () => {
+    const err = { response: { data: { message: 'Custom message' } } };
+    expect(mapAuthError(err)).toBe('Custom message');
+  });
+
+  it('maps axios Network Error to Vietnamese connection message', () => {
+    const err = { message: 'Network Error' };
+    expect(mapAuthError(err)).toBe('Không thể kết nối server. Vui lòng kiểm tra mạng.');
+  });
+
+  it('maps ERR_NETWORK code to Vietnamese connection message', () => {
+    const err = { code: 'ERR_NETWORK', message: 'Network Error' };
+    expect(mapAuthError(err)).toBe('Không thể kết nối server. Vui lòng kiểm tra mạng.');
+  });
+
+  it('maps generic err.message fallback', () => {
+    const err = { message: 'Some custom failure' };
+    expect(mapAuthError(err)).toBe('Some custom failure');
+  });
+
+  it('defaults to Dang nhap that bai', () => {
+    const err = { response: { data: {} } };
+    expect(mapAuthError(err)).toBe('Đăng nhập thất bại');
   });
 });
 </file>
@@ -11436,6 +11549,59 @@ export const triggerHaptic = {
 };
 </file>
 
+<file path="src/utils/mapAuthError.ts">
+export function mapAuthError(err: any): string {
+  if (err?.response?.data) {
+    const data = err.response.data;
+    if (typeof data === 'string' && data.trim()) {
+      return data;
+    }
+    if (data.error) {
+      const backendError = data.error;
+      if (backendError === 'Invalid credentials') {
+        return 'Sai tài khoản hoặc mật khẩu';
+      }
+      if (backendError === 'Account is disabled') {
+        return 'Tài khoản đã bị khóa';
+      }
+      if (backendError === 'Membership has expired') {
+        return 'Thẻ thư viện đã hết hạn';
+      }
+      if (typeof backendError === 'string' && backendError.trim()) {
+        return backendError;
+      }
+    }
+    if (data.detail) {
+      if (typeof data.detail === 'string' && data.detail.trim()) {
+        return data.detail;
+      }
+      if (Array.isArray(data.detail) && data.detail.length > 0) {
+        return data.detail[0];
+      }
+    }
+    if (Array.isArray(data.message) && data.message.length > 0) {
+      return data.message[0];
+    }
+    if (data.message && typeof data.message === 'string' && data.message.trim()) {
+      return data.message;
+    }
+  }
+  if (err?.code === 'ECONNABORTED') {
+    return 'Kết nối quá lâu. Vui lòng thử lại.';
+  }
+  if (err?.code === 'ERR_NETWORK' || err?.message === 'Network Error' || err?.message === 'TypeError: Network request failed') {
+    return 'Không thể kết nối server. Vui lòng kiểm tra mạng.';
+  }
+  if (err?.message && typeof err.message === 'string' && err.message.trim()) {
+    return err.message;
+  }
+  if (!err?.response) {
+    return 'Không thể kết nối server. Vui lòng kiểm tra mạng.';
+  }
+  return 'Đăng nhập thất bại';
+}
+</file>
+
 <file path="jest.config.js">
 module.exports = {
   ...require('@react-native/jest-preset'),
@@ -14259,355 +14425,6 @@ function createStyles(theme: AppTheme) {
 }
 </file>
 
-<file path="src/features/auth/screens/LoginScreen.tsx">
-import React, { useMemo, useState } from 'react';
-import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, HelperText, SegmentedButtons, Text, TextInput, useTheme } from 'react-native-paper';
-import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
-import { useAuth } from '../../../context/AuthContext';
-import { AppTheme } from '../../../theme/DarkTheme';
-import { mapAuthError } from '../../../utils/mapAuthError';
-
-interface LoginScreenProps {
-  navigation: any;
-}
-
-type LoginMode = 'patron' | 'staff';
-
-export default function LoginScreen({ navigation }: LoginScreenProps) {
-  const theme = useTheme() as AppTheme;
-  const styles = useMemo(() => createStyles(theme), [theme]);
-  const [loginMode, setLoginMode] = useState<LoginMode>('patron');
-  const [studentCode, setStudentCode] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
-  const { patronLogin, staffLogin } = useAuth();
-
-  const handleLogin = async () => {
-    const identifier = loginMode === 'staff' ? email.trim() : studentCode.trim();
-    if (!identifier || !password.trim()) {
-      setError(loginMode === 'staff'
-        ? 'Vui lòng nhập email và mật khẩu'
-        : 'Vui lòng nhập mã sinh viên và mật khẩu');
-      return;
-    }
-
-    setIsLoading(true);
-    setError('');
-    try {
-      if (loginMode === 'staff') {
-        await staffLogin(email.trim(), password);
-      } else {
-        await patronLogin(studentCode.trim(), password);
-      }
-    } catch (err: any) {
-      const message = mapAuthError(err);
-      setError(message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          <View style={styles.headerSection}>
-            <View style={styles.decorCircle1} />
-            <View style={styles.decorCircle2} />
-            <View style={styles.decorCircle3} />
-            <View style={styles.brandRow}>
-              <Image
-                source={require('../../../../assets/logo-white.png')}
-                style={styles.logoImage}
-                resizeMode="contain"
-              />
-            </View>
-            <Text variant="bodyLarge" style={styles.welcomeText}>Hệ thống Thư viện Thông minh</Text>
-          </View>
-
-          <View style={styles.formCard}>
-            <View style={styles.accentBar} />
-            <View style={styles.formInner}>
-              <SegmentedButtons
-                value={loginMode}
-                onValueChange={(value) => setLoginMode(value as LoginMode)}
-                buttons={[
-                  { value: 'patron', label: 'Độc giả', icon: 'account' },
-                  { value: 'staff', label: 'Nhân viên', icon: 'shield-account' },
-                ]}
-              />
-
-              {loginMode === 'staff' ? (
-                <TextInput
-                  label="Email"
-                  value={email}
-                  onChangeText={setEmail}
-                  mode="outlined"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="email-address"
-                  left={<TextInput.Icon icon="email" color={theme.colors.onSurfaceVariant} />}
-                  outlineStyle={styles.inputOutline}
-                  style={styles.input}
-                />
-              ) : (
-                <TextInput
-                  label="Mã sinh viên"
-                  value={studentCode}
-                  onChangeText={setStudentCode}
-                  mode="outlined"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  left={<TextInput.Icon icon="account" color={theme.colors.onSurfaceVariant} />}
-                  outlineStyle={styles.inputOutline}
-                  style={styles.input}
-                />
-              )}
-
-              <TextInput
-                label="Mật khẩu"
-                value={password}
-                onChangeText={setPassword}
-                mode="outlined"
-                secureTextEntry={!showPassword}
-                left={<TextInput.Icon icon="lock" color={theme.colors.onSurfaceVariant} />}
-                right={
-                  <TextInput.Icon
-                    icon={showPassword ? 'eye-off' : 'eye'}
-                    onPress={() => setShowPassword(!showPassword)}
-                    color={theme.colors.onSurfaceVariant}
-                  />
-                }
-                outlineStyle={styles.inputOutline}
-                style={styles.input}
-              />
-              <HelperText type="error" visible={!!error} testID="helper-error" style={styles.helperError}>
-                {error}
-              </HelperText>
-
-              <Button
-                mode="contained"
-                onPress={handleLogin}
-                loading={isLoading}
-                disabled={isLoading}
-                contentStyle={styles.loginBtn}
-                labelStyle={styles.loginBtnLabel}
-                style={styles.loginBtnWrapper}
-              >
-                {loginMode === 'staff' ? 'Đăng nhập nhân viên' : 'Đăng nhập'}
-              </Button>
-
-              <Button
-                mode="text"
-                onPress={() => navigation.navigate('ForgotPassword')}
-                compact
-                labelStyle={styles.forgotLabel}
-              >
-                Quên mật khẩu?
-              </Button>
-
-              <View style={styles.dividerRow}>
-                <View style={styles.dividerLine} />
-                <Text variant="bodySmall" style={styles.dividerText}>hoặc</Text>
-                <View style={styles.dividerLine} />
-              </View>
-
-              <Button
-                mode="outlined"
-                onPress={() => navigation.navigate('FaceLogin')}
-                icon="face-recognition"
-                contentStyle={styles.faceBtn}
-                labelStyle={styles.faceBtnLabel}
-                style={styles.faceBtnWrapper}
-              >
-                Đăng nhập bằng khuôn mặt
-              </Button>
-
-              {loginMode === 'patron' ? (
-                <Button
-                  mode="text"
-                  onPress={() => navigation.navigate('Register')}
-                  labelStyle={styles.registerLabel}
-                >
-                  Chưa có tài khoản? Đăng ký ngay
-                </Button>
-              ) : null}
-            </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-
-      <NoticeSnackbar
-        visible={!!error}
-        message={error}
-        severity="error"
-        onDismiss={() => setError('')}
-      />
-    </SafeAreaView>
-  );
-}
-
-function createStyles(theme: AppTheme) {
-  return StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: theme.colors.background,
-    },
-    flex: {
-      flex: 1,
-    },
-    scrollContent: {
-      flexGrow: 1,
-    },
-    headerSection: {
-      backgroundColor: theme.colors.primary,
-      paddingTop: 28,
-      paddingBottom: 40,
-      paddingHorizontal: 24,
-      borderBottomLeftRadius: 28,
-      borderBottomRightRadius: 28,
-      position: 'relative',
-      overflow: 'hidden',
-    },
-    decorCircle1: {
-      position: 'absolute',
-      top: -30,
-      right: -30,
-      width: 130,
-      height: 130,
-      borderRadius: 999,
-      backgroundColor: 'rgba(255,255,255,0.08)',
-    },
-    decorCircle2: {
-      position: 'absolute',
-      bottom: -40,
-      left: 60,
-      width: 170,
-      height: 170,
-      borderRadius: 999,
-      backgroundColor: 'rgba(255,255,255,0.05)',
-    },
-    decorCircle3: {
-      position: 'absolute',
-      top: 20,
-      left: -50,
-      width: 100,
-      height: 100,
-      borderRadius: 999,
-      backgroundColor: 'rgba(255,255,255,0.04)',
-    },
-    brandRow: {
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1,
-      marginBottom: 8,
-    },
-    logoImage: {
-      width: 240,
-      height: 70,
-    },
-    welcomeText: {
-      color: 'rgba(255,255,255,0.85)',
-      marginTop: 16,
-      zIndex: 1,
-      fontWeight: '500',
-    },
-    formCard: {
-      marginHorizontal: 16,
-      marginTop: -30,
-      backgroundColor: theme.colors.surface,
-      borderRadius: 20,
-      shadowColor: '#000',
-      shadowOffset: {
-        width: 0,
-        height: 10,
-      },
-      shadowOpacity: 0.1,
-      shadowRadius: 20,
-      elevation: 8,
-      position: 'relative',
-      overflow: 'hidden',
-    },
-    accentBar: {
-      position: 'absolute',
-      left: 0,
-      top: 0,
-      bottom: 0,
-      width: 4,
-      backgroundColor: theme.colors.primary,
-    },
-    formInner: {
-      padding: 24,
-      gap: 16,
-    },
-    input: {
-      backgroundColor: 'transparent',
-    },
-    inputOutline: {
-      borderRadius: 12,
-    },
-    helperError: {
-      marginTop: -8,
-      fontSize: 13,
-    },
-    loginBtn: {
-      minHeight: 52,
-      borderRadius: 12,
-    },
-    loginBtnLabel: {
-      fontWeight: '800',
-      fontSize: 15,
-    },
-    loginBtnWrapper: {
-      borderRadius: 12,
-      marginTop: 4,
-    },
-    forgotLabel: {
-      fontSize: 13,
-      color: theme.colors.primary,
-    },
-    dividerRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      paddingVertical: 2,
-    },
-    dividerLine: {
-      flex: 1,
-      height: 1,
-      backgroundColor: theme.colors.outlineVariant,
-    },
-    dividerText: {
-      color: theme.colors.onSurfaceVariant,
-    },
-    faceBtn: {
-      minHeight: 52,
-      borderRadius: 12,
-    },
-    faceBtnLabel: {
-      fontWeight: '700',
-      fontSize: 14,
-    },
-    faceBtnWrapper: {
-      borderRadius: 12,
-      borderColor: theme.colors.outline,
-    },
-    registerLabel: {
-      fontSize: 14,
-      fontWeight: '600',
-    },
-  });
-}
-</file>
-
 <file path="src/features/book/screens/BookRecommendationsScreen.tsx">
 import React, { useCallback, useMemo, useState } from 'react';
 import { Alert, FlatList, RefreshControl, StyleSheet } from 'react-native';
@@ -14806,6 +14623,7 @@ import { AppTheme } from '../../../theme/DarkTheme';
 import { BorrowRecord, StaffPatronActiveBorrowsResponse } from '../../../types';
 import { formatDate, getDaysUntil, isOverdue } from '../../../utils/dateUtils';
 import { getErrorMessage } from '../../../utils/errorUtils';
+import { CONDITION_LABELS } from '../../../constants/copy';
 import {
   GradientHeader,
   SectionCard,
@@ -14848,15 +14666,11 @@ export default function ReturnScreen() {
   const [permission, requestPermission] = useCameraPermissions();
 
   const CONDITION_OPTIONS = useMemo(() => [
-    { label: 'Còn mới', value: 'Còn mới' },
-    { label: 'Bình thường', value: 'Bình thường' },
-    { label: 'Sách cũ', value: 'Sách cũ' },
-    { label: 'Rách bìa', value: 'Rách bìa' },
-    { label: 'Rách trang', value: 'Rách trang' },
-    { label: 'Thiếu trang', value: 'Thiếu trang' },
-    { label: 'Ẩm mốc', value: 'Ẩm mốc' },
-    { label: 'Viết/bôi bẩn', value: 'Viết/bôi bẩn' },
-    { label: 'Hư hỏng nặng', value: 'Hư hỏng nặng' },
+    { label: 'Mới', value: 'new' },
+    { label: 'Bình thường', value: 'good' },
+    { label: 'Hư nhẹ', value: 'minor_damage' },
+    { label: 'Hư nặng', value: 'major_damage' },
+    { label: 'Thất lạc', value: 'lost' },
   ], []);
 
   const activeRecords = staffLookup?.records ?? [];
@@ -14943,24 +14757,34 @@ export default function ReturnScreen() {
 
   const handleBarCodeScanned = (result: BarcodeScanningResult) => {
     if (scanned || !result.data) return;
-    const code = normalizeBookCode(result.data);
-    if (!code || !/^\d{10,13}$/.test(code)) return;
+    const rawCode = result.data.trim();
+    if (!rawCode) return;
+    const code = normalizeBookCode(rawCode);
+    if (!code) return;
     setScanned(true);
     setTimeout(() => setScanned(false), 1200);
     let toast = '';
     setScannedReturns((prev) => {
-      if (prev.some((item) => item.isbn === code)) {
-        toast = `Sách ${code} đã có trong danh sách`;
+      if (prev.some((item) => item.isbn === rawCode || normalizeBookCode(item.isbn) === code)) {
+        toast = `Sách ${rawCode} đã có trong danh sách`;
         triggerHaptic.warning();
         return prev;
       }
-      const match = activeRecords.find((r) => normalizeBookCode(r.book?.isbn) === code);
+      const match = activeRecords.find((r) => {
+        const copyBarcode = r.copy?.barcode?.trim().toLowerCase();
+        const rawTarget = rawCode.toLowerCase();
+        if (copyBarcode && copyBarcode === rawTarget) return true;
+        return (
+          normalizeBookCode(r.book?.isbn) === code ||
+          (copyBarcode ? normalizeBookCode(copyBarcode) === code : false)
+        );
+      });
       if (match) {
-        toast = `Đã thêm: ${match.book?.title || code}`;
+        toast = `Đã thêm: ${match.book?.title || rawCode}`;
         triggerHaptic.success();
-        return [...prev, { isbn: code, record: match, condition: '' }];
+        return [...prev, { isbn: rawCode, record: match, condition: '' }];
       }
-      toast = `Không tìm thấy sách đang mượn: ${code}`;
+      toast = `Không tìm thấy sách đang mượn: ${rawCode}`;
       triggerHaptic.error();
       return prev;
     });
@@ -14987,7 +14811,7 @@ export default function ReturnScreen() {
               {record.book?.title || record.book_id}
             </Text>
             <Text variant="bodySmall" style={styles.mutedText} selectable>
-              ISBN {record.book?.isbn || record.book_id}
+              {record.copy?.barcode ? `Mã bản sao: ${record.copy.barcode}` : `ISBN: ${record.book?.isbn || record.book_id}`}
             </Text>
           </View>
           <Chip compact style={overdue ? styles.errorChip : styles.primaryChip} textStyle={overdue ? styles.errorChipText : styles.primaryChipText}>
@@ -15033,7 +14857,7 @@ export default function ReturnScreen() {
               style={styles.camera}
               facing="back"
               barcodeScannerSettings={{
-                barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
+                barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'qr'],
               }}
               onBarcodeScanned={handleBarCodeScanned}
             />
@@ -15069,7 +14893,7 @@ export default function ReturnScreen() {
                   <Text variant="bodySmall" style={styles.cardTitle} numberOfLines={1}>
                     {item.record.book?.title || item.record.book_id}
                   </Text>
-                  <Text style={styles.scannedIsbn}>{item.isbn}</Text>
+                  <Text style={styles.scannedIsbn}>{item.record.copy?.barcode || item.isbn}</Text>
                 </View>
                 <Menu
                   visible={conditionMenuIsbn === item.isbn}
@@ -15083,7 +14907,7 @@ export default function ReturnScreen() {
                       contentStyle={styles.scannedConditionContent}
                       icon={item.condition ? 'check-circle' : 'note-plus-outline'}
                     >
-                      {item.condition || 'Tình trạng'}
+                      {item.condition ? CONDITION_LABELS[item.condition] || item.condition : 'Tình trạng'}
                     </Button>
                   }
                   anchorPosition="bottom"
@@ -17274,6 +17098,361 @@ export default function ScheduleScreen() {
 }
 </file>
 
+<file path="src/features/auth/screens/LoginScreen.tsx">
+import React, { useMemo, useState } from 'react';
+import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Button, HelperText, SegmentedButtons, Text, TextInput, useTheme } from 'react-native-paper';
+import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
+import { useAuth } from '../../../context/AuthContext';
+import { AppTheme } from '../../../theme/DarkTheme';
+import { mapAuthError } from '../../../utils/mapAuthError';
+
+interface LoginScreenProps {
+  navigation: any;
+}
+
+type LoginMode = 'patron' | 'staff';
+
+export default function LoginScreen({ navigation }: LoginScreenProps) {
+  const theme = useTheme() as AppTheme;
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const [loginMode, setLoginMode] = useState<LoginMode>('patron');
+  const [studentCode, setStudentCode] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [snackVisible, setSnackVisible] = useState(false);
+  const { patronLogin, staffLogin } = useAuth();
+
+  const showError = (message: string) => {
+    setError(message);
+    setSnackVisible(true);
+  };
+
+  const handleLogin = async () => {
+    const identifier = loginMode === 'staff' ? email.trim() : studentCode.trim();
+    if (!identifier || !password.trim()) {
+      showError(loginMode === 'staff'
+        ? 'Vui lòng nhập email và mật khẩu'
+        : 'Vui lòng nhập mã sinh viên và mật khẩu');
+      return;
+    }
+
+    setIsLoading(true);
+    setError('');
+    setSnackVisible(false);
+    try {
+      if (loginMode === 'staff') {
+        await staffLogin(email.trim(), password);
+      } else {
+        await patronLogin(studentCode.trim(), password);
+      }
+    } catch (err: any) {
+      showError(mapAuthError(err));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+          <View style={styles.headerSection}>
+            <View style={styles.decorCircle1} />
+            <View style={styles.decorCircle2} />
+            <View style={styles.decorCircle3} />
+            <View style={styles.brandRow}>
+              <Image
+                source={require('../../../../assets/logo-white.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
+            </View>
+            <Text variant="bodyLarge" style={styles.welcomeText}>Hệ thống Thư viện Thông minh</Text>
+          </View>
+
+          <View style={styles.formCard}>
+            <View style={styles.accentBar} />
+            <View style={styles.formInner}>
+              <SegmentedButtons
+                value={loginMode}
+                onValueChange={(value) => setLoginMode(value as LoginMode)}
+                buttons={[
+                  { value: 'patron', label: 'Độc giả', icon: 'account' },
+                  { value: 'staff', label: 'Nhân viên', icon: 'shield-account' },
+                ]}
+              />
+
+              {loginMode === 'staff' ? (
+                <TextInput
+                  label="Email"
+                  value={email}
+                  onChangeText={setEmail}
+                  mode="outlined"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                  left={<TextInput.Icon icon="email" color={theme.colors.onSurfaceVariant} />}
+                  outlineStyle={styles.inputOutline}
+                  style={styles.input}
+                />
+              ) : (
+                <TextInput
+                  label="Mã sinh viên"
+                  value={studentCode}
+                  onChangeText={setStudentCode}
+                  mode="outlined"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  left={<TextInput.Icon icon="account" color={theme.colors.onSurfaceVariant} />}
+                  outlineStyle={styles.inputOutline}
+                  style={styles.input}
+                />
+              )}
+
+              <TextInput
+                label="Mật khẩu"
+                value={password}
+                onChangeText={setPassword}
+                mode="outlined"
+                secureTextEntry={!showPassword}
+                left={<TextInput.Icon icon="lock" color={theme.colors.onSurfaceVariant} />}
+                right={
+                  <TextInput.Icon
+                    icon={showPassword ? 'eye-off' : 'eye'}
+                    onPress={() => setShowPassword(!showPassword)}
+                    color={theme.colors.onSurfaceVariant}
+                  />
+                }
+                outlineStyle={styles.inputOutline}
+                style={styles.input}
+              />
+              <HelperText type="error" visible={!!error} testID="helper-error" style={styles.helperError}>
+                {error}
+              </HelperText>
+
+              <Button
+                mode="contained"
+                onPress={handleLogin}
+                loading={isLoading}
+                disabled={isLoading}
+                contentStyle={styles.loginBtn}
+                labelStyle={styles.loginBtnLabel}
+                style={styles.loginBtnWrapper}
+              >
+                {loginMode === 'staff' ? 'Đăng nhập nhân viên' : 'Đăng nhập'}
+              </Button>
+
+              <Button
+                mode="text"
+                onPress={() => navigation.navigate('ForgotPassword')}
+                compact
+                labelStyle={styles.forgotLabel}
+              >
+                Quên mật khẩu?
+              </Button>
+
+              <View style={styles.dividerRow}>
+                <View style={styles.dividerLine} />
+                <Text variant="bodySmall" style={styles.dividerText}>hoặc</Text>
+                <View style={styles.dividerLine} />
+              </View>
+
+              <Button
+                mode="outlined"
+                onPress={() => navigation.navigate('FaceLogin')}
+                icon="face-recognition"
+                contentStyle={styles.faceBtn}
+                labelStyle={styles.faceBtnLabel}
+                style={styles.faceBtnWrapper}
+              >
+                Đăng nhập bằng khuôn mặt
+              </Button>
+
+              {loginMode === 'patron' ? (
+                <Button
+                  mode="text"
+                  onPress={() => navigation.navigate('Register')}
+                  labelStyle={styles.registerLabel}
+                >
+                  Chưa có tài khoản? Đăng ký ngay
+                </Button>
+              ) : null}
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      <NoticeSnackbar
+        visible={snackVisible}
+        message={error}
+        severity="error"
+        onDismiss={() => setSnackVisible(false)}
+      />
+    </SafeAreaView>
+  );
+}
+
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    flex: {
+      flex: 1,
+    },
+    scrollContent: {
+      flexGrow: 1,
+    },
+    headerSection: {
+      backgroundColor: theme.colors.primary,
+      paddingTop: 28,
+      paddingBottom: 40,
+      paddingHorizontal: 24,
+      borderBottomLeftRadius: 28,
+      borderBottomRightRadius: 28,
+      position: 'relative',
+      overflow: 'hidden',
+    },
+    decorCircle1: {
+      position: 'absolute',
+      top: -30,
+      right: -30,
+      width: 130,
+      height: 130,
+      borderRadius: 999,
+      backgroundColor: 'rgba(255,255,255,0.08)',
+    },
+    decorCircle2: {
+      position: 'absolute',
+      bottom: -40,
+      left: 60,
+      width: 170,
+      height: 170,
+      borderRadius: 999,
+      backgroundColor: 'rgba(255,255,255,0.05)',
+    },
+    decorCircle3: {
+      position: 'absolute',
+      top: 20,
+      left: -50,
+      width: 100,
+      height: 100,
+      borderRadius: 999,
+      backgroundColor: 'rgba(255,255,255,0.04)',
+    },
+    brandRow: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1,
+      marginBottom: 8,
+    },
+    logoImage: {
+      width: 240,
+      height: 70,
+    },
+    welcomeText: {
+      color: 'rgba(255,255,255,0.85)',
+      marginTop: 16,
+      zIndex: 1,
+      fontWeight: '500',
+    },
+    formCard: {
+      marginHorizontal: 16,
+      marginTop: -30,
+      backgroundColor: theme.colors.surface,
+      borderRadius: 20,
+      shadowColor: '#000',
+      shadowOffset: {
+        width: 0,
+        height: 10,
+      },
+      shadowOpacity: 0.1,
+      shadowRadius: 20,
+      elevation: 8,
+      position: 'relative',
+      overflow: 'hidden',
+    },
+    accentBar: {
+      position: 'absolute',
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: 4,
+      backgroundColor: theme.colors.primary,
+    },
+    formInner: {
+      padding: 24,
+      gap: 16,
+    },
+    input: {
+      backgroundColor: 'transparent',
+    },
+    inputOutline: {
+      borderRadius: 12,
+    },
+    helperError: {
+      marginTop: -8,
+      fontSize: 13,
+    },
+    loginBtn: {
+      minHeight: 52,
+      borderRadius: 12,
+    },
+    loginBtnLabel: {
+      fontWeight: '800',
+      fontSize: 15,
+    },
+    loginBtnWrapper: {
+      borderRadius: 12,
+      marginTop: 4,
+    },
+    forgotLabel: {
+      fontSize: 13,
+      color: theme.colors.primary,
+    },
+    dividerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingVertical: 2,
+    },
+    dividerLine: {
+      flex: 1,
+      height: 1,
+      backgroundColor: theme.colors.outlineVariant,
+    },
+    dividerText: {
+      color: theme.colors.onSurfaceVariant,
+    },
+    faceBtn: {
+      minHeight: 52,
+      borderRadius: 12,
+    },
+    faceBtnLabel: {
+      fontWeight: '700',
+      fontSize: 14,
+    },
+    faceBtnWrapper: {
+      borderRadius: 12,
+      borderColor: theme.colors.outline,
+    },
+    registerLabel: {
+      fontSize: 14,
+      fontWeight: '600',
+    },
+  });
+}
+</file>
+
 <file path="src/features/auth/screens/RegisterScreen.tsx">
 import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
@@ -18274,11 +18453,15 @@ import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
 import { LoadingOverlay } from '../../../components/LoadingOverlay';
 import { triggerHaptic } from '../../../utils/haptics';
 
+import { CONDITION_LABELS } from '../../../constants/copy';
+
 interface ScannedBorrowItem {
   barcode: string;
   isbn: string;
   copy_id: string | null;
   copy_barcode: string | null;
+  copy_condition?: string | null;
+  copy_status?: string | null;
   book: Book;
   alreadyBorrowed?: boolean;
 }
@@ -18350,11 +18533,19 @@ export default function StaffBorrowScreen() {
         cover_url: item.book!.cover_url || undefined,
         shelf_location: item.book!.shelf_location || undefined,
       };
+
+      if (scannedItems.some((i) => i.book?.id === book.id)) {
+        setScanError(`Đầu sách "${book.title}" đã có trong danh sách mượn`);
+        setManualIsbn('');
+        return;
+      }
       setScannedItems((prev) => [...prev, {
         barcode: isbn,
         isbn,
         copy_id: item.copy?.id || null,
         copy_barcode: item.copy?.barcode || null,
+        copy_condition: item.copy?.condition || null,
+        copy_status: item.copy?.status || null,
         book,
       }]);
       triggerHaptic.success();
@@ -18395,11 +18586,20 @@ export default function StaffBorrowScreen() {
       return;
     }
 
-    const normalizeCode = (v: string | undefined | null) => v?.replace(/[\s-]+/g, '').replace(/\.0+$/, '') ?? '';
+    const normalizeCode = (v: string | undefined | null) => v?.replace(/[\s-]+/g, '').replace(/\.0+$/, '').toLowerCase() ?? '';
     const barcodeNormalized = normalizeCode(barcode);
-    const alreadyBorrowedRecord = activeRecords.find(
-      (r) => normalizeCode(r.book?.isbn) === barcodeNormalized || normalizeCode(r.book_id) === barcodeNormalized
-    );
+    const libMatch = barcodeNormalized.match(/^lib(\d{10,13})(\d+)?$/i);
+    const targetIsbn = libMatch ? libMatch[1] : barcodeNormalized;
+    const alreadyBorrowedRecord = activeRecords.find((r) => {
+      const rIsbn = normalizeCode(r.book?.isbn);
+      const rCopyBarcode = normalizeCode((r as any).copy?.barcode);
+      return (
+        rIsbn === barcodeNormalized ||
+        normalizeCode(r.book_id) === barcodeNormalized ||
+        rCopyBarcode === barcodeNormalized ||
+        (!!libMatch && rIsbn === targetIsbn)
+      );
+    });
 
     if (alreadyBorrowedRecord) {
       const book: Book = {
@@ -18421,12 +18621,17 @@ export default function StaffBorrowScreen() {
         patron_id: patronId!,
         items: [{ barcode, isbn: barcode }],
       });
-      const item = result.items.find((i) => i.barcode === barcode);
+      const item = result.items.find((i) =>
+        i.barcode === barcode ||
+        normalizeCode(i.barcode) === barcodeNormalized ||
+        normalizeCode(i.copy?.barcode) === barcodeNormalized ||
+        normalizeCode(i.isbn) === barcodeNormalized
+      ) || result.items[0];
       if (!item || !item.can_borrow) {
         const msg = item?.reason || 'Sách không thể mượn';
         const title = item?.book?.title || '';
         triggerHaptic.error();
-        setScanError(title ? `"${title}": ${msg}` : `${msg} (ISBN: ${barcode})`);
+        setScanError(title ? `"${title}": ${msg}` : `${msg} (Mã: ${barcode})`);
         setTimeout(() => setScanned(false), 500);
         return;
       }
@@ -18438,11 +18643,20 @@ export default function StaffBorrowScreen() {
         cover_url: item.book!.cover_url || undefined,
         shelf_location: item.book!.shelf_location || undefined,
       };
+
+      if (scannedItems.some((i) => i.book?.id === book.id)) {
+        triggerHaptic.warning();
+        setScanError(`Đầu sách "${book.title}" đã có trong danh sách mượn`);
+        setTimeout(() => setScanned(false), 800);
+        return;
+      }
       setScannedItems((prev) => [...prev, {
         barcode,
         isbn: barcode,
         copy_id: item.copy?.id || null,
         copy_barcode: item.copy?.barcode || null,
+        copy_condition: item.copy?.condition || null,
+        copy_status: item.copy?.status || null,
         book,
       }]);
       triggerHaptic.success();
@@ -18683,7 +18897,7 @@ export default function StaffBorrowScreen() {
               facing="back"
               onCameraReady={() => setCameraReady(true)}
               barcodeScannerSettings={{
-                barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
+                barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'qr'],
               }}
               onBarcodeScanned={cameraReady && !scanned ? handleBarCodeScanned : undefined}
             />
@@ -18743,12 +18957,12 @@ export default function StaffBorrowScreen() {
           <TextInput
             value={manualIsbn}
             onChangeText={setManualIsbn}
-            placeholder="Nhập ISBN thủ công..."
+            placeholder="Quét hoặc nhập mã bản sao (LIB-...) hoặc ISBN..."
             mode="outlined"
             style={styles.manualInput}
             outlineStyle={styles.inputOutline}
             activeOutlineColor={c.primary}
-            keyboardType="numeric"
+            autoCapitalize="characters"
             onSubmitEditing={lookupManualIsbn}
           />
           <Button
@@ -18812,7 +19026,16 @@ export default function StaffBorrowScreen() {
                       ) : null}
                     </View>
                     {item.book.author ? <Text style={styles.itemAuthor} numberOfLines={1}>{item.book.author}</Text> : null}
-                    <Text style={styles.itemIsbn}>{item.barcode}</Text>
+                    <View style={styles.copyRow}>
+                      <Text style={styles.itemIsbn}>{item.copy_barcode || item.barcode}</Text>
+                      {item.copy_condition ? (
+                        <View style={styles.copyConditionTag}>
+                          <Text style={styles.copyConditionText}>
+                            {CONDITION_LABELS[item.copy_condition] || item.copy_condition}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
                     {item.alreadyBorrowed ? (
                       <Text style={styles.alreadyBorrowedNote}>Sách này đang được mượn — sẽ không thêm vào phiếu</Text>
                     ) : null}
@@ -18945,7 +19168,10 @@ function createStyles(theme: AppTheme) {
     itemInfo: { flex: 1, marginLeft: 12 },
     itemTitle: { fontSize: 14, fontWeight: '600', color: c.onSurface },
     itemAuthor: { fontSize: 12, color: c.onSurfaceVariant, marginTop: 2 },
-    itemIsbn: { fontSize: 11, color: c.primary, marginTop: 2, fontFamily: 'monospace' },
+    itemIsbn: { fontSize: 11, color: c.primary, fontFamily: 'monospace' },
+    copyRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' },
+    copyConditionTag: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6, backgroundColor: c.surfaceVariant },
+    copyConditionText: { fontSize: 10, fontWeight: '600', color: c.primary },
     itemTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
     alreadyBorrowedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, backgroundColor: 'rgba(196, 78, 78, 0.15)' },
     alreadyBorrowedText: { color: c.error, fontSize: 10, fontWeight: '700' },
@@ -20284,66 +20510,6 @@ function createStyles(theme: AppTheme, insets: { top: number; bottom: number; le
 }
 </file>
 
-<file path="src/config/api.ts">
-import { NativeModules, Platform } from 'react-native';
-
-const ENV_API_URL = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/+$/, '');
-
-const DEFAULT_FALLBACK_URL = 'http://192.168.1.222:80/api';
-
-function getDevHost(): string {
-  // Automatically extract host IP from Metro bundler's scriptURL if available (e.g. "http://192.168.1.xxx:8081/...")
-  const scriptURL: string | undefined = NativeModules.SourceCode?.scriptURL;
-  if (scriptURL) {
-    const match = scriptURL.match(/^https?:\/\/([^:/]+)/);
-    if (match && match[1] && match[1] !== 'localhost' && match[1] !== '127.0.0.1') {
-      return match[1];
-    }
-  }
-
-  return Platform.OS === 'ios' ? 'localhost' : '10.0.2.2';
-}
-
-function getApiBaseUrl(): string {
-  // In development, if connected to a remote Metro host (physical phone via Wi-Fi), prioritize that host IP
-  if (__DEV__) {
-    const devHost = getDevHost();
-    if (devHost && devHost !== 'localhost' && devHost !== '10.0.2.2') {
-      return `http://${devHost}:80/api`;
-    }
-  }
-
-  if (ENV_API_URL) {
-    try {
-      const url = new URL(ENV_API_URL);
-      if (['http:', 'https:'].includes(url.protocol) && url.pathname.endsWith('/api') && !url.search && !url.hash) {
-        return ENV_API_URL;
-      }
-    } catch {
-      // ignore parsing error and continue to fallback
-    }
-  }
-  if (__DEV__) return `http://${getDevHost()}:80/api`;
-  return DEFAULT_FALLBACK_URL;
-}
-
-function getApiBaseNoPath(): string {
-  if (__DEV__) {
-    const devHost = getDevHost();
-    if (devHost && devHost !== 'localhost' && devHost !== '10.0.2.2') {
-      return `http://${devHost}:80`;
-    }
-  }
-
-  if (ENV_API_URL) return ENV_API_URL.replace(/\/api\/?$/, '');
-  if (__DEV__) return `http://${getDevHost()}:80`;
-  return DEFAULT_FALLBACK_URL.replace(/\/api\/?$/, '');
-}
-
-export const API_BASE_URL = getApiBaseUrl();
-export const API_BASE_NO_PATH = getApiBaseNoPath();
-</file>
-
 <file path="src/features/history/screens/HistoryScreen.tsx">
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { View, Image, StyleSheet, ScrollView, RefreshControl, Animated, Alert } from 'react-native';
@@ -20785,42 +20951,64 @@ function createStyles(theme: AppTheme) {
 }
 </file>
 
-<file path="eas.json">
-{
-  "cli": {
-    "version": ">= 18.13.0",
-    "appVersionSource": "remote"
-  },
-  "build": {
-    "development": {
-      "developmentClient": true,
-      "distribution": "internal",
-      "android": {
-        "buildType": "apk"
-      },
-      "env": {
-        "EXPO_PUBLIC_API_URL": "http://192.168.1.222:80/api",
-        "EXPO_PUBLIC_WEB_URL": "http://192.168.1.222:3000"
-      }
-    },
-    "preview": {
-      "distribution": "internal",
-      "android": {
-        "buildType": "apk"
-      },
-      "env": {
-        "EXPO_PUBLIC_API_URL": "http://192.168.1.222:80/api",
-        "EXPO_PUBLIC_WEB_URL": "http://192.168.1.222:3000"
-      }
-    },
-    "production": {
-      "autoIncrement": true
+<file path="src/config/api.ts">
+import { NativeModules, Platform } from 'react-native';
+
+const ENV_API_URL = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/+$/, '');
+
+const DEFAULT_FALLBACK_URL = 'http://192.168.1.119:80/api';
+
+function getDevHost(): string {
+  // Automatically extract host IP from Metro bundler's scriptURL if available (e.g. "http://192.168.1.xxx:8081/...")
+  const scriptURL: string | undefined = NativeModules.SourceCode?.scriptURL;
+  if (scriptURL) {
+    const match = scriptURL.match(/^https?:\/\/([^:/]+)/);
+    if (match && match[1] && match[1] !== 'localhost' && match[1] !== '127.0.0.1') {
+      return match[1];
     }
-  },
-  "submit": {
-    "production": {}
   }
+
+  return Platform.OS === 'ios' ? 'localhost' : '10.0.2.2';
 }
+
+function getApiBaseUrl(): string {
+  // In development, if connected to a remote Metro host (physical phone via Wi-Fi), prioritize that host IP
+  if (__DEV__) {
+    const devHost = getDevHost();
+    if (devHost && devHost !== 'localhost' && devHost !== '10.0.2.2') {
+      return `http://${devHost}:80/api`;
+    }
+  }
+
+  if (ENV_API_URL) {
+    try {
+      const url = new URL(ENV_API_URL);
+      if (['http:', 'https:'].includes(url.protocol) && url.pathname.endsWith('/api') && !url.search && !url.hash) {
+        return ENV_API_URL;
+      }
+    } catch {
+      // ignore parsing error and continue to fallback
+    }
+  }
+  if (__DEV__) return `http://${getDevHost()}:80/api`;
+  return DEFAULT_FALLBACK_URL;
+}
+
+function getApiBaseNoPath(): string {
+  if (__DEV__) {
+    const devHost = getDevHost();
+    if (devHost && devHost !== 'localhost' && devHost !== '10.0.2.2') {
+      return `http://${devHost}:80`;
+    }
+  }
+
+  if (ENV_API_URL) return ENV_API_URL.replace(/\/api\/?$/, '');
+  if (__DEV__) return `http://${getDevHost()}:80`;
+  return DEFAULT_FALLBACK_URL.replace(/\/api\/?$/, '');
+}
+
+export const API_BASE_URL = getApiBaseUrl();
+export const API_BASE_NO_PATH = getApiBaseNoPath();
 </file>
 
 <file path="src/features/ai/screens/AIChatScreen.tsx">
@@ -21903,6 +22091,44 @@ EXPO_PUBLIC_API_URL=http://<your-pc-ip>:80/api
 EXPO_PUBLIC_WEB_URL=http://<your-pc-ip>:3000
 </file>
 
+<file path="eas.json">
+{
+  "cli": {
+    "version": ">= 18.13.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "http://192.168.1.110:80/api",
+        "EXPO_PUBLIC_WEB_URL": "http://192.168.1.110:3000"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "http://192.168.1.110:80/api",
+        "EXPO_PUBLIC_WEB_URL": "http://192.168.1.110:3000"
+      }
+    },
+    "production": {
+      "autoIncrement": true
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
+</file>
+
 <file path="src/features/home/screens/HomeScreen.tsx">
 import React, { useCallback, useMemo, useState } from 'react';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -22603,257 +22829,135 @@ function createStyles(theme: AppTheme) {
 }
 </file>
 
-<file path="src/features/library/screens/MyReservationsScreen.tsx">
-import React, { useState, useCallback, useMemo } from 'react';
-import { View, Image, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, Surface, Button, useTheme } from 'react-native-paper';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { useFocusEffect } from '@react-navigation/native';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getMyWaitlist, joinWaitlist, leaveWaitlist, WaitlistEntry } from '../../../api/borrow';
-import { AppTheme } from '../../../theme/DarkTheme';
-import { GradientHeader, SectionCard, EmptyState, GRADIENTS } from '../../../theme/MobileDesignSystem';
-import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
-import { UndoBar } from '../../../components/UndoBar';
-import SwipeReserveRow from '../../../components/SwipeReserveRow';
-import { useUndo } from '../../../lib/useUndo';
-import { devError } from '../../../utils/logger';
-import { useNetwork } from '../../../context/NetworkContext';
-import { useAuth } from '../../../context/AuthContext';
+<file path="src/api/borrow.ts">
+import api from './client';
+import { BorrowResponse, ReturnResponse, BorrowRecord, Book, BookWithStats, BookImportResponse, StaffPatronActiveBorrowsResponse, CreateBorrowSlipRequest, CreateBorrowSlipResponse, LookupBorrowSlipRequest, LookupBorrowSlipResponse, ConfirmBorrowSlipRequest } from '../types';
 
-interface MyReservationsScreenProps {
-  navigation: any;
-}
-
-export default function MyReservationsScreen({ navigation }: MyReservationsScreenProps) {
-  const theme = useTheme() as AppTheme;
-  const c = theme.colors;
-  const styles = useMemo(() => createStyles(theme), [theme]);
-  const { isAuthenticated } = useAuth();
-  const [snackMsg, setSnackMsg] = useState('');
-  const [snackVisible, setSnackVisible] = useState(false);
-  const { hiddenIds, confirmingId, undo, cancelUndo, markConfirmed } = useUndo({ duration: 5000 });
-  const { isOnline } = useNetwork();
-  const qc = useQueryClient();
-
-  const {
-    data: waitlistData,
-    error: waitlistError,
-    isFetching,
-    refetch,
-  } = useQuery({
-    queryKey: ['myReservations'],
-    queryFn: () => getMyWaitlist(),
-    enabled: isAuthenticated,
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const entries: WaitlistEntry[] = waitlistData?.items || [];
-  const loadError = waitlistError ? (waitlistError as any)?.response?.data?.detail || (waitlistError as Error)?.message || 'Không thể tải danh sách nhận thông báo' : null;
-  const refreshing = isFetching;
-
-  useFocusEffect(
-    useCallback(() => {
-      if (isAuthenticated) {
-        refetch();
-      }
-    }, [isAuthenticated, refetch])
-  );
-
-  const handleCancel = useCallback((entry: WaitlistEntry) => {
-    if (!isOnline) {
-      Alert.alert('Yêu cầu mạng', 'Bạn cần kết nối internet để hủy nhận thông báo.');
-      return;
-    }
-
-    undo(entry.id);
-  }, [isOnline, undo]);
-
-  const handleUndoCancel = useCallback(async () => {
-    if (!confirmingId || !isOnline) return;
-    try {
-      const entry = entries.find(e => e.id === confirmingId);
-      if (entry) {
-        await joinWaitlist(entry.book_id);
-        setSnackMsg(`Đã khôi phục nhận thông báo "${entry.book?.title || 'sách này'}"`);
-        setSnackVisible(true);
-      }
-    } catch (error: any) {
-      const detail = error?.response?.data?.detail || error?.message || 'Không thể khôi phục nhận thông báo';
-      setSnackMsg(detail);
-      setSnackVisible(true);
-    } finally {
-      cancelUndo(confirmingId);
-    }
-  }, [confirmingId, isOnline, entries, joinWaitlist, cancelUndo]);
-
-  const commitCancellation = useCallback(async () => {
-    if (!confirmingId) return;
-    const title = entries.find(e => e.id === confirmingId)?.book?.title || 'sách này';
-    try {
-      await leaveWaitlist(confirmingId);
-      // Invalidate query to refetch fresh data from server
-      qc.invalidateQueries({ queryKey: ['myReservations'] });
-      setSnackMsg(`Đã hủy nhận thông báo "${title}"`);
-      setSnackVisible(true);
-    } catch (error: any) {
-      const msg = error?.response?.data?.detail || error?.message || 'Không thể hủy nhận thông báo';
-      setSnackMsg(msg);
-      setSnackVisible(true);
-      cancelUndo(confirmingId);
-    } finally {
-      markConfirmed(confirmingId);
-    }
-  }, [confirmingId, entries, leaveWaitlist, qc, cancelUndo, markConfirmed]);
-
-  const getStatusLabel = (status: string): string => {
-    switch (status) {
-      case 'waiting': return 'Đang chờ';
-      case 'notified': return 'Đã thông báo';
-      case 'fulfilled': return 'Đã mượn';
-      case 'expired': return 'Đã hết hạn';
-      default: return status;
-    }
+export interface WaitlistEntry {
+  id: string;
+  book_id: string;
+  status: string;
+  created_at: string;
+  book: {
+    id: string;
+    isbn: string;
+    title: string;
+    author?: string;
+    cover_url?: string;
+    total_copies?: number;
+    available_copies?: number;
   };
-
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: c.background }]} edges={['bottom']}>
-      <ScrollView
-        style={styles.flex}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => refetch()} tintColor={c.primary} />
-        }
-      >
-        <GradientHeader
-          title="Sách chờ nhận thông báo"
-          subtitle={entries.length > 0 ? `${entries.length} đang chờ` : 'Chưa có sách nào'}
-          icon="bell-ring-outline"
-        />
-
-        {loadError ? (
-          <EmptyState
-            icon="cloud-off-outline"
-            title={loadError}
-            action={<Button mode="outlined" onPress={() => refetch()} icon="refresh">Thử lại</Button>}
-          />
-        ) : entries.length === 0 ? (
-          <EmptyState icon="bell-off-outline" title="Bạn chưa đăng ký nhận thông báo nào" />
-        ) : (
-          <SectionCard title="Sách đang chờ" icon="bell-check-outline" accentColor={GRADIENTS.indigo[0]}>
-            {entries
-              .filter((entry) => !hiddenIds.includes(entry.id))
-              .map((entry) => {
-            const isNotified = entry.status === 'notified';
-            return (
-              <SwipeReserveRow
-                key={entry.id}
-                variant="cancel"
-                onCancel={() => handleCancel(entry)}
-              >
-                <Surface
-                  style={[styles.resCard, { backgroundColor: c.surface, borderColor: c.outline }]}
-                  elevation={0}
-                >
-                  <View style={[styles.resCardSpine, { backgroundColor: isNotified ? c.custom.success : c.primary }]} />
-                  {entry.book?.cover_url ? (
-                    <Image source={{ uri: entry.book.cover_url }} style={styles.bookCover} />
-                  ) : (
-                    <View style={[styles.bookCoverPlaceholder, { backgroundColor: c.surfaceVariant }]}>
-                      <MaterialCommunityIcons name="book-variant" size={24} color={c.onSurfaceVariant} />
-                    </View>
-                  )}
-                  <View style={styles.resContent}>
-                    <Text style={[styles.bookTitle, { color: c.onSurface }]} numberOfLines={2}>
-                      {entry.book?.title || entry.book_id}
-                    </Text>
-                    {entry.book?.author ? (
-                      <Text style={[styles.bookAuthor, { color: c.onSurfaceVariant }]} numberOfLines={1}>
-                        {entry.book.author}
-                      </Text>
-                    ) : null}
-                    <View style={styles.resMeta}>
-                      <Surface
-                        style={[
-                          styles.statusBadge,
-                          { backgroundColor: isNotified ? c.custom.success : c.primary },
-                        ]}
-                        elevation={0}
-                      >
-                        <Text style={[styles.statusBadgeText, { color: '#FFFFFF' }]}>
-                          {getStatusLabel(entry.status)}
-                        </Text>
-                      </Surface>
-                    </View>
-                  </View>
-                </Surface>
-              </SwipeReserveRow>
-            );
-            })}
-          </SectionCard>
-        )}
-      </ScrollView>
-
-      <NoticeSnackbar
-        visible={snackVisible}
-        message={snackMsg}
-        severity={snackMsg.includes('hủy') ? 'success' : 'error'}
-        onDismiss={() => setSnackVisible(false)}
-      />
-
-      <UndoBar
-        visible={!!confirmingId}
-        message={`Đã hủy nhận thông báo "${entries.find(e => e.id === confirmingId)?.book?.title ?? ''}"`}
-        onUndo={handleUndoCancel}
-        onDismiss={commitCancellation}
-      />
-    </SafeAreaView>
-  );
 }
 
-function createStyles(theme: AppTheme) {
-  const c = theme.colors;
-  return StyleSheet.create({
-    container: { flex: 1 },
-    flex: { flex: 1 },
-    resCard: {
-      marginHorizontal: 16,
-      marginTop: 10,
-      borderRadius: 10,
-      flexDirection: 'row',
-      overflow: 'hidden',
-      borderWidth: 0.5,
-      alignItems: 'center',
-    },
-    resCardSpine: { width: 4, alignSelf: 'stretch' },
-    bookCover: {
-      width: 48,
-      height: 66,
-      borderRadius: 4,
-      margin: 10,
-      marginRight: 0,
-    },
-    bookCoverPlaceholder: {
-      width: 48,
-      height: 66,
-      borderRadius: 4,
-      margin: 10,
-      marginRight: 0,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    resContent: { flex: 1, padding: 10, gap: 4 },
-    bookTitle: { fontWeight: '600', fontSize: 14, lineHeight: 18 },
-    bookAuthor: { fontSize: 12 },
-    resMeta: { flexDirection: 'row', gap: 6, marginTop: 6, flexWrap: 'wrap' },
-    statusBadge: {
-      paddingHorizontal: 8,
-      paddingVertical: 2,
-      borderRadius: 4,
-    },
-    statusBadgeText: { fontSize: 11, fontWeight: '700' },
-  });
-}
+export const getMyWaitlist = async (): Promise<{ items: WaitlistEntry[]; total: number }> => {
+  const response = await api.get<{ items: WaitlistEntry[]; total: number }>('/borrow/waitlist');
+  return response.data;
+};
+
+export const joinWaitlist = async (bookId: string): Promise<{ id: string; book_id: string; status: string }> => {
+  const response = await api.post<{ id: string; book_id: string; status: string }>('/borrow/waitlist', { book_id: bookId });
+  return response.data;
+};
+
+export const leaveWaitlist = async (waitlistId: string): Promise<void> => {
+  await api.delete(`/borrow/waitlist/${waitlistId}`);
+};
+
+export const borrowApi = {
+  getBooksPage: async (skip: number, limit: number, search: string): Promise<{ items: Book[]; total: number }> => {
+    const { data } = await api.get('/borrow/books', { params: { skip, limit, search } });
+    return data;
+  },
+  borrowBook: async (barcode: string): Promise<BorrowResponse> => {
+    const response = await api.post<BorrowResponse>('/borrow/', { barcode });
+    return response.data;
+  },
+
+  returnBook: async (barcode: string, note?: string): Promise<ReturnResponse> => {
+    const response = await api.post<ReturnResponse>('/borrow/staff-return', { barcode, note });
+    return response.data;
+  },
+
+  lookupByBarcode: async (barcode: string): Promise<BorrowRecord> => {
+    const response = await api.get<BorrowRecord>(`/borrow/barcode/${encodeURIComponent(barcode)}`);
+    return response.data;
+  },
+
+  getActiveBorrowsByStudentCode: async (studentCode: string): Promise<StaffPatronActiveBorrowsResponse> => {
+    const response = await api.get<StaffPatronActiveBorrowsResponse>(
+      `/borrow/staff/patrons/${encodeURIComponent(studentCode)}/active`,
+    );
+    return response.data;
+  },
+
+  getPatronActiveBorrows: async (): Promise<StaffPatronActiveBorrowsResponse> => {
+    const response = await api.get<StaffPatronActiveBorrowsResponse>('/borrow/patron/active');
+    return response.data;
+  },
+
+  returnByPatron: async (studentCode: string, barcodeOrIsbn: string, note?: string): Promise<ReturnResponse> => {
+    const response = await api.post<ReturnResponse>('/borrow/staff-return/by-patron', {
+      student_code: studentCode,
+      barcode_or_isbn: barcodeOrIsbn,
+      note,
+    });
+    return response.data;
+  },
+
+  getHistory: async (status?: string): Promise<BorrowRecord[]> => {
+    const params = status ? { status_filter: status } : {};
+    const response = await api.get<BorrowRecord[]>('/borrow/history', { params });
+    return response.data;
+  },
+
+  getBooks: async (skip = 0, limit = 50): Promise<Book[]> => {
+    const response = await api.get<{ items: Book[]; total: number } | Book[]>('/borrow/books', {
+      params: { skip, limit },
+    });
+    const data = response.data;
+    return Array.isArray(data) ? data : data.items || [];
+  },
+
+  getBook: async (isbn: string): Promise<BookWithStats> => {
+    const response = await api.get<BookWithStats>(`/borrow/book/${isbn}`);
+    return response.data;
+  },
+
+  lookupBookByIsbn: async (isbn: string): Promise<BookWithStats> => {
+    const response = await api.get<BookWithStats>(`/borrow/book/${isbn}`);
+    return response.data;
+  },
+
+  batchImportByIsbn: async (items: { isbn: string; quantity: number }[]): Promise<BookImportResponse> => {
+    const response = await api.post<BookImportResponse>('/borrow/isbn-import/batch', { items });
+    return response.data;
+  },
+
+  createSlip: async (data: CreateBorrowSlipRequest): Promise<CreateBorrowSlipResponse> => {
+    const response = await api.post<CreateBorrowSlipResponse>('/borrow/staff/slip/create', data);
+    return response.data;
+  },
+
+  lookupBorrowSlip: async (data: LookupBorrowSlipRequest): Promise<LookupBorrowSlipResponse> => {
+    const response = await api.post<LookupBorrowSlipResponse>('/borrow/staff/slip/lookup', data);
+    return response.data;
+  },
+
+  confirmBorrowSlip: async (data: ConfirmBorrowSlipRequest): Promise<CreateBorrowSlipResponse> => {
+    const response = await api.post<CreateBorrowSlipResponse>('/borrow/staff/slip/confirm', data);
+    return response.data;
+  },
+
+  getBorrowConfig: async (): Promise<{ max_borrow_books: number; max_borrow_books_per_slip: number; max_borrow_days: number }> => {
+    const response = await api.get('/borrow/config');
+    return response.data;
+  },
+
+  renewBorrow: async (borrowId: string): Promise<{ success: boolean; message: string; due_at?: string; renewal_count?: number }> => {
+    const response = await api.post('/borrow/renew', { record_id: borrowId, borrow_id: borrowId });
+    return response.data;
+  },
+};
 </file>
 
 <file path="src/features/book/screens/BookCatalogScreen.tsx">
@@ -23649,133 +23753,295 @@ const styles = StyleSheet.create({
 });
 </file>
 
-<file path="src/api/borrow.ts">
-import api from './client';
-import { BorrowResponse, ReturnResponse, BorrowRecord, Book, BookWithStats, BookImportResponse, StaffPatronActiveBorrowsResponse, CreateBorrowSlipRequest, CreateBorrowSlipResponse, LookupBorrowSlipRequest, LookupBorrowSlipResponse, ConfirmBorrowSlipRequest } from '../types';
+<file path="src/features/library/screens/MyReservationsScreen.tsx">
+import React, { useState, useCallback, useMemo } from 'react';
+import { View, Image, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Text, Surface, Button, useTheme } from 'react-native-paper';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { useFocusEffect } from '@react-navigation/native';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getMyWaitlist, joinWaitlist, leaveWaitlist, WaitlistEntry } from '../../../api/borrow';
+import { AppTheme } from '../../../theme/DarkTheme';
+import { GradientHeader, SectionCard, EmptyState, GRADIENTS } from '../../../theme/MobileDesignSystem';
+import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
+import { UndoBar } from '../../../components/UndoBar';
+import SwipeReserveRow from '../../../components/SwipeReserveRow';
+import { useUndo } from '../../../lib/useUndo';
+import { devError } from '../../../utils/logger';
+import { useNetwork } from '../../../context/NetworkContext';
+import { useAuth } from '../../../context/AuthContext';
 
-export interface WaitlistEntry {
-  id: string;
-  book_id: string;
-  status: string;
-  created_at: string;
-  book: {
-    id: string;
-    isbn: string;
-    title: string;
-    author?: string;
-    cover_url?: string;
-  };
+interface MyReservationsScreenProps {
+  navigation: any;
 }
 
-export const getMyWaitlist = async (): Promise<{ items: WaitlistEntry[]; total: number }> => {
-  const response = await api.get<{ items: WaitlistEntry[]; total: number }>('/borrow/waitlist');
-  return response.data;
-};
+export default function MyReservationsScreen({ navigation }: MyReservationsScreenProps) {
+  const theme = useTheme() as AppTheme;
+  const c = theme.colors;
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const { isAuthenticated } = useAuth();
+  const [snackMsg, setSnackMsg] = useState('');
+  const [snackVisible, setSnackVisible] = useState(false);
+  const { hiddenIds, confirmingId, undo, cancelUndo, markConfirmed } = useUndo({ duration: 5000 });
+  const { isOnline } = useNetwork();
+  const qc = useQueryClient();
 
-export const joinWaitlist = async (bookId: string): Promise<{ id: string; book_id: string; status: string }> => {
-  const response = await api.post<{ id: string; book_id: string; status: string }>('/borrow/waitlist', { book_id: bookId });
-  return response.data;
-};
+  const {
+    data: waitlistData,
+    error: waitlistError,
+    isFetching,
+    refetch,
+  } = useQuery({
+    queryKey: ['myReservations'],
+    queryFn: () => getMyWaitlist(),
+    enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000,
+  });
 
-export const leaveWaitlist = async (waitlistId: string): Promise<void> => {
-  await api.delete(`/borrow/waitlist/${waitlistId}`);
-};
+  const entries: WaitlistEntry[] = waitlistData?.items || [];
+  const loadError = waitlistError ? (waitlistError as any)?.response?.data?.detail || (waitlistError as Error)?.message || 'Không thể tải danh sách nhận thông báo' : null;
+  const refreshing = isFetching;
 
-export const borrowApi = {
-  getBooksPage: async (skip: number, limit: number, search: string): Promise<{ items: Book[]; total: number }> => {
-    const { data } = await api.get('/borrow/books', { params: { skip, limit, search } });
-    return data;
-  },
-  borrowBook: async (barcode: string): Promise<BorrowResponse> => {
-    const response = await api.post<BorrowResponse>('/borrow/', { barcode });
-    return response.data;
-  },
+  useFocusEffect(
+    useCallback(() => {
+      if (isAuthenticated) {
+        refetch();
+      }
+    }, [isAuthenticated, refetch])
+  );
 
-  returnBook: async (barcode: string, note?: string): Promise<ReturnResponse> => {
-    const response = await api.post<ReturnResponse>('/borrow/staff-return', { barcode, note });
-    return response.data;
-  },
+  const handleCancel = useCallback((entry: WaitlistEntry) => {
+    if (!isOnline) {
+      Alert.alert('Yêu cầu mạng', 'Bạn cần kết nối internet để hủy nhận thông báo.');
+      return;
+    }
 
-  lookupByBarcode: async (barcode: string): Promise<BorrowRecord> => {
-    const response = await api.get<BorrowRecord>(`/borrow/barcode/${encodeURIComponent(barcode)}`);
-    return response.data;
-  },
+    undo(entry.id);
+  }, [isOnline, undo]);
 
-  getActiveBorrowsByStudentCode: async (studentCode: string): Promise<StaffPatronActiveBorrowsResponse> => {
-    const response = await api.get<StaffPatronActiveBorrowsResponse>(
-      `/borrow/staff/patrons/${encodeURIComponent(studentCode)}/active`,
-    );
-    return response.data;
-  },
+  const handleUndoCancel = useCallback(async () => {
+    if (!confirmingId || !isOnline) return;
+    try {
+      const entry = entries.find(e => e.id === confirmingId);
+      if (entry) {
+        await joinWaitlist(entry.book_id);
+        setSnackMsg(`Đã khôi phục nhận thông báo "${entry.book?.title || 'sách này'}"`);
+        setSnackVisible(true);
+      }
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail || error?.message || 'Không thể khôi phục nhận thông báo';
+      setSnackMsg(detail);
+      setSnackVisible(true);
+    } finally {
+      cancelUndo(confirmingId);
+    }
+  }, [confirmingId, isOnline, entries, joinWaitlist, cancelUndo]);
 
-  getPatronActiveBorrows: async (): Promise<StaffPatronActiveBorrowsResponse> => {
-    const response = await api.get<StaffPatronActiveBorrowsResponse>('/borrow/patron/active');
-    return response.data;
-  },
+  const commitCancellation = useCallback(async () => {
+    if (!confirmingId) return;
+    const title = entries.find(e => e.id === confirmingId)?.book?.title || 'sách này';
+    try {
+      await leaveWaitlist(confirmingId);
+      // Invalidate query to refetch fresh data from server
+      qc.invalidateQueries({ queryKey: ['myReservations'] });
+      setSnackMsg(`Đã hủy nhận thông báo "${title}"`);
+      setSnackVisible(true);
+    } catch (error: any) {
+      const msg = error?.response?.data?.detail || error?.message || 'Không thể hủy nhận thông báo';
+      setSnackMsg(msg);
+      setSnackVisible(true);
+      cancelUndo(confirmingId);
+    } finally {
+      markConfirmed(confirmingId);
+    }
+  }, [confirmingId, entries, leaveWaitlist, qc, cancelUndo, markConfirmed]);
 
-  returnByPatron: async (studentCode: string, barcodeOrIsbn: string, note?: string): Promise<ReturnResponse> => {
-    const response = await api.post<ReturnResponse>('/borrow/staff-return/by-patron', {
-      student_code: studentCode,
-      barcode_or_isbn: barcodeOrIsbn,
-      note,
-    });
-    return response.data;
-  },
+  const getStatusLabel = (status: string): string => {
+    switch (status) {
+      case 'waiting': return 'Đang theo dõi';
+      case 'notified': return 'Sách đã có sẵn';
+      case 'fulfilled': return 'Đã mượn';
+      default: return status;
+    }
+  };
 
-  getHistory: async (status?: string): Promise<BorrowRecord[]> => {
-    const params = status ? { status_filter: status } : {};
-    const response = await api.get<BorrowRecord[]>('/borrow/history', { params });
-    return response.data;
-  },
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: c.background }]} edges={['bottom']}>
+      <ScrollView
+        style={styles.flex}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => refetch()} tintColor={c.primary} />
+        }
+      >
+        <GradientHeader
+          title="Sách chờ nhận thông báo"
+          subtitle={entries.length > 0 ? `${entries.length} sách đang theo dõi` : 'Chưa có sách nào'}
+          icon="bell-ring-outline"
+        />
 
-  getBooks: async (skip = 0, limit = 50): Promise<Book[]> => {
-    const response = await api.get<{ items: Book[]; total: number } | Book[]>('/borrow/books', {
-      params: { skip, limit },
-    });
-    const data = response.data;
-    return Array.isArray(data) ? data : data.items || [];
-  },
+        <Surface style={[styles.infoBanner, { backgroundColor: c.surfaceVariant, borderColor: c.outline }]} elevation={0}>
+          <MaterialCommunityIcons name="information-outline" size={18} color={c.primary} style={{ marginRight: 8 }} />
+          <Text style={[styles.infoBannerText, { color: c.onSurfaceVariant }]}>
+            Khi có sách được trả về, bạn sẽ nhận được thông báo ngay. Thư viện phục vụ theo nguyên tắc bạn đọc đến trước phục vụ trước (không giữ chỗ).
+          </Text>
+        </Surface>
 
-  getBook: async (isbn: string): Promise<BookWithStats> => {
-    const response = await api.get<BookWithStats>(`/borrow/book/${isbn}`);
-    return response.data;
-  },
+        {loadError ? (
+          <EmptyState
+            icon="cloud-off-outline"
+            title={loadError}
+            action={<Button mode="outlined" onPress={() => refetch()} icon="refresh">Thử lại</Button>}
+          />
+        ) : entries.length === 0 ? (
+          <EmptyState icon="bell-off-outline" title="Bạn chưa đăng ký nhận thông báo nào" />
+        ) : (
+          <SectionCard title="Danh sách theo dõi" icon="bell-check-outline" accentColor={GRADIENTS.indigo[0]}>
+            {entries
+              .filter((entry) => !hiddenIds.includes(entry.id))
+              .map((entry) => {
+            const isNotified = entry.status === 'notified';
+            return (
+              <SwipeReserveRow
+                key={entry.id}
+                variant="cancel"
+                onCancel={() => handleCancel(entry)}
+              >
+                <Surface
+                  style={[styles.resCard, { backgroundColor: c.surface, borderColor: c.outline }]}
+                  elevation={0}
+                >
+                  <View style={[styles.resCardSpine, { backgroundColor: isNotified ? c.custom.success : c.primary }]} />
+                  {entry.book?.cover_url ? (
+                    <Image source={{ uri: entry.book.cover_url }} style={styles.bookCover} />
+                  ) : (
+                    <View style={[styles.bookCoverPlaceholder, { backgroundColor: c.surfaceVariant }]}>
+                      <MaterialCommunityIcons name="book-variant" size={24} color={c.onSurfaceVariant} />
+                    </View>
+                  )}
+                  <View style={styles.resContent}>
+                    <Text style={[styles.bookTitle, { color: c.onSurface }]} numberOfLines={2}>
+                      {entry.book?.title || entry.book_id}
+                    </Text>
+                    {entry.book?.author ? (
+                      <Text style={[styles.bookAuthor, { color: c.onSurfaceVariant }]} numberOfLines={1}>
+                        {entry.book.author}
+                      </Text>
+                    ) : null}
+                    {typeof entry.book?.available_copies === 'number' ? (
+                      <Text
+                        style={[
+                          styles.bookAuthor,
+                          {
+                            color: entry.book.available_copies > 0 ? c.custom.success : c.onSurfaceVariant,
+                            fontWeight: '600',
+                            marginTop: 2,
+                          },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {entry.book.available_copies > 0
+                          ? `Có sẵn: ${entry.book.available_copies} cuốn`
+                          : 'Hiện hết sách'}
+                      </Text>
+                    ) : null}
+                    <View style={styles.resMeta}>
+                      <Surface
+                        style={[
+                          styles.statusBadge,
+                          { backgroundColor: isNotified ? c.custom.success : c.primary },
+                        ]}
+                        elevation={0}
+                      >
+                        <Text style={[styles.statusBadgeText, { color: '#FFFFFF' }]}>
+                          {getStatusLabel(entry.status)}
+                        </Text>
+                      </Surface>
+                    </View>
+                  </View>
+                </Surface>
+              </SwipeReserveRow>
+            );
+            })}
+          </SectionCard>
+        )}
+      </ScrollView>
 
-  lookupBookByIsbn: async (isbn: string): Promise<BookWithStats> => {
-    const response = await api.get<BookWithStats>(`/borrow/book/${isbn}`);
-    return response.data;
-  },
+      <NoticeSnackbar
+        visible={snackVisible}
+        message={snackMsg}
+        severity={snackMsg.includes('hủy') ? 'success' : 'error'}
+        onDismiss={() => setSnackVisible(false)}
+      />
 
-  batchImportByIsbn: async (items: { isbn: string; quantity: number }[]): Promise<BookImportResponse> => {
-    const response = await api.post<BookImportResponse>('/borrow/isbn-import/batch', { items });
-    return response.data;
-  },
+      <UndoBar
+        visible={!!confirmingId}
+        message={`Đã hủy nhận thông báo "${entries.find(e => e.id === confirmingId)?.book?.title ?? ''}"`}
+        onUndo={handleUndoCancel}
+        onDismiss={commitCancellation}
+      />
+    </SafeAreaView>
+  );
+}
 
-  createSlip: async (data: CreateBorrowSlipRequest): Promise<CreateBorrowSlipResponse> => {
-    const response = await api.post<CreateBorrowSlipResponse>('/borrow/staff/slip/create', data);
-    return response.data;
-  },
-
-  lookupBorrowSlip: async (data: LookupBorrowSlipRequest): Promise<LookupBorrowSlipResponse> => {
-    const response = await api.post<LookupBorrowSlipResponse>('/borrow/staff/slip/lookup', data);
-    return response.data;
-  },
-
-  confirmBorrowSlip: async (data: ConfirmBorrowSlipRequest): Promise<CreateBorrowSlipResponse> => {
-    const response = await api.post<CreateBorrowSlipResponse>('/borrow/staff/slip/confirm', data);
-    return response.data;
-  },
-
-  getBorrowConfig: async (): Promise<{ max_borrow_books: number; max_borrow_books_per_slip: number; max_borrow_days: number }> => {
-    const response = await api.get('/borrow/config');
-    return response.data;
-  },
-
-  renewBorrow: async (borrowId: string): Promise<{ success: boolean; message: string; due_at?: string; renewal_count?: number }> => {
-    const response = await api.post('/borrow/renew', { record_id: borrowId, borrow_id: borrowId });
-    return response.data;
-  },
-};
+function createStyles(theme: AppTheme) {
+  const c = theme.colors;
+  return StyleSheet.create({
+    container: { flex: 1 },
+    flex: { flex: 1 },
+    resCard: {
+      marginHorizontal: 16,
+      marginTop: 10,
+      borderRadius: 10,
+      flexDirection: 'row',
+      overflow: 'hidden',
+      borderWidth: 0.5,
+      alignItems: 'center',
+    },
+    resCardSpine: { width: 4, alignSelf: 'stretch' },
+    bookCover: {
+      width: 48,
+      height: 66,
+      borderRadius: 4,
+      margin: 10,
+      marginRight: 0,
+    },
+    bookCoverPlaceholder: {
+      width: 48,
+      height: 66,
+      borderRadius: 4,
+      margin: 10,
+      marginRight: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    resContent: { flex: 1, padding: 10, gap: 4 },
+    bookTitle: { fontWeight: '600', fontSize: 14, lineHeight: 18 },
+    bookAuthor: { fontSize: 12 },
+    resMeta: { flexDirection: 'row', gap: 6, marginTop: 6, flexWrap: 'wrap' },
+    statusBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 4,
+    },
+    statusBadgeText: { fontSize: 11, fontWeight: '700' },
+    infoBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginHorizontal: 16,
+      marginTop: 12,
+      marginBottom: 4,
+      padding: 12,
+      borderRadius: 8,
+      borderWidth: 0.5,
+    },
+    infoBannerText: {
+      flex: 1,
+      fontSize: 12,
+      lineHeight: 16,
+    },
+  });
+}
 </file>
 
 <file path="src/api/client.ts">
@@ -24606,6 +24872,8 @@ export interface BorrowRecord {
   return_method?: string;
   note?: string;
   book?: Book;
+  copy?: { id: string; barcode: string; condition?: string | null; status?: string | null; shelf_location?: string | null } | null;
+  return_condition?: string;
 }
 
 export interface BorrowResponse {
@@ -24828,7 +25096,7 @@ export interface LookupBorrowSlipItem {
   can_borrow: boolean;
   reason: string | null;
   book: BookWithStats | null;
-  copy: { id: string; book_id: string; barcode: string; is_available: boolean; shelf_location: string | null } | null;
+  copy: { id: string; book_id: string; barcode: string; is_available: boolean; shelf_location: string | null; condition?: string | null; status?: string | null } | null;
 }
 
 export interface LookupBorrowSlipResponse {
@@ -24868,6 +25136,76 @@ export interface NotificationListResponse {
   items: Notification[];
   total: number;
   unread: number;
+}
+</file>
+
+<file path="src/navigation/types.ts">
+import { NavigatorScreenParams } from '@react-navigation/native';
+import { Notification } from '../types';
+
+export type AuthStackParamList = {
+  Login: undefined;
+  Register: undefined;
+  FaceLogin: undefined;
+  ForgotPassword: undefined;
+};
+
+export type PatronTabParamList = {
+  Home: undefined;
+  AIChat: undefined;
+  BookRecommendations: undefined;
+  BookCatalog: undefined;
+  Profile: undefined;
+};
+
+export type StaffTabParamList = {
+  Home: undefined;
+  Schedule: undefined;
+  AIChat: undefined;
+  Profile: undefined;
+};
+
+export type PatronStackParamList = {
+  MainTabs: NavigatorScreenParams<PatronTabParamList>;
+  NotificationDetail: { notification: Notification };
+  FaceCamera: undefined;
+  ChangePassword: undefined;
+  BookRecommendations: undefined;
+  MyReservations: undefined;
+  BookCatalog: undefined;
+  Notifications: undefined;
+  History: undefined;
+  EditProfile: undefined;
+  LibraryTour: undefined;
+};
+
+export type StaffStackParamList = {
+  MainTabs: NavigatorScreenParams<StaffTabParamList>;
+  NotificationDetail: { notification: Notification };
+  FaceCamera: undefined;
+  ChangePassword: undefined;
+  ImportBooks: undefined;
+  AIHealth: undefined;
+  AIChat: undefined;
+  Notifications: undefined;
+  StaffReturn: undefined;
+  StaffBorrow: undefined;
+  Schedule: undefined;
+  History: undefined;
+  EditProfile: undefined;
+  LibraryTour: undefined;
+};
+
+export type RootStackParamList = {
+  Auth: NavigatorScreenParams<AuthStackParamList>;
+  Patron: NavigatorScreenParams<PatronStackParamList>;
+  Staff: NavigatorScreenParams<StaffStackParamList>;
+};
+
+declare global {
+  namespace ReactNavigation {
+    interface RootParamList extends RootStackParamList {}
+  }
 }
 </file>
 
@@ -25106,76 +25444,6 @@ export const authApi = {
     });
   },
 };
-</file>
-
-<file path="src/navigation/types.ts">
-import { NavigatorScreenParams } from '@react-navigation/native';
-import { Notification } from '../types';
-
-export type AuthStackParamList = {
-  Login: undefined;
-  Register: undefined;
-  FaceLogin: undefined;
-  ForgotPassword: undefined;
-};
-
-export type PatronTabParamList = {
-  Home: undefined;
-  AIChat: undefined;
-  BookRecommendations: undefined;
-  BookCatalog: undefined;
-  Profile: undefined;
-};
-
-export type StaffTabParamList = {
-  Home: undefined;
-  Schedule: undefined;
-  AIChat: undefined;
-  Profile: undefined;
-};
-
-export type PatronStackParamList = {
-  MainTabs: NavigatorScreenParams<PatronTabParamList>;
-  NotificationDetail: { notification: Notification };
-  FaceCamera: undefined;
-  ChangePassword: undefined;
-  BookRecommendations: undefined;
-  MyReservations: undefined;
-  BookCatalog: undefined;
-  Notifications: undefined;
-  History: undefined;
-  EditProfile: undefined;
-  LibraryTour: undefined;
-};
-
-export type StaffStackParamList = {
-  MainTabs: NavigatorScreenParams<StaffTabParamList>;
-  NotificationDetail: { notification: Notification };
-  FaceCamera: undefined;
-  ChangePassword: undefined;
-  ImportBooks: undefined;
-  AIHealth: undefined;
-  AIChat: undefined;
-  Notifications: undefined;
-  StaffReturn: undefined;
-  StaffBorrow: undefined;
-  Schedule: undefined;
-  History: undefined;
-  EditProfile: undefined;
-  LibraryTour: undefined;
-};
-
-export type RootStackParamList = {
-  Auth: NavigatorScreenParams<AuthStackParamList>;
-  Patron: NavigatorScreenParams<PatronStackParamList>;
-  Staff: NavigatorScreenParams<StaffStackParamList>;
-};
-
-declare global {
-  namespace ReactNavigation {
-    interface RootParamList extends RootStackParamList {}
-  }
-}
 </file>
 
 <file path="package.json">
