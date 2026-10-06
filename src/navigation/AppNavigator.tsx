@@ -22,7 +22,6 @@ import LoginScreen from '../features/auth/screens/LoginScreen';
 import NotificationScreen from '../features/notifications/screens/NotificationScreen';
 import NotificationDetailScreen from '../features/notifications/screens/NotificationDetailScreen';
 import ProfileScreen from '../features/profile/screens/ProfileScreen';
-import RegisterScreen from '../features/auth/screens/RegisterScreen';
 import ReturnScreen from '../features/borrow/screens/ReturnScreen';
 import ScheduleScreen from '../features/schedule/screens/ScheduleScreen';
 import StaffBorrowScreen from '../features/borrow/screens/StaffBorrowScreen';
@@ -56,7 +55,6 @@ function AuthNavigator() {
       }}
     >
       <AuthStack.Screen name="Login" component={LoginScreen} />
-      <AuthStack.Screen name="Register" component={RegisterScreen} />
       <AuthStack.Screen
         name="FaceLogin"
         component={FaceLoginScreen}
@@ -467,7 +465,7 @@ function StaffStackNavigator() {
 
 export default function AppNavigator() {
   const theme = useTheme();
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { isAuthenticated, isLoading, user, mustChangePassword } = useAuth();
   const { activeHazard, dismissHazard } = useNotification();
 
   const navigationTheme = useMemo(() => {
@@ -499,6 +497,12 @@ export default function AppNavigator() {
         <RootStack.Navigator screenOptions={{ headerShown: false }}>
           {!isAuthenticated ? (
             <RootStack.Screen name="Auth" component={AuthNavigator} />
+          ) : mustChangePassword ? (
+            <RootStack.Screen
+              name="ForceChangePassword"
+              component={ChangePasswordScreen}
+              options={{ gestureEnabled: false }}
+            />
           ) : isStaff ? (
             <RootStack.Screen name="Staff" component={StaffStackNavigator} />
           ) : (

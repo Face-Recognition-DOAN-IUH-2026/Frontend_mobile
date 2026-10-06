@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { API_BASE_NO_PATH } from '../config/api';
-import { devError } from '../utils/logger';
+import { devWarn } from '../utils/logger';
 
 interface NetworkContextType {
   isOnline: boolean;
@@ -31,8 +31,14 @@ export const NetworkProvider: React.FC<{ children: ReactNode }> = ({ children })
       try {
         const res = await fetch(`${API_BASE_NO_PATH}/healthz`, { method: 'HEAD', cache: 'no-store', signal: controller.signal });
         if (mounted) setNetworkState({ isOnline: res.ok, isConnected: true });
-} catch (err) {
-      devError('[Network] Health check failed:', err);
+} catch (err: any) {
+      const msg = err?.message ?? String(err);
+      // Abort khi unmount/timeout là bình thường, không log để đỡ ồn
+      const isAbort =
+        err?.name === 'AbortError' || /canceled|cancelled|abort/i.test(msg);
+      if (!isAbort) {
+        devWarn('[Network] Health check failed:', `${API_BASE_NO_PATH}/healthz`, msg);
+      }
       if (mounted) setNetworkState({ isOnline: false, isConnected: false });
     } finally {
       clearTimeout(timeout);

@@ -17,13 +17,21 @@ import {
 import { Text, Button, ProgressBar, ActivityIndicator, useTheme } from "react-native-paper";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import {
+  FaceDetectionProvider,
+  useFacesInPhoto,
+} from "@infinitered/react-native-mlkit-face-detection";
+import type { RNMLKitFace } from "@infinitered/react-native-mlkit-face-detection";
 import { AppTheme } from "../theme/DarkTheme";
 import { MotionHaptics } from "../theme/motion";
+import { assessPose } from "../utils/facePose";
 
 interface AutoFaceCaptureProps {
   onFilesReady: (images: string[]) => Promise<void> | void;
   onError?: (error: string) => void;
   onCancel?: () => void;
+  /** Các góc worker báo lỗi (để viền đỏ + badge lý do ở màn xem lại) */
+  failedAngles?: { id: string; label: string; error: string | null }[];
 }
 
 interface Angle {
@@ -71,10 +79,11 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const OVAL_W = Math.min(SCREEN_WIDTH * 0.7, 300);
 const OVAL_H = OVAL_W * 1.34;
 
-export default function AutoFaceCapture({
+function AutoFaceCaptureInner({
   onFilesReady,
   onError,
   onCancel,
+  failedAngles = [],
 }: AutoFaceCaptureProps) {
   const theme = useTheme<AppTheme>();
   const c = theme.colors;
@@ -430,6 +439,10 @@ export default function AutoFaceCapture({
           fontSize: 11,
           fontWeight: "800",
         },
+        reviewErrorBadge: {
+          top: 34,
+          backgroundColor: c.error,
+        },
         retakeOverlay: {
           position: "absolute",
           bottom: 8,
@@ -463,22 +476,52 @@ export default function AutoFaceCapture({
   );
 
   const cameraRef = useRef<CameraView>(null);
-  const [captured, setCaptured] = useState<string[]>([]);
+  const [captured, setCaptured] = useState<(string | null)[]>([null, null, null, null]);
   const [currentIdx, setCurrentIdx] = useState(-1);
   const [countdownVal, setCountdownVal] = useState<number | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [consent, setConsent] = useState(false);
-  const capturedRef = useRef<string[]>([]);
+  const capturedRef = useRef<(string | null)[]>([null, null, null, null]);
   const idxRef = useRef(-1);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const poseRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const attemptRef = useRef(0);
+  const pendingBase64Ref = useRef<string | null>(null);
+  const commitCaptureRef = useRef<(base64: string, idx: number) => void>(() => {});
   const cancelledRef = useRef(false);
+  // Pose-gate: verify tư thế bằng ML Kit trước khi chấp nhận ảnh
+  const [verifyUri, setVerifyUri] = useState<string | null>(null);
+  const [poseFeedback, setPoseFeedback] = useState<string | null>(null);
+  const { faces, status: faceStatus } = useFacesInPhoto(verifyUri ?? undefined);
+  const verifying = verifyUri !== null;
+  const MAX_POSE_ATTEMPTS = 3;
+  /**
+   * Camera trước lật ảnh selfie nên dấu Euler Y của ML Kit bị đảo so với
+   * hướng quay thực của người dùng. Nhân -1 để khớp ngưỡng image-space
+   * trong utils/facePose. Đã kiểm chứng: góc chính diện (đối xứng) luôn
+   * qua, còn nghiêng trái/phải không bao giờ qua trước khi đảo dấu.
+   */
+  const MIRROR_YAW = -1;
+  // Debug overlay: hiện Y/X/attempt để kiểm chứng thực tế trên máy
+  const [poseDebug, setPoseDebug] = useState<string | null>(null);
   const scanAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     return () => {
       cancelledRef.current = true;
       if (timerRef.current) clearInterval(timerRef.current);
+      if (poseRetryRef.current) clearTimeout(poseRetryRef.current);
     };
+  }, []);
+
+  const clearVerifyState = useCallback(() => {
+    if (poseRetryRef.current) clearTimeout(poseRetryRef.current);
+    poseRetryRef.current = null;
+    pendingBase64Ref.current = null;
+    attemptRef.current = 0;
+    setVerifyUri(null);
+    setPoseFeedback(null);
+    setPoseDebug(null);
   }, []);
 
   useEffect(() => {
@@ -507,6 +550,93 @@ export default function AutoFaceCapture({
     outputRange: [14, OVAL_H - 14],
   });
 
+  // Chụp lại 1 frame để verify tư thế (dùng khi sai hướng, không đếm ngược lại)
+  const snapForVerify = useCallback(async () => {
+    if (!cameraRef.current || cancelledRef.current) return;
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        base64: true,
+        quality: 0.9,
+        skipProcessing: true,
+      });
+      if (cancelledRef.current) return;
+      if (!photo?.base64 || !photo?.uri) {
+        onError?.('Không thể chụp ảnh');
+        return;
+      }
+      pendingBase64Ref.current = photo.base64;
+      setVerifyUri(photo.uri);
+    } catch {
+      onError?.('Lỗi khi chụp ảnh');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onError]);
+
+  const retryPoseAttempt = useCallback(
+    (hint: string) => {
+      attemptRef.current += 1;
+      if (attemptRef.current >= MAX_POSE_ATTEMPTS) {
+        // Quá nhiều lần sai: chấp nhận ảnh cuối để backend chấm (tránh kẹt vô hạn)
+        const fallback = pendingBase64Ref.current;
+        clearVerifyState();
+        if (fallback) commitCaptureRef.current(fallback, idxRef.current);
+        return;
+      }
+      setPoseFeedback(`${hint} — giữ yên để chụp lại (lần ${attemptRef.current}/${MAX_POSE_ATTEMPTS})...`);
+      if (poseRetryRef.current) clearTimeout(poseRetryRef.current);
+      poseRetryRef.current = setTimeout(() => {
+        snapForVerify();
+      }, 1200);
+    },
+    [clearVerifyState, snapForVerify],
+  );
+
+  // Xử lý kết quả detect ML Kit cho frame vừa chụp
+  useEffect(() => {
+    if (!verifyUri) return;
+    // Chờ detect xong (done) hoặc lỗi hẳn (error); các trạng thái giữa thì bỏ qua
+    if (faceStatus !== 'done' && faceStatus !== 'error') return;
+    const base64 = pendingBase64Ref.current;
+    if (!base64) {
+      clearVerifyState();
+      return;
+    }
+    const idx = idxRef.current;
+    if (faceStatus === 'error' || !faces || faces.length === 0) {
+      if (faceStatus === 'error') {
+        // Detector lỗi: rớt về hành vi cũ (chấp nhận ảnh)
+        clearVerifyState();
+        commitCaptureRef.current(base64, idx);
+        return;
+      }
+      retryPoseAttempt('Không thấy khuôn mặt trong khung hình');
+      return;
+    }
+    if (faces.length > 1) {
+      retryPoseAttempt('Chỉ giữ 1 khuôn mặt trong khung hình');
+      return;
+    }
+    const face: RNMLKitFace = faces[0];
+    const rawY = face.headEulerAngleY ?? null;
+    const rawX = face.headEulerAngleX ?? null;
+    setPoseDebug(
+      `Y:${rawY === null ? '-' : rawY.toFixed(0)} X:${rawX === null ? '-' : rawX.toFixed(0)} · lần ${attemptRef.current + 1}/${MAX_POSE_ATTEMPTS}`,
+    );
+    const verdict = assessPose(
+      rawY === null ? null : rawY * MIRROR_YAW,
+      rawX,
+      ANGLES[idx].id,
+    );
+    if (verdict.ok) {
+      clearVerifyState();
+      MotionHaptics.success();
+      commitCaptureRef.current(base64, idx);
+    } else {
+      retryPoseAttempt(verdict.hint);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verifyUri, faceStatus, faces]);
+
   const runCountdown = useCallback(
     (idx: number) => {
       if (idx < 0 || idx >= ANGLES.length) return;
@@ -532,25 +662,15 @@ export default function AutoFaceCapture({
               skipProcessing: true,
             });
             if (cancelledRef.current) return;
-            if (!photo?.base64) {
+            if (!photo?.base64 || !photo?.uri) {
               onError?.("Không thể chụp ảnh");
               return;
             }
-            MotionHaptics.success();
-            capturedRef.current = [...capturedRef.current, photo.base64];
-            setCaptured([...capturedRef.current]);
-            const nextIdx = idxRef.current + 1;
-            if (nextIdx >= ANGLES.length) {
-              setIsRunning(false);
-              setCurrentIdx(-1);
-            } else {
-              setTimeout(() => {
-                if (!cancelledRef.current) {
-                  setCurrentIdx(nextIdx);
-                  runCountdown(nextIdx);
-                }
-              }, 900);
-            }
+            // Pose-gate: verify tư thế bằng ML Kit trước khi chấp nhận ảnh
+            pendingBase64Ref.current = photo.base64;
+            attemptRef.current = 0;
+            setPoseFeedback("Đang kiểm tra tư thế...");
+            setVerifyUri(photo.uri);
           } catch {
             onError?.("Lỗi khi chụp ảnh");
           }
@@ -562,60 +682,97 @@ export default function AutoFaceCapture({
     [onError],
   );
 
+  const commitCapture = useCallback(
+    (base64: string, idx: number) => {
+      MotionHaptics.success();
+      const slots = [...capturedRef.current];
+      slots[idx] = base64;
+      capturedRef.current = slots;
+      setCaptured([...slots]);
+      // Góc tiếp theo = ô trống đầu tiên (chụp lại 1 góc không xóa các góc đã đạt)
+      const nextIdx = slots.findIndex((v) => v === null);
+      if (nextIdx === -1) {
+        setIsRunning(false);
+        setCurrentIdx(-1);
+      } else {
+        setTimeout(() => {
+          if (!cancelledRef.current) {
+            setCurrentIdx(nextIdx);
+            runCountdown(nextIdx);
+          }
+        }, 900);
+      }
+    },
+    [runCountdown],
+  );
+  commitCaptureRef.current = commitCapture;
+
+  const resetCaptures = useCallback(() => {
+    const empty: (string | null)[] = [null, null, null, null];
+    capturedRef.current = empty;
+    setCaptured([...empty]);
+  }, []);
+
   const startSequence = useCallback(() => {
     if (!consent) return;
     MotionHaptics.tap();
-    capturedRef.current = [];
-    setCaptured([]);
+    clearVerifyState();
+    resetCaptures();
     cancelledRef.current = false;
     setIsRunning(true);
     setCurrentIdx(0);
     runCountdown(0);
-  }, [runCountdown, consent]);
+  }, [runCountdown, consent, clearVerifyState, resetCaptures]);
 
   const cancelSequence = useCallback(() => {
     cancelledRef.current = true;
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = null;
-    capturedRef.current = [];
-    setCaptured([]);
+    clearVerifyState();
+    resetCaptures();
     setIsRunning(false);
     setCurrentIdx(-1);
     setCountdownVal(null);
     cancelledRef.current = false;
-  }, []);
+  }, [clearVerifyState, resetCaptures]);
 
   const retakeAngle = useCallback(
     (idx: number) => {
       MotionHaptics.tap();
-      capturedRef.current = capturedRef.current.slice(0, idx);
-      setCaptured([...capturedRef.current]);
+      clearVerifyState();
+      // Chỉ xóa đúng ô góc đó, giữ nguyên các góc đã đạt
+      const slots = [...capturedRef.current];
+      slots[idx] = null;
+      capturedRef.current = slots;
+      setCaptured([...slots]);
       cancelledRef.current = false;
       setIsRunning(true);
       setCurrentIdx(idx);
       runCountdown(idx);
     },
-    [runCountdown],
+    [runCountdown, clearVerifyState],
   );
 
   const retakeAll = useCallback(() => {
     MotionHaptics.tap();
-    capturedRef.current = [];
-    setCaptured([]);
+    clearVerifyState();
+    resetCaptures();
     cancelledRef.current = false;
     setIsRunning(true);
     setCurrentIdx(0);
     runCountdown(0);
-  }, [runCountdown]);
+  }, [runCountdown, clearVerifyState, resetCaptures]);
 
-  const allCaptured = captured.length === ANGLES.length;
+  const allCaptured = captured.every((v) => v !== null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const handleSubmit = async () => {
     if (!allCaptured || isSubmitting) return;
     MotionHaptics.tap();
     setIsSubmitting(true);
     try {
-      await onFilesReady(captured);
+      const images = captured.filter((v): v is string => v !== null);
+      if (images.length !== ANGLES.length) return;
+      await onFilesReady(images);
     } finally {
       setIsSubmitting(false);
     }
@@ -659,18 +816,29 @@ export default function AutoFaceCapture({
     return (
       <ScrollView style={styles.reviewScroll} contentContainerStyle={styles.reviewInner}>
         <Text style={styles.reviewTitle}>Xem lại ảnh đã chụp</Text>
-        <Text style={styles.reviewSub}>Chạm vào nút chụp lại nếu ảnh chưa rõ nét</Text>
+        <Text style={styles.reviewSub}>
+          {failedAngles.length > 0
+            ? 'Các góc viền đỏ chưa đạt yêu cầu, chạm "Chụp lại" để chụp riêng góc đó'
+            : 'Chạm vào nút chụp lại nếu ảnh chưa rõ nét'}
+        </Text>
         <View style={styles.reviewGrid}>
-          {ANGLES.map((a, i) => (
-            <View key={a.id} style={styles.reviewCard}>
+          {ANGLES.map((a, i) => {
+            const failed = failedAngles.find((f) => f.id === a.id);
+            return (
+            <View key={a.id} style={[styles.reviewCard, failed && { borderColor: c.error }]}>
               <Image
-                source={{ uri: `data:image/jpeg;base64,${captured[i]}` }}
+                source={{ uri: `data:image/jpeg;base64,${captured[i] ?? ''}` }}
                 style={styles.reviewImg}
                 resizeMode="cover"
               />
               <View style={styles.reviewBadge}>
                 <Text style={styles.reviewBadgeText}>{a.label}</Text>
               </View>
+              {failed ? (
+                <View style={[styles.reviewBadge, styles.reviewErrorBadge]}>
+                  <Text style={styles.reviewBadgeText}>Lỗi, cần chụp lại</Text>
+                </View>
+              ) : null}
               <TouchableOpacity
                 style={styles.retakeOverlay}
                 activeOpacity={0.7}
@@ -680,7 +848,8 @@ export default function AutoFaceCapture({
                 <Text style={styles.retakeOverlayText}>Chụp lại</Text>
               </TouchableOpacity>
             </View>
-          ))}
+            );
+          })}
         </View>
         <View style={styles.noteCard}>
           <MaterialCommunityIcons name="shield-check" size={20} color={c.custom.success} />
@@ -817,7 +986,7 @@ export default function AutoFaceCapture({
               key={a.id}
               style={[
                 styles.segment,
-                i < captured.length && { backgroundColor: c.custom.success },
+                i < captured.length && captured[i] !== null && { backgroundColor: c.custom.success },
                 i === currentIdx && { backgroundColor: c.primary },
               ]}
             />
@@ -839,6 +1008,22 @@ export default function AutoFaceCapture({
         <View style={styles.ovalCenter} pointerEvents="none">
           <View style={[styles.ovalBorder, { borderColor: ovalColor }]} />
         </View>
+        {poseDebug ? (
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              left: 10,
+              bottom: 10,
+              backgroundColor: 'rgba(0,0,0,0.65)',
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+              borderRadius: 6,
+            }}
+          >
+            <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'monospace' }}>{poseDebug}</Text>
+          </View>
+        ) : null}
         <View style={styles.ovalCenter} pointerEvents="none">
           <View style={styles.ovalClip}>
             {!isCounting && !showSuccess ? (
@@ -896,7 +1081,11 @@ export default function AutoFaceCapture({
         />
         <View style={styles.sheetFooter}>
           <Text style={styles.sheetHint}>
-            {showSuccess ? "Đang chuyển sang góc tiếp theo..." : "Giữ yên điện thoại khi đếm ngược"}
+            {verifying
+              ? poseFeedback ?? 'Đang kiểm tra tư thế...'
+              : showSuccess
+                ? 'Đang chuyển sang góc tiếp theo...'
+                : 'Giữ yên điện thoại khi đếm ngược'}
           </Text>
           <Button mode="text" compact onPress={cancelSequence} textColor={c.error}>
             Hủy
@@ -904,5 +1093,13 @@ export default function AutoFaceCapture({
         </View>
       </View>
     </View>
+  );
+}
+
+export default function AutoFaceCapture(props: AutoFaceCaptureProps) {
+  return (
+    <FaceDetectionProvider>
+      <AutoFaceCaptureInner {...props} />
+    </FaceDetectionProvider>
   );
 }

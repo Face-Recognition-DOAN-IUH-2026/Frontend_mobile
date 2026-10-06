@@ -1,7 +1,7 @@
 module.exports = {
   ...require('@react-native/jest-preset'),
   testMatch: ['**/__tests__/**/*.test.[jt]s?(x)'],
-  setupFilesAfterEnv: ['<rootDir>/jest.haptics.js'],
+  setupFilesAfterEnv: ['<rootDir>/jest.haptics.js', '<rootDir>/jest.setup.js'],
   transform: {
     ...require('@react-native/jest-preset').transform,
     '^.+\\.(ts|tsx)$': ['ts-jest', { tsconfig: 'tsconfig.jest.json' }],
@@ -11,6 +11,7 @@ module.exports = {
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
+    '^expo-notifications$': '<rootDir>/src/__tests__/mocks/expoNotifications.js',
   },
   testPathIgnorePatterns: ['/node_modules/', '/android/', '/ios/'],
   collectCoverageFrom: [

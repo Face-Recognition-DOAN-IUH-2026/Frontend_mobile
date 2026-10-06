@@ -11,6 +11,12 @@ import { useAuth } from '../../../context/AuthContext';
 import { useTheme } from 'react-native-paper';
 import { AppTheme } from '../../../theme/DarkTheme';
 import { devError } from '../../../utils/logger';
+import {
+  extractFailedAngles,
+  buildAngleErrorMessage,
+  mapEnrollError,
+  FailedAngle,
+} from '../../../utils/faceEnrollErrors';
 
 interface FaceCameraScreenProps {
   navigation: any;
@@ -22,6 +28,7 @@ export default function FaceCameraScreen({ navigation }: FaceCameraScreenProps) 
   const { patron } = useAuth();
   const [isUploading, setIsUploading] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [failedAngles, setFailedAngles] = useState<FailedAngle[]>([]);
 
   const handleFilesReady = async (images: string[]) => {
     const patronId = patron?.id;
@@ -30,6 +37,7 @@ export default function FaceCameraScreen({ navigation }: FaceCameraScreenProps) 
       return;
     }
 
+    setFailedAngles([]);
     setIsUploading(true);
     try {
       const formData = new FormData();
@@ -66,8 +74,22 @@ export default function FaceCameraScreen({ navigation }: FaceCameraScreenProps) 
       ]);
     } catch (error: any) {
       devError('[FaceCamera] enroll error:', error?.response?.data || error?.message || error);
-      const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || 'Đăng ký khuôn mặt thất bại';
-      Alert.alert('Lỗi', message);
+      // Ưu tiên chi tiết từng góc từ worker (giống web), thay vì câu chung "N angle(s) failed"
+      const rawResults =
+        error?.angleResults ??
+        error?.response?.data?.result?.results ??
+        error?.response?.data?.results;
+      const failed = extractFailedAngles(rawResults ? { results: rawResults } : error?.response?.data?.result);
+      const fallback = mapEnrollError(
+        error?.response?.data?.detail || error?.response?.data?.error || error?.message,
+        'Đăng ký khuôn mặt thất bại',
+      );
+      const message =
+        failed.length > 0
+          ? `${buildAngleErrorMessage(failed, fallback)}\nToàn bộ đã rollback, vui lòng chụp lại các góc lỗi.`
+          : fallback;
+      setFailedAngles(failed);
+      Alert.alert('Đăng ký chưa đạt', message);
     } finally {
       setIsUploading(false);
     }
@@ -89,6 +111,7 @@ export default function FaceCameraScreen({ navigation }: FaceCameraScreenProps) 
             onFilesReady={handleFilesReady}
             onError={(msg) => setCameraError(msg)}
             onCancel={() => navigation.goBack()}
+            failedAngles={failedAngles}
           />
         )}
         {isUploading ? (

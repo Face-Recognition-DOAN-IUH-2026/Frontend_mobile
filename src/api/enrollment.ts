@@ -6,7 +6,10 @@ export async function waitForEnrollment(jobId: string): Promise<void> {
   while (Date.now() < deadline) {
     const { data } = await api.get(`/tasks/${encodeURIComponent(jobId)}`, { timeout: 10000 });
     if (['FAILURE', 'ERROR', 'REVOKED'].includes(data.status) || data.result?.error || data.result?.status === 'error') {
-      throw new Error(data.result?.error || 'Xử lý khuôn mặt thất bại');
+      const err: any = new Error(data.result?.error || 'Xử lý khuôn mặt thất bại');
+      // Giữ chi tiết từng góc để UI báo rõ góc nào lỗi (giống web)
+      err.angleResults = data.result?.results;
+      throw err;
     }
     if (data.status === 'SUCCESS') return;
     await new Promise(resolve => setTimeout(resolve, 2000));
