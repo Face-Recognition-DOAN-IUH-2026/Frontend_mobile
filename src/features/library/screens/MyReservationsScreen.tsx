@@ -172,6 +172,23 @@ export default function MyReservationsScreen({ navigation }: MyReservationsScree
                         {entry.book.author}
                       </Text>
                     ) : null}
+                    {typeof entry.book?.available_copies === 'number' ? (
+                      <Text
+                        style={[
+                          styles.bookAuthor,
+                          {
+                            color: entry.book.available_copies > 0 ? c.custom.success : c.onSurfaceVariant,
+                            fontWeight: '600',
+                            marginTop: 2,
+                          },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {entry.book.available_copies > 0
+                          ? `Có sẵn: ${entry.book.available_copies} cuốn`
+                          : 'Hiện hết sách'}
+                      </Text>
+                    ) : null}
                     <View style={styles.resMeta}>
                       <Surface
                         style={[

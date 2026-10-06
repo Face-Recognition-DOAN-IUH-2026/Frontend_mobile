@@ -12,6 +12,8 @@ export interface WaitlistEntry {
     title: string;
     author?: string;
     cover_url?: string;
+    total_copies?: number;
+    available_copies?: number;
   };
 }
 
