@@ -415,7 +415,6 @@ function PatronHistoryCard({ data, theme, styles }: { data: any; theme: AppTheme
         const statusColor = item.status === 'returned' ? '#10B981' : item.status === 'overdue' ? '#EF4444' : '#3B82F6';
         return (
           <View key={idx} style={[styles.bookItem, idx === items.length - 1 && styles.bookItemLast]}>
-            <View style={[styles.bookAccentBar, { backgroundColor: statusColor }]} />
             <View style={styles.bookContent}>
               <Text variant="bodyMedium" style={styles.bookTitle}>{item.book?.title || item.title || 'Sách'}</Text>
               <View style={styles.bookMetaRow}>
@@ -644,13 +643,6 @@ function createStyles(theme: AppTheme) {
     },
     bookItemLast: {
       borderBottomWidth: 0,
-    },
-    bookAccentBar: {
-      width: 3,
-      backgroundColor: theme.colors.primary,
-      borderRadius: 2,
-      marginVertical: 8,
-      marginLeft: 1,
     },
     bookContent: {
       flex: 1,
