@@ -59,8 +59,7 @@ export function StatCard({
   const c = theme.colors;
 
   return (
-    <Surface style={[dhStyles.statCard, { borderColor: c.outline }]} elevation={0}>
-      <View style={[dhStyles.statAccent, { backgroundColor: gradient[0] }]} />
+    <Surface style={[dhStyles.statCard, { borderColor: c.outline }]} elevation={1}>
       <View style={dhStyles.statRow}>
         <Avatar.Icon size={40} icon={icon} style={[dhStyles.statIcon, { backgroundColor: gradient[0] + '20' }]} color={gradient[0]} />
         <View style={{ flex: 1 }}>
@@ -97,13 +96,12 @@ export function SectionCard({
   const c = theme.colors;
 
   return (
-    <Surface style={[dhStyles.sectionCard, { borderColor: c.outline }, style]} elevation={0}>
-      {accentColor && <View style={[dhStyles.sectionAccent, { backgroundColor: accentColor }]} />}
+    <Surface style={[dhStyles.sectionCard, { borderColor: c.outline }, style]} elevation={1}>
       {(title || right) ? (
         <View style={dhStyles.sectionHeader}>
           <View style={dhStyles.sectionHeaderLeft}>
-            {icon ? <MaterialCommunityIcons name={icon as any} size={18} color={c.primary} /> : null}
-            {title ? <Text variant="titleSmall" style={[dhStyles.sectionTitle, { color: c.onSurface }]}>{title}</Text> : null}
+            {icon ? <MaterialCommunityIcons name={icon as any} size={18} color={accentColor || c.primary} /> : null}
+            {title ? <Text variant="titleSmall" style={[dhStyles.sectionTitle, { color: accentColor || c.onSurface }]}>{title}</Text> : null}
           </View>
           {right}
         </View>
@@ -331,13 +329,6 @@ const dhStyles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 0,
   },
-  statAccent: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 3,
-  },
   statRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -372,13 +363,6 @@ const dhStyles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
     borderWidth: 0,
-  },
-  sectionAccent: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 3,
   },
   sectionHeader: {
     flexDirection: 'row',

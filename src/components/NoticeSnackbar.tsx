@@ -38,7 +38,7 @@ export function NoticeSnackbar({ visible, message, severity = 'info', onDismiss 
       visible={visible}
       onDismiss={onDismiss}
       duration={3000}
-      style={[nsStyles.snackbar, { backgroundColor: c.inverseSurface, borderLeftWidth: 3, borderLeftColor: accentColor }]}
+      style={[nsStyles.snackbar, { backgroundColor: c.inverseSurface }]}
       action={{ label: 'OK', onPress: onDismiss }}
     >
       <View style={nsStyles.content}>

@@ -167,14 +167,6 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
       borderTopWidth: 0.5,
       borderTopColor: c.outline,
     },
-    manualAccent: {
-      position: 'absolute',
-      left: 0,
-      top: 0,
-      bottom: 0,
-      width: 3,
-      backgroundColor: c.primary,
-    },
     manualInputField: {
       backgroundColor: 'transparent',
     },
@@ -518,7 +510,6 @@ export default function ImportBooksScreen({ navigation }: ImportBooksScreenProps
         <Text style={styles.scanText}>Đặt mã vạch trong khung hình</Text>
       </View>
       <Surface style={styles.manualInput} elevation={0}>
-        <View style={styles.manualAccent} />
         <TextInput
           label="Nhập ISBN thủ công"
           value={manualIsbn}
