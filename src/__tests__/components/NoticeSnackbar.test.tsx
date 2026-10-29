@@ -1,5 +1,5 @@
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { render, fireEvent } from '@testing-library/react-native';
 import { NoticeSnackbar } from '../../components/NoticeSnackbar';
 
 jest.mock('react-native-paper', () => {
@@ -13,6 +13,7 @@ jest.mock('react-native-paper', () => {
         inverseOnSurface: '#ffffff',
         primary: '#6366f1',
       },
+      dark: true,
     }),
   };
 });
@@ -41,11 +42,13 @@ describe('NoticeSnackbar', () => {
     expect(getByText('Saved!')).toBeTruthy();
   });
 
-  it('renders OK action button', async () => {
+  it('calls onDismiss when tapped', async () => {
+    const onDismiss = jest.fn();
     const { getByText } = await render(
-      <NoticeSnackbar visible={true} message="Test" onDismiss={jest.fn()} />,
+      <NoticeSnackbar visible={true} message="Test" onDismiss={onDismiss} />,
     );
-    expect(getByText('OK')).toBeTruthy();
+    fireEvent.press(getByText('Test'));
+    expect(onDismiss).toHaveBeenCalled();
   });
 
   it('renders with default severity info', async () => {

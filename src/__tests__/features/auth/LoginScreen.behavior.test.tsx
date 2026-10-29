@@ -114,10 +114,10 @@ describe('LoginScreen - behavioral error feedback', () => {
       expect(utils.getAllByText('Sai tài khoản hoặc mật khẩu').length).toBeGreaterThan(0);
     });
 
-    await fireEvent.press(utils.getByText('OK'));
+    await fireEvent.press(utils.getByTestId('notice-snackbar'));
 
     await waitFor(() => {
-      expect(utils.queryByText('OK')).toBeNull();
+      expect(utils.queryByTestId('notice-snackbar')).toBeNull();
     });
     expect(utils.getAllByText('Sai tài khoản hoặc mật khẩu').length).toBeGreaterThan(0);
   });
