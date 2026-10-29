@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { StyleSheet, View, TouchableOpacity } from 'react-native';
 import { Text, useTheme } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import bus from '../lib/event-bus';
 import type { AppTheme } from '../theme/DarkTheme';
@@ -10,6 +11,7 @@ const DISMISS_DAYS = 7;
 
 export default function LegacyUpgradeBanner() {
   const theme = useTheme() as AppTheme;
+  const insets = useSafeAreaInsets();
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -46,7 +48,15 @@ export default function LegacyUpgradeBanner() {
   if (!visible) return null;
 
   return (
-    <View style={[styles.banner, { backgroundColor: theme.colors.inverseSurface }]}>
+    <View
+      style={[
+        styles.banner,
+        {
+          top: Math.max(insets.top + 8, 16),
+          backgroundColor: theme.colors.inverseSurface,
+        },
+      ]}
+    >
       <Text style={[styles.text, { color: theme.colors.inverseOnSurface }]}>
         Có bản cập nhật mới. Nâng cấp ứng dụng để có trải nghiệm tốt hơn.
       </Text>
@@ -60,7 +70,6 @@ export default function LegacyUpgradeBanner() {
 const styles = StyleSheet.create({
   banner: {
     position: 'absolute',
-    top: 50,
     left: 16,
     right: 16,
     borderRadius: 12,
@@ -69,8 +78,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    zIndex: 9999,
-    elevation: 8,
+    zIndex: 99999,
+    elevation: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,

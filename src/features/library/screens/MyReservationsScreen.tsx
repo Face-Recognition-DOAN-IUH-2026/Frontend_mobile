@@ -212,10 +212,11 @@ export default function MyReservationsScreen({ navigation }: MyReservationsScree
       </ScrollView>
 
       <NoticeSnackbar
-        visible={snackVisible}
+        visible={snackVisible && !confirmingId}
         message={snackMsg}
         severity={snackMsg.includes('hủy') ? 'success' : 'error'}
         onDismiss={() => setSnackVisible(false)}
+        bottomOffset={16}
       />
 
       <UndoBar
@@ -223,6 +224,7 @@ export default function MyReservationsScreen({ navigation }: MyReservationsScree
         message={`Đã hủy nhận thông báo "${entries.find(e => e.id === confirmingId)?.book?.title ?? ''}"`}
         onUndo={handleUndoCancel}
         onDismiss={commitCancellation}
+        bottomOffset={16}
       />
     </SafeAreaView>
   );

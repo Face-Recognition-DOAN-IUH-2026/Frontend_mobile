@@ -403,6 +403,7 @@ export default function AIChatScreen({ navigation, route }: AIChatScreenProps) {
           message={`Đã đăng ký "${lastReservation?.title ?? ''}"`}
           onUndo={handleUndoReserve}
           onDismiss={() => setLastReservation(null)}
+          bottomOffset={72}
         />
       </KeyboardAvoidingView>
     </SafeAreaView>

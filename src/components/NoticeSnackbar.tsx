@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { Snackbar, Text, useTheme } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import type { AppTheme } from '../theme/DarkTheme';
 
@@ -25,13 +26,25 @@ interface NoticeSnackbarProps {
   message: string;
   severity?: Severity;
   onDismiss: () => void;
+  bottomOffset?: number;
+  wrapperStyle?: StyleProp<ViewStyle>;
 }
 
-export function NoticeSnackbar({ visible, message, severity = 'info', onDismiss }: NoticeSnackbarProps) {
+export function NoticeSnackbar({
+  visible,
+  message,
+  severity = 'info',
+  onDismiss,
+  bottomOffset = 0,
+  wrapperStyle,
+}: NoticeSnackbarProps) {
   const theme = useTheme() as AppTheme;
+  const insets = useSafeAreaInsets();
   const c = theme.colors;
   const iconName = SEVERITY_ICONS[severity];
   const accentColor = SEVERITY_COLORS[severity];
+
+  const calculatedBottom = bottomOffset + (insets.bottom || 0);
 
   return (
     <Snackbar
@@ -39,6 +52,11 @@ export function NoticeSnackbar({ visible, message, severity = 'info', onDismiss 
       onDismiss={onDismiss}
       duration={3000}
       style={[nsStyles.snackbar, { backgroundColor: c.inverseSurface }]}
+      wrapperStyle={[
+        nsStyles.wrapper,
+        { bottom: calculatedBottom },
+        wrapperStyle,
+      ]}
       action={{ label: 'OK', onPress: onDismiss }}
     >
       <View style={nsStyles.content}>
@@ -50,6 +68,10 @@ export function NoticeSnackbar({ visible, message, severity = 'info', onDismiss 
 }
 
 const nsStyles = StyleSheet.create({
+  wrapper: {
+    zIndex: 9999,
+    elevation: 10,
+  },
   snackbar: {
     borderRadius: 8,
     marginHorizontal: 16,

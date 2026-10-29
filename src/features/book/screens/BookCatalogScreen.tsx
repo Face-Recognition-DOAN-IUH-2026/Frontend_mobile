@@ -474,10 +474,11 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
       </Portal>
 
       <NoticeSnackbar
-        visible={snackVisible}
+        visible={snackVisible && !lastReservation}
         message={snackMsg}
         severity={snackMsg.includes('thành công') ? 'success' : 'error'}
         onDismiss={() => setSnackVisible(false)}
+        bottomOffset={16}
       />
 
       <UndoBar
@@ -485,6 +486,7 @@ export default function BookCatalogScreen({ navigation }: BookCatalogScreenProps
         message={`Đã đăng ký "${lastReservation?.title ?? ''}"`}
         onUndo={handleUndoReserve}
         onDismiss={() => setLastReservation(null)}
+        bottomOffset={16}
       />
     </SafeAreaView>
   );

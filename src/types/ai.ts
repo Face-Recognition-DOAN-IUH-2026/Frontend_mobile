@@ -103,7 +103,12 @@ export interface AICommandCenterChatResponse {
 }
 
 export interface CompanionChunk {
-  type: 'text' | 'audio' | 'viseme' | 'tool_result' | 'book_card' | 'companion_done';
+  /**
+   * `text_delta`  — a token streamed mid-response (append to the visible text)
+   * `text`        — the authoritative full answer when `data.final === true`, otherwise a
+   *                 stable transcript prefix (e.g. the `[Voice] …` line)
+   */
+  type: 'text_delta' | 'text' | 'audio' | 'viseme' | 'tool_result' | 'book_card' | 'companion_done';
   data: any;
 }
 

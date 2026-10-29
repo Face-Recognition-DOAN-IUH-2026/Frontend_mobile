@@ -12,7 +12,9 @@ export function GradientHeader({
   icon,
   right,
   children,
+  onBack,
 }: {
+  onBack?: () => void;
   title: string;
   subtitle?: string;
   icon: string;
@@ -29,7 +31,19 @@ export function GradientHeader({
       <View style={[dhStyles.circle, { bottom: -40, left: 80, width: 160, height: 160, backgroundColor: `${c.onPrimary}0D` }]} />
 
       <View style={dhStyles.headerRow}>
-        <Avatar.Icon size={44} icon={icon} style={[dhStyles.headerAvatar, { backgroundColor: `${c.onPrimary}33` }]} color={c.onPrimary} />
+        {onBack ? (
+          <Pressable
+            onPress={onBack}
+            style={({ pressed }) => [
+              dhStyles.headerAvatar,
+              { backgroundColor: `${c.onPrimary}33`, justifyContent: 'center', alignItems: 'center', opacity: pressed ? 0.7 : 1 },
+            ]}
+          >
+            <MaterialCommunityIcons name="arrow-left" size={24} color={c.onPrimary} />
+          </Pressable>
+        ) : (
+          <Avatar.Icon size={44} icon={icon} style={[dhStyles.headerAvatar, { backgroundColor: `${c.onPrimary}33` }]} color={c.onPrimary} />
+        )}
         <View style={{ flex: 1 }}>
           <Text variant="titleLarge" style={[dhStyles.headerTitle, { color: c.onPrimary }]}>{title}</Text>
           {subtitle ? <Text variant="bodySmall" style={[dhStyles.headerSubtitle, { color: `${c.onPrimary}B3` }]}>{subtitle}</Text> : null}
