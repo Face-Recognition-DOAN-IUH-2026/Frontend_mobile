@@ -11,6 +11,7 @@ import {
 import { Text, Surface, Button } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { triggerHaptic } from '../utils/haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export interface HazardAlertData {
   camera_id?: string;
@@ -38,6 +39,7 @@ export default function EmergencyFireAlertModal({
 }: EmergencyFireAlertModalProps) {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const borderAnim = useRef(new Animated.Value(0)).current;
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (!visible) return;
@@ -111,7 +113,7 @@ export default function EmergencyFireAlertModal({
       onRequestClose={onDismiss}
       statusBarTranslucent
     >
-      <View style={styles.backdrop}>
+      <View style={[styles.backdrop, { paddingTop: Math.max(insets.top, 16), paddingBottom: Math.max(insets.bottom, 16) }]}>
         <Surface style={styles.card} elevation={5}>
           {/* Header Báo động */}
           <View style={styles.header}>

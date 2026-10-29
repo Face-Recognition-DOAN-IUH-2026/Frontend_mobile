@@ -16,7 +16,6 @@ import { getAssignmentTimeState, AssignmentTimeState } from '../../../utils/assi
 import { GradientHeader, EmptyState, GRADIENTS } from '../../../theme/MobileDesignSystem';
 import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
 import { LoadingOverlay } from '../../../components/LoadingOverlay';
-import FaceCheckInModal from '../../../components/FaceCheckInModal';
 import { useAuth } from '../../../context/AuthContext';
 
 function getErrorMessage(err: any, fallback: string) {
@@ -129,7 +128,6 @@ export default function ScheduleScreen() {
   }), [c]);
 
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
-  const [faceAssignment, setFaceAssignment] = useState<StaffScheduleAssignment | null>(null);
   const [snackbar, setSnackbar] = useState('');
   const [viewMode, setViewMode] = useState<(typeof VIEW_MODES)[number]>('Ngày');
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -346,8 +344,15 @@ export default function ScheduleScreen() {
         } catch (locErr) {
           devError('[ScheduleScreen] Location error:', locErr);
         }
-        await scheduleApi.checkIn(id, lat, lng);
-        setSnackbar('Đã check-in thành công');
+        const result = await scheduleApi.checkIn(id, lat, lng);
+        const location = result?.location;
+        if (location && location.verified === false) {
+          setSnackbar(`Đã check-in nhưng vị trí chưa xác thực: ${location.reason}`);
+        } else if (location?.distanceMeters != null && location?.radiusMeters != null) {
+          setSnackbar(`Đã check-in · cách tâm ${location.distanceMeters}m (bán kính ${location.radiusMeters}m)`);
+        } else {
+          setSnackbar('Đã check-in thành công');
+        }
       } else {
         await scheduleApi.checkOut(id);
         setSnackbar('Đã check-out thành công');
@@ -355,17 +360,6 @@ export default function ScheduleScreen() {
       await refetchSchedule();
     } catch (err: any) {
       setSnackbar(getErrorMessage(err, action === 'check-in' ? 'Check-in thất bại' : 'Check-out thất bại'));
-    } finally { setActionLoadingId(null); }
-  };
-
-  const handleRequestManualCheckIn = async (assignmentId: string) => {
-    setActionLoadingId(`${assignmentId}:manual-checkin`);
-    try {
-      await scheduleApi.requestManualCheckIn(assignmentId, 'Yêu cầu check-in thủ công từ ứng dụng di động');
-      setSnackbar('Đã gửi yêu cầu check-in thủ công');
-      await refetchSchedule();
-    } catch (err: any) {
-      setSnackbar(getErrorMessage(err, 'Gửi yêu cầu check-in thủ công thất bại'));
     } finally { setActionLoadingId(null); }
   };
 
@@ -496,9 +490,7 @@ export default function ScheduleScreen() {
           <AssignmentCard
             item={item}
             onCheckIn={(id) => runAttendanceAction(id, 'check-in')}
-            onFaceCheckIn={(it) => setFaceAssignment(it)}
             onCheckOut={(id) => runAttendanceAction(id, 'check-out')}
-            onRequestManualCheckIn={handleRequestManualCheckIn}
             actionLoadingId={actionLoadingId}
             shiftLabel={item._shiftName}
             shiftTime={item._shiftTime}
@@ -539,9 +531,7 @@ export default function ScheduleScreen() {
             key={item.id}
             item={item}
             onCheckIn={(id) => runAttendanceAction(id, 'check-in')}
-            onFaceCheckIn={(it) => setFaceAssignment(it)}
             onCheckOut={(id) => runAttendanceAction(id, 'check-out')}
-            onRequestManualCheckIn={handleRequestManualCheckIn}
             actionLoadingId={actionLoadingId}
             shiftLabel={item._shiftName}
             shiftTime={item._shiftTime}
@@ -816,16 +806,6 @@ export default function ScheduleScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
-
-      <FaceCheckInModal
-        visible={!!faceAssignment}
-        assignment={faceAssignment}
-        onClose={() => setFaceAssignment(null)}
-        onSuccess={(msg) => {
-          setSnackbar(msg);
-          refetchSchedule();
-        }}
-      />
 
       <NoticeSnackbar
         visible={!!snackbar}

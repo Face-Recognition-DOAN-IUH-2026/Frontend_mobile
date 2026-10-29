@@ -42,8 +42,8 @@ function AppContent() {
           <AuthProvider>
             <NotificationProvider>
               <StatusBar style={isDark ? 'light' : 'dark'} />
-              <LegacyUpgradeBanner />
               <AppNavigator />
+              <LegacyUpgradeBanner />
             </NotificationProvider>
           </AuthProvider>
         </NetworkProvider>

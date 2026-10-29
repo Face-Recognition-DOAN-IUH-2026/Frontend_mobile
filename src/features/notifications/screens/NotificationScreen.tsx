@@ -150,11 +150,12 @@ export default function NotificationScreen({ navigation }: NotificationScreenPro
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: c.background }]} edges={['bottom']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: c.background }]} edges={['top', 'bottom']}>
       <GradientHeader
         title="Thông báo"
         subtitle={unreadCount > 0 ? `${unreadCount} thông báo chưa đọc` : 'Không có thông báo mới'}
         icon="bell"
+        onBack={navigation.canGoBack?.() ? () => navigation.goBack() : undefined}
         right={
           unreadCount > 0 ? (
             <TouchableOpacity activeOpacity={0.7} onPress={markAllAsRead} style={styles.markAllBtn}>

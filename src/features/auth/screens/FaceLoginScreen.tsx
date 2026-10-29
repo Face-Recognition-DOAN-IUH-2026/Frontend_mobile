@@ -1,6 +1,6 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, StyleSheet, View } from 'react-native';
+import { Animated, Keyboard, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Card, Text, TextInput, useTheme } from 'react-native-paper';
 import { useAuth } from '../../../context/AuthContext';
@@ -56,6 +56,7 @@ export default function FaceLoginScreen({ navigation }: FaceLoginScreenProps) {
   };
 
   const handlePasswordLogin = async () => {
+    Keyboard.dismiss();
     if (!email.trim() || !password.trim()) {
       setError('Vui lòng nhập email và mật khẩu');
       return;
@@ -65,9 +66,11 @@ export default function FaceLoginScreen({ navigation }: FaceLoginScreenProps) {
     try {
       await staffLogin(email.trim(), password);
     } catch (err: any) {
-      const message = err?.response?.data?.detail?.includes('Invalid')
+      Keyboard.dismiss();
+      const rawDetail = err?.response?.data?.detail || err?.response?.data?.error;
+      const message = rawDetail?.includes('Invalid')
         ? 'Email hoặc mật khẩu không đúng'
-        : 'Đăng nhập thất bại, vui lòng thử lại';
+        : (rawDetail || 'Đăng nhập thất bại, vui lòng thử lại');
       setError(message);
     } finally {
       setLoginLoading(false);

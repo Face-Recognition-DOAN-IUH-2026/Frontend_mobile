@@ -38,6 +38,10 @@ yarn-error.*
 # generated / agent files
 repomix-output.xml
 
+# repomix dumps (file rác, phình context)
+fe_mobile.txt
+fe_*.txt
+
 # typescript
 *.tsbuildinfo
 

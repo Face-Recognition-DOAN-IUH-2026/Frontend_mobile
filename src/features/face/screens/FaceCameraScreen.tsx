@@ -7,14 +7,15 @@ import { LoadingOverlay } from '../../../components/LoadingOverlay';
 import { GradientHeader } from '../../../theme/MobileDesignSystem';
 import api from '../../../api/client';
 import { waitForEnrollment } from '../../../api/enrollment';
+import { blurScoreForBase64, isImageBlurry } from '../../../utils/faceQuality';
 import { useAuth } from '../../../context/AuthContext';
 import { useTheme } from 'react-native-paper';
 import { AppTheme } from '../../../theme/DarkTheme';
 import { devError } from '../../../utils/logger';
 import {
   extractFailedAngles,
-  buildAngleErrorMessage,
   mapEnrollError,
+  buildAngleErrorMessage,
   FailedAngle,
 } from '../../../utils/faceEnrollErrors';
 
@@ -40,6 +41,28 @@ export default function FaceCameraScreen({ navigation }: FaceCameraScreenProps) 
     setFailedAngles([]);
     setIsUploading(true);
     try {
+      // Kiểm tra độ mờ từng ảnh trước khi upload (góc frontal là bắt buộc check blur
+      // theo quy tắc của worker). Tránh upload 4 ảnh rồi worker rollback toàn bộ
+      // vì 1 góc lỗi MOTION_BLUR.
+      const angleLabels: Record<number, string> = {
+        0: 'Nhìn thẳng',
+        1: 'Nghiêng phải',
+        2: 'Nghiêng trái',
+        3: 'Cúi xuống',
+      };
+      for (let i = 0; i < images.length; i++) {
+        const score = await blurScoreForBase64(images[i]);
+        if (isImageBlurry(score, 25)) {
+          Alert.alert(
+            'Ảnh quá mờ',
+            `Góc ${angleLabels[i]} bị mờ hoặc thiếu sáng. Vui lòng giữ yên, ánh sáng tốt và chụp lại góc này.`,
+            [{ text: 'OK' }],
+          );
+          setIsUploading(false);
+          return;
+        }
+      }
+
       const formData = new FormData();
       formData.append('frontal', {
         uri: `data:image/jpeg;base64,${images[0]}`,

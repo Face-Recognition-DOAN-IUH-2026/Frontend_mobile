@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Image, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { triggerHaptic } from '../../../utils/haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, HelperText, SegmentedButtons, Text, TextInput, useTheme } from 'react-native-paper';
 import { NoticeSnackbar } from '../../../components/NoticeSnackbar';
@@ -27,11 +29,14 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
   const { patronLogin, staffLogin } = useAuth();
 
   const showError = (message: string) => {
+    Keyboard.dismiss();
+    triggerHaptic.error();
     setError(message);
     setSnackVisible(true);
   };
 
   const handleLogin = async () => {
+    Keyboard.dismiss();
     const identifier = loginMode === 'staff' ? email.trim() : studentCode.trim();
     if (!identifier || !password.trim()) {
       showError(loginMode === 'staff'
@@ -136,6 +141,15 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
               <HelperText type="error" visible={!!error} testID="helper-error" style={styles.helperError}>
                 {error}
               </HelperText>
+
+              {error ? (
+                <View style={[styles.errorAlertBox, { backgroundColor: `${theme.colors.error}15`, borderColor: theme.colors.error }]}>
+                  <MaterialCommunityIcons name="alert-circle" size={20} color={theme.colors.error} />
+                  <Text style={[styles.errorAlertText, { color: theme.colors.error }]}>
+                    {error}
+                  </Text>
+                </View>
+              ) : null}
 
               <Button
                 mode="contained"
@@ -302,6 +316,22 @@ function createStyles(theme: AppTheme) {
     helperError: {
       marginTop: -8,
       fontSize: 13,
+    },
+    errorAlertBox: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: 10,
+      borderWidth: 1,
+      marginTop: 4,
+      marginBottom: 8,
+      gap: 10,
+    },
+    errorAlertText: {
+      flex: 1,
+      fontSize: 13,
+      fontWeight: '600',
     },
     loginBtn: {
       minHeight: 52,

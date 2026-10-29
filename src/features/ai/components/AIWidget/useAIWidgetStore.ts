@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { aiApi } from '../../../../api/ai';
 import { getSessionGeneration } from '../../../../api/secureStorage';
 import { AICommandCenterSummary, AIMessage, CompanionChunk, CompanionState, VisemeData } from '../../../../types/ai';
+import { createCompanionChunkHandler } from '../../utils/aiStreaming';
 
 interface AIWidgetStore {
   isOpen: boolean;
@@ -93,45 +94,40 @@ export const useAIWidgetStore = create<AIWidgetStore>()(
         try {
           const { chatSessionId } = get();
 
-          let accumulatedText = '';
+          const handleChunk = createCompanionChunkHandler({
+            onTextChange: (content) =>
+              set((state) => ({
+                messages: [
+                  ...state.messages.filter((m) => m.id !== 'streaming'),
+                  {
+                    id: 'streaming',
+                    role: 'assistant',
+                    content,
+                    timestamp: new Date(),
+                  },
+                ],
+              })),
+            onAudio: (chunk) =>
+              set({ currentAudio: chunk.data.audioBase64, companionState: 'speaking' }),
+            onViseme: (chunk) => set({ visemeData: chunk.data.visemes }),
+            onDone: (sessionId) =>
+              set((state) => ({
+                messages: state.messages.map((m) =>
+                  m.id === 'streaming' ? { ...m, id: `assistant-${Date.now()}` } : m
+                ),
+                isLoadingChat: false,
+                companionState: 'idle',
+                chatSessionId: sessionId || state.chatSessionId,
+              })),
+          });
+
           await aiApi.streamCompanionChat(
             message,
             undefined,
             chatSessionId,
             (chunk: CompanionChunk) => {
               if (generation !== getSessionGeneration()) return;
-              switch (chunk.type) {
-                case 'text':
-                  accumulatedText += chunk.data.content;
-                  set((state) => ({
-                    messages: [
-                      ...state.messages.filter((m) => m.id !== 'streaming'),
-                      {
-                        id: 'streaming',
-                        role: 'assistant',
-                        content: accumulatedText,
-                        timestamp: new Date(),
-                      },
-                    ],
-                  }));
-                  break;
-                case 'audio':
-                  set({ currentAudio: chunk.data.audioBase64, companionState: 'speaking' });
-                  break;
-                case 'viseme':
-                  set({ visemeData: chunk.data.visemes });
-                  break;
-                case 'companion_done':
-                  set((state) => ({
-                    messages: state.messages.map((m) =>
-                      m.id === 'streaming' ? { ...m, id: `assistant-${Date.now()}` } : m
-                    ),
-                    isLoadingChat: false,
-                    companionState: 'idle',
-                    chatSessionId: chunk.data.sessionId || state.chatSessionId,
-                  }));
-                  break;
-              }
+              handleChunk(chunk);
             },
             (error) => {
               if (generation !== getSessionGeneration()) return;
@@ -186,45 +182,40 @@ export const useAIWidgetStore = create<AIWidgetStore>()(
         try {
           const { chatSessionId } = get();
 
-          let accumulatedText = '';
+          const handleChunk = createCompanionChunkHandler({
+            onTextChange: (content) =>
+              set((state) => ({
+                messages: [
+                  ...state.messages.filter((m) => m.id !== 'streaming'),
+                  {
+                    id: 'streaming',
+                    role: 'assistant',
+                    content,
+                    timestamp: new Date(),
+                  },
+                ],
+              })),
+            onAudio: (chunk) =>
+              set({ currentAudio: chunk.data.audioBase64, companionState: 'speaking' }),
+            onViseme: (chunk) => set({ visemeData: chunk.data.visemes }),
+            onDone: (sessionId) =>
+              set((state) => ({
+                messages: state.messages.map((m) =>
+                  m.id === 'streaming' ? { ...m, id: `assistant-${Date.now()}` } : m
+                ),
+                isLoadingChat: false,
+                companionState: 'idle',
+                chatSessionId: sessionId || state.chatSessionId,
+              })),
+          });
+
           await aiApi.streamCompanionChat(
             undefined,
             audioBase64,
             chatSessionId,
             (chunk: CompanionChunk) => {
               if (generation !== getSessionGeneration()) return;
-              switch (chunk.type) {
-                case 'text':
-                  accumulatedText += chunk.data.content;
-                  set((state) => ({
-                    messages: [
-                      ...state.messages.filter((m) => m.id !== 'streaming'),
-                      {
-                        id: 'streaming',
-                        role: 'assistant',
-                        content: accumulatedText,
-                        timestamp: new Date(),
-                      },
-                    ],
-                  }));
-                  break;
-                case 'audio':
-                  set({ currentAudio: chunk.data.audioBase64, companionState: 'speaking' });
-                  break;
-                case 'viseme':
-                  set({ visemeData: chunk.data.visemes });
-                  break;
-                case 'companion_done':
-                  set((state) => ({
-                    messages: state.messages.map((m) =>
-                      m.id === 'streaming' ? { ...m, id: `assistant-${Date.now()}` } : m
-                    ),
-                    isLoadingChat: false,
-                    companionState: 'idle',
-                    chatSessionId: chunk.data.sessionId || state.chatSessionId,
-                  }));
-                  break;
-              }
+              handleChunk(chunk);
             },
             (error) => {
               if (generation !== getSessionGeneration()) return;

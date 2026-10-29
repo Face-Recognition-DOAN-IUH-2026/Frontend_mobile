@@ -24,9 +24,7 @@ function parseTimeToMinutes(timeStr?: string | null): number | null {
 interface AssignmentCardProps {
   item: StaffScheduleAssignment;
   onCheckIn: (id: string) => void;
-  onFaceCheckIn?: (item: StaffScheduleAssignment) => void;
   onCheckOut: (id: string) => void;
-  onRequestManualCheckIn?: (assignmentId: string) => void;
   actionLoadingId: string | null;
   shiftLabel?: string;
   shiftTime?: string;
@@ -35,9 +33,7 @@ interface AssignmentCardProps {
 export default function AssignmentCard({
   item,
   onCheckIn,
-  onFaceCheckIn,
   onCheckOut,
-  onRequestManualCheckIn,
   actionLoadingId,
   shiftLabel,
   shiftTime,
@@ -49,24 +45,22 @@ export default function AssignmentCard({
   const isToday = item.workDate === today;
 
   const startTime = normalizeTime(item.shift?.startTime);
-  const endTime = normalizeTime(item.shift?.endTime);
   const nowDate = new Date();
   const nowMins = nowDate.getHours() * 60 + nowDate.getMinutes();
   const startMins = parseTimeToMinutes(startTime);
-  const endMins = parseTimeToMinutes(endTime);
 
-  // Check-in tolerance window: backend opens 45 mins before shift start and allows throughout shift
-  const withinCheckInWindow = startMins !== null && endMins !== null
-    ? nowMins >= startMins - 45 && nowMins <= endMins + 30
-    : true;
+  // Backend chỉ chặn khi quá sớm: check-in mở 45 phút trước giờ bắt đầu ca (ScheduleService.checkIn),
+  // không có giới hạn phía sau nên ca đang/đã diễn ra vẫn check-in được (sẽ bị đánh dấu đi muộn).
+  const checkInOpenAt = startMins !== null ? startMins - 45 : null;
+  const withinCheckInWindow = checkInOpenAt === null ? true : nowMins >= checkInOpenAt;
 
   const isPendingManual = item.attendance?.status === 'pending_manual';
-  const isRejectedManual = item.attendance?.status === 'rejected_manual';
   const isCancelled = item.status === 'cancelled';
   const isCompleted = item.status === 'completed' || !!item.attendance?.checkOutAt;
 
   const canCheckIn = isToday && !item.attendance?.checkInAt && !isPendingManual && !isCancelled && !isCompleted && withinCheckInWindow;
   const canCheckOut = isToday && !!item.attendance?.checkInAt && !item.attendance?.checkOutAt && !isCancelled;
+  const checkInNotOpenYet = isToday && !item.attendance?.checkInAt && !isCancelled && !isCompleted && !isPendingManual && !withinCheckInWindow;
   const isPast = state === 'past';
 
   const checkInTime = item.attendance?.checkInAt ? item.attendance.checkInAt.slice(11, 16) : null;
@@ -134,58 +128,31 @@ export default function AssignmentCard({
           </View>
         )}
 
-        {isRejectedManual && !item.attendance?.checkInAt && (
-          <View style={[s.statusBadge, { backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}>
-            <MaterialCommunityIcons name="alert-circle-outline" size={16} color="#ef4444" />
-            <Text style={[s.statusBadgeText, { color: '#ef4444' }]}>Check-in thủ công đã bị từ chối</Text>
+        {checkInNotOpenYet && (
+          <View style={[s.statusBadge, { backgroundColor: 'rgba(234, 179, 8, 0.12)' }]}>
+            <MaterialCommunityIcons name="clock-alert-outline" size={16} color="#eab308" />
+            <Text style={[s.statusBadgeText, { color: '#eab308' }]}>
+              Check-in mở từ 45 phút trước giờ bắt đầu ca
+            </Text>
           </View>
         )}
 
-        {(canCheckIn || canCheckOut || (isRejectedManual && !item.attendance?.checkInAt)) && (
+        {(canCheckIn || canCheckOut) && (
           <View style={s.actionContainer}>
             {canCheckIn ? (
               <View style={s.actionRow}>
-                {onFaceCheckIn ? (
-                  <Button
-                    mode="contained"
-                    icon="face-recognition"
-                    compact
-                    onPress={() => onFaceCheckIn(item)}
-                    style={[s.actionBtn, { backgroundColor: c.primary }]}
-                    labelStyle={s.actionLabel}
-                    textColor="#fff"
-                  >
-                    Face Check-in
-                  </Button>
-                ) : null}
-
                 <Button
-                  mode={onFaceCheckIn ? 'outlined' : 'contained'}
+                  mode="contained"
                   icon="map-marker-check"
                   compact
                   loading={actionLoadingId === `${item.id}:check-in`}
                   onPress={() => onCheckIn(item.id)}
-                  style={[s.actionBtn, onFaceCheckIn ? { borderColor: c.primary } : { backgroundColor: c.primary }]}
+                  style={[s.actionBtn, { backgroundColor: c.primary }]}
                   labelStyle={s.actionLabel}
-                  textColor={onFaceCheckIn ? c.primary : '#fff'}
+                  textColor="#fff"
                 >
-                  GPS
+                  Check-in khu vực
                 </Button>
-
-                {onRequestManualCheckIn ? (
-                  <Button
-                    mode="outlined"
-                    icon="clipboard-text-outline"
-                    compact
-                    loading={actionLoadingId === `${item.id}:manual-checkin`}
-                    onPress={() => onRequestManualCheckIn(item.id)}
-                    style={[s.actionBtn, { borderColor: c.secondary }]}
-                    labelStyle={[s.actionLabel, { color: c.secondary }]}
-                    textColor={c.secondary}
-                  >
-                    Thủ công
-                  </Button>
-                ) : null}
               </View>
             ) : null}
 

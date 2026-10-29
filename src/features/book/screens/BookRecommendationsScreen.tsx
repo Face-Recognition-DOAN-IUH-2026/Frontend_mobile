@@ -142,10 +142,11 @@ export default function BookRecommendationsScreen({ navigation }: BookRecommenda
       />
 
       <NoticeSnackbar
-        visible={snackVisible}
+        visible={snackVisible && !lastReservation}
         message={snackMsg}
         severity={snackMsg.includes('thành công') || snackMsg.includes('hủy') ? 'success' : 'error'}
         onDismiss={() => setSnackVisible(false)}
+        bottomOffset={16}
       />
 
       <UndoBar
@@ -153,6 +154,7 @@ export default function BookRecommendationsScreen({ navigation }: BookRecommenda
         message={`Đã đăng ký "${lastReservation?.title ?? ''}"`}
         onUndo={handleUndoReserve}
         onDismiss={() => setLastReservation(null)}
+        bottomOffset={16}
       />
     </SafeAreaView>
   );

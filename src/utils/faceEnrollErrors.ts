@@ -16,6 +16,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   NO_FACE_DETECTED: 'Không tìm thấy khuôn mặt trong ảnh, vui lòng thử lại.',
   MULTIPLE_FACES: 'Có nhiều hơn 1 khuôn mặt trong ảnh, vui lòng chụp lại.',
   LOW_QUALITY: 'Ảnh quá mờ hoặc thiếu sáng, vui lòng chụp lại với ánh sáng tốt hơn.',
+  MOTION_BLUR: 'Ảnh bị mờ do rung tay / chuyển động, vui lòng giữ yên và chụp lại.',
   FACE_DETECTION_FAILED: 'Không thể trích xuất khuôn mặt, vui lòng thử lại.',
 };
 

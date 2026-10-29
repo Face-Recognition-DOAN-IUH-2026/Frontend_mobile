@@ -17,6 +17,7 @@ describe('faceEnrollErrors (mobile)', () => {
 
   it('map mã lỗi backend sang tiếng Việt', () => {
     expect(mapEnrollError('LOW_QUALITY', 'fallback')).toMatch(/mờ|thiếu sáng/);
+    expect(mapEnrollError('MOTION_BLUR', 'fallback')).toMatch(/mờ|thiếu sáng|chụp lại/);
     expect(mapEnrollError('NO_FACE_DETECTED', 'fallback')).toMatch(/Không tìm thấy/);
     expect(mapEnrollError('Quá thời gian chờ.', 'fallback')).toBe('Quá thời gian chờ.');
     expect(mapEnrollError('WEIRD_CODE', 'fallback')).toBe('fallback');

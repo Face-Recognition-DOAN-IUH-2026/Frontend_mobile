@@ -624,6 +624,7 @@ export default function StaffBorrowScreen() {
         message={scanToast}
         severity={scanToast.startsWith('⚠️') || scanToast.includes('Không') ? 'warning' : 'success'}
         onDismiss={() => setScanToast('')}
+        bottomOffset={70}
       />
     </SafeAreaView>
   );

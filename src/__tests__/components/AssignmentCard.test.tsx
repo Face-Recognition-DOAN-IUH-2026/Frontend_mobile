@@ -82,24 +82,7 @@ describe('AssignmentCard Component', () => {
     expect(getByText('1')).toBeTruthy();
   });
 
-  it('calls onFaceCheckIn when Face Check-in button is pressed', async () => {
-    const onFaceCheckIn = jest.fn();
-    const { getByText } = await render(
-      <AssignmentCard
-        item={baseItem}
-        onCheckIn={jest.fn()}
-        onFaceCheckIn={onFaceCheckIn}
-        onCheckOut={jest.fn()}
-        actionLoadingId={null}
-      />
-    );
-
-    const faceBtn = getByText('Face Check-in');
-    fireEvent.press(faceBtn);
-    expect(onFaceCheckIn).toHaveBeenCalledWith(baseItem);
-  });
-
-  it('calls onCheckIn when GPS button is pressed', async () => {
+  it('calls onCheckIn when area check-in button is pressed', async () => {
     const onCheckIn = jest.fn();
     const { getByText } = await render(
       <AssignmentCard
@@ -110,26 +93,8 @@ describe('AssignmentCard Component', () => {
       />
     );
 
-    const gpsBtn = getByText('GPS');
-    fireEvent.press(gpsBtn);
+    fireEvent.press(getByText('Check-in khu vực'));
     expect(onCheckIn).toHaveBeenCalledWith('asg-1');
-  });
-
-  it('calls onRequestManualCheckIn when Manual button is pressed', async () => {
-    const onRequestManualCheckIn = jest.fn();
-    const { getByText } = await render(
-      <AssignmentCard
-        item={baseItem}
-        onCheckIn={jest.fn()}
-        onCheckOut={jest.fn()}
-        onRequestManualCheckIn={onRequestManualCheckIn}
-        actionLoadingId={null}
-      />
-    );
-
-    const manualBtn = getByText('Thủ công');
-    fireEvent.press(manualBtn);
-    expect(onRequestManualCheckIn).toHaveBeenCalledWith('asg-1');
   });
 
   it('shows Check-out button when checked in but not checked out', async () => {
