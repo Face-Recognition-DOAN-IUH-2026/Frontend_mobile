@@ -45,6 +45,19 @@ export default function CheckInMapModal({ visible, assignmentId, zoneName, onClo
   const [checking, setChecking] = useState(false);
   const [status, setStatus] = useState<{ allowed: boolean; distance: number | null; radius: number | null } | null>(null);
 
+  /* Hoạt ảnh vòng tròn nhấp nháy xung quanh ghim GPS nhân viên khi đã có vị trí. */
+  const [pulse, setPulse] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+    let t = 0;
+    const id = setInterval(() => {
+      t = (t + 0.08) % 2.08;
+      setPulse(t <= 1 ? t : 2.08 - t); // 0 → 1 → 0
+    }, 40);
+    return () => clearInterval(id);
+  }, [user]);
+
   useEffect(() => {
     if (visible) loadGeofence();
     else {
@@ -125,7 +138,19 @@ export default function CheckInMapModal({ visible, assignmentId, zoneName, onClo
           <MapView style={mapStyle} initialRegion={{ latitude: center.latitude, longitude: center.longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 }}>
             {radiusMeters != null ? <Circle center={center} radius={radiusMeters} fillColor="rgba(99,102,241,0.15)" strokeColor="#6366f1" strokeWidth={2} /> : null}
             <Marker coordinate={center} title="Phòng thi" />
-            {user ? <Marker coordinate={user} title="Bạn" /> : null}
+            {user ? (
+              <>
+                <Circle
+                  center={{ latitude: user.latitude, longitude: user.longitude }}
+                  radius={22 + pulse * 48}
+                  fillColor={status?.allowed
+                    ? `rgba(16,185,129,${0.35 - pulse * 0.25})`
+                    : `rgba(239,68,68,${0.35 - pulse * 0.25})`}
+                  strokeWidth={0}
+                />
+                <Marker coordinate={user} title="Bạn" />
+              </>
+            ) : null}
           </MapView>
         )}
       </View>
@@ -145,7 +170,7 @@ export default function CheckInMapModal({ visible, assignmentId, zoneName, onClo
               </Text>
             ) : (
               <View style={styles.rowCenter}>
-                <Button icon="map-marker" mode="outlined" onPress={async () => { setLoadingGeo(true); const loc = await requestLocation(); setLoadingGeo(false); if (loc) { setUser(loc); evaluate(); } else { Alert.alert("Lỗi", "Trình duyệt không xác định được vị trí. Vui lòng bật định vị."); } }}>{loadingGeo ? "Đang định vị..." : "Xác định vị trí của tôi"}</Button>
+                <Button icon="map-marker" mode="outlined" onPress={async () => { setLoadingGeo(true); const loc = await requestLocation(); setLoadingGeo(false); if (loc) { setUser(loc); evaluate(); } else { Alert.alert("Lỗi", "Trình duyệt không xác định được vị trí. Vui lòng bật định vị."); } }}>{loadingGeo ? "Đang định vị..." : "Lấy lại vị trí GPS"}</Button>
               </View>
             )}
             <Text style={styles.caption}>Vị trí chỉ dùng hiển thị trên bản đồ. Nút xác nhận bật khi bạn nằm trong bán kính cho phép.</Text>

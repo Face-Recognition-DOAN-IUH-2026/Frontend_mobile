@@ -338,6 +338,16 @@ export default function ScheduleScreen() {
           const { status } = await Location.requestForegroundPermissionsAsync();
           if (status === 'granted') {
             const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+
+            // BLF-GPS-NATIVE: block check-in when the location comes from a
+            // mock/spoof provider so a faked position cannot pass the geofence.
+            // `mocked` is Android-only and optional (native sets it from
+            // Location.isFromMockProvider); absent flag -> never block.
+            if (pos.mocked === true) {
+              setSnackbar('Không thể xác thực vị trí. Vui lòng tắt ứng dụng giả lập vị trí.');
+              return;
+            }
+
             lat = pos.coords.latitude;
             lng = pos.coords.longitude;
           }

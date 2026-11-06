@@ -4,6 +4,7 @@ import { Text, useTheme } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { AIMessage } from '../../../types/ai';
 import { AppTheme } from '../../../theme/DarkTheme';
+import SimpleMarkdownText from './SimpleMarkdownText';
 
 interface ChatBubbleProps {
   message: AIMessage;
@@ -275,13 +276,13 @@ export default function ChatBubble({ message }: ChatBubbleProps) {
       {isUser ? (
         <View style={styles.userBubbleWrapper}>
           <View style={styles.userBubble}>
-            <Text style={styles.userText}>{message.content}</Text>
+            <Text style={styles.userText} selectable>{message.content}</Text>
           </View>
         </View>
       ) : (
         <View style={styles.assistantRow}>
           <View style={styles.avatarSmall}>
-            <MaterialCommunityIcons name="robot" size={12} color="#FFFFFF" />
+            <MaterialCommunityIcons name="robot" size={13} color="#FFFFFF" />
           </View>
           <View style={styles.assistantContent}>
             {parts.map((part, idx) => {
@@ -294,7 +295,7 @@ export default function ChatBubble({ message }: ChatBubbleProps) {
               if (part.type === 'text' && part.text) {
                 return (
                   <View key={idx} style={styles.assistantBubble}>
-                    <Text style={styles.assistantText}>{part.text}</Text>
+                    <SimpleMarkdownText content={part.text} />
                   </View>
                 );
               }
@@ -317,21 +318,26 @@ function createStyles(theme: AppTheme) {
     },
     userContainer: {
       alignItems: 'flex-end',
-      paddingHorizontal: 16,
+      paddingHorizontal: 12,
     },
     assistantContainer: {
       alignItems: 'flex-start',
-      paddingHorizontal: 16,
+      paddingHorizontal: 12,
     },
     userBubbleWrapper: {
-      maxWidth: '82%',
+      maxWidth: '84%',
     },
     userBubble: {
       backgroundColor: c.primary,
       borderRadius: 18,
       borderBottomRightRadius: 4,
-      paddingHorizontal: 14,
+      paddingHorizontal: 15,
       paddingVertical: 10,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.15,
+      shadowRadius: 3,
+      elevation: 2,
     },
     userText: {
       color: '#FFFFFF',
@@ -340,21 +346,26 @@ function createStyles(theme: AppTheme) {
     },
     assistantRow: {
       flexDirection: 'row',
-      alignItems: 'flex-end',
-      maxWidth: '88%',
+      alignItems: 'flex-start',
+      maxWidth: '92%',
       gap: 8,
     },
     assistantContent: {
       flex: 1,
     },
     assistantBubble: {
-      backgroundColor: isDark ? c.surface : '#F1F5F9',
+      backgroundColor: isDark ? c.surface : '#FFFFFF',
       borderRadius: 18,
       borderBottomLeftRadius: 4,
       paddingHorizontal: 14,
-      paddingVertical: 10,
+      paddingVertical: 11,
       borderWidth: 1,
       borderColor: isDark ? c.outlineVariant : '#E2E8F0',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: isDark ? 0.3 : 0.05,
+      shadowRadius: 3,
+      elevation: 1,
     },
     assistantText: {
       color: isDark ? c.onSurface : '#1E293B',
@@ -368,6 +379,7 @@ function createStyles(theme: AppTheme) {
       backgroundColor: c.primary,
       alignItems: 'center',
       justifyContent: 'center',
+      marginTop: 2,
     },
   });
 }

@@ -26,7 +26,7 @@ export function useFaceLoginState(faceLoginFn: (uri: string) => Promise<void>): 
         failCountRef.current = 0;
         setFaceAttemptCount(0);
         return true;
-      } catch {
+      } catch (error: unknown) {
         failCountRef.current += 1;
         const newCount = failCountRef.current;
         setFaceAttemptCount(newCount);
@@ -35,7 +35,8 @@ export function useFaceLoginState(faceLoginFn: (uri: string) => Promise<void>): 
           setFaceFailed(true);
           setShowPasswordForm(true);
         }
-        return false;
+        // Re-throw để FaceLoginScreen.captureFace() nhận được detail lỗi thực từ backend
+        throw error;
       }
     },
     [faceLoginFn],

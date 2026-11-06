@@ -49,6 +49,10 @@ export interface BorrowRecord {
   returned_by_email?: string;
   return_method?: string;
   note?: string;
+  fine_amount?: number;
+  damage_fee?: number;
+  fine_paid?: boolean;
+  total_due?: number;
   book?: Book;
   copy?: { id: string; barcode: string; condition?: string | null; status?: string | null; shelf_location?: string | null } | null;
   return_condition?: string;
@@ -66,6 +70,10 @@ export interface ReturnResponse {
   message: string;
   record?: BorrowRecord;
   note?: string;
+  fine_amount?: number;
+  damage_fee?: number;
+  fine_paid?: boolean;
+  total_due?: number;
 }
 
 export interface Patron {
@@ -296,6 +304,23 @@ export interface ConfirmBorrowSlipItem {
 export interface ConfirmBorrowSlipRequest {
   patron_id: string;
   items: ConfirmBorrowSlipItem[];
+}
+
+export interface QuickSearchCopy {
+  id: string;
+  book_id: string;
+  barcode: string;
+  is_available: boolean;
+  shelf_location: string | null;
+  condition: string;
+  status: string;
+  book: {
+    id: string;
+    isbn: string;
+    title: string;
+    author: string | null;
+    shelf_location: string | null;
+  } | null;
 }
 
 export interface Notification {

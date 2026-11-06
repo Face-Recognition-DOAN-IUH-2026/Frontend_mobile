@@ -471,12 +471,62 @@ function AutoFaceCaptureInner({
           alignItems: "center",
         },
         noteText: { color: c.onSurfaceVariant, fontSize: 12, flex: 1, lineHeight: 17 },
+        directionGuideOverlay: {
+          ...StyleSheet.absoluteFillObject,
+          alignItems: "center",
+          justifyContent: "center",
+        },
+        directionPill: {
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 8,
+          backgroundColor: "rgba(0, 0, 0, 0.78)",
+          borderColor: c.primary,
+          borderWidth: 1.5,
+          paddingHorizontal: 16,
+          paddingVertical: 9,
+          borderRadius: 24,
+          shadowColor: c.primary,
+          shadowOpacity: 0.5,
+          shadowRadius: 8,
+          elevation: 6,
+        },
+        directionText: {
+          color: "#fff",
+          fontSize: 14,
+          fontWeight: "800",
+        },
+        smartRetryCard: {
+          backgroundColor: c.errorContainer,
+          borderRadius: 14,
+          borderWidth: 1,
+          borderColor: c.error,
+          padding: 14,
+          marginBottom: 16,
+          gap: 10,
+        },
+        smartRetryHeader: {
+          flexDirection: "row",
+          alignItems: "flex-start",
+          gap: 10,
+        },
+        smartRetryTitle: {
+          fontSize: 15,
+          fontWeight: "800",
+        },
+        smartRetryDesc: {
+          fontSize: 12,
+          color: c.onErrorContainer,
+          marginTop: 2,
+          lineHeight: 17,
+        },
       }),
     [c],
   );
 
   const cameraRef = useRef<CameraView>(null);
   const [captured, setCaptured] = useState<(string | null)[]>([null, null, null, null]);
+  const [localFailedAngles, setLocalFailedAngles] = useState(failedAngles);
   const [currentIdx, setCurrentIdx] = useState(-1);
   const [countdownVal, setCountdownVal] = useState<number | null>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -489,6 +539,10 @@ function AutoFaceCaptureInner({
   const pendingBase64Ref = useRef<string | null>(null);
   const commitCaptureRef = useRef<(base64: string, idx: number) => void>(() => {});
   const cancelledRef = useRef(false);
+
+  useEffect(() => {
+    setLocalFailedAngles(failedAngles);
+  }, [failedAngles]);
   // Pose-gate: verify tư thế bằng ML Kit trước khi chấp nhận ảnh
   const [verifyUri, setVerifyUri] = useState<string | null>(null);
   const [poseFeedback, setPoseFeedback] = useState<string | null>(null);
@@ -505,6 +559,28 @@ function AutoFaceCaptureInner({
   // Debug overlay: hiện Y/X/attempt để kiểm chứng thực tế trên máy
   const [poseDebug, setPoseDebug] = useState<string | null>(null);
   const scanAnim = useRef(new Animated.Value(0)).current;
+  const arrowAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!isRunning || currentIdx < 0) return;
+    arrowAnim.setValue(0);
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(arrowAnim, {
+          toValue: 1,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+        Animated.timing(arrowAnim, {
+          toValue: 0,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [isRunning, currentIdx, arrowAnim]);
 
   useEffect(() => {
     return () => {
@@ -650,10 +726,14 @@ function AutoFaceCaptureInner({
           clearInterval(timerRef.current!);
           return;
         }
+        if (n > 0) {
+          MotionHaptics.tap();
+        }
         if (n <= 0) {
           clearInterval(timerRef.current!);
           timerRef.current = null;
           setCountdownVal(null);
+          MotionHaptics.selection();
           if (!cameraRef.current) return;
           try {
             const photo = await cameraRef.current.takePictureAsync({
@@ -740,6 +820,8 @@ function AutoFaceCaptureInner({
     (idx: number) => {
       MotionHaptics.tap();
       clearVerifyState();
+      // Xóa góc này khỏi danh sách lỗi cục bộ để xóa viền đỏ và badge lỗi
+      setLocalFailedAngles((prev) => prev.filter((f) => f.id !== ANGLES[idx].id));
       // Chỉ xóa đúng ô góc đó, giữ nguyên các góc đã đạt
       const slots = [...capturedRef.current];
       slots[idx] = null;
@@ -817,13 +899,45 @@ function AutoFaceCaptureInner({
       <ScrollView style={styles.reviewScroll} contentContainerStyle={styles.reviewInner}>
         <Text style={styles.reviewTitle}>Xem lại ảnh đã chụp</Text>
         <Text style={styles.reviewSub}>
-          {failedAngles.length > 0
+          {localFailedAngles.length > 0
             ? 'Các góc viền đỏ chưa đạt yêu cầu, chạm "Chụp lại" để chụp riêng góc đó'
             : 'Chạm vào nút chụp lại nếu ảnh chưa rõ nét'}
         </Text>
+
+        {localFailedAngles.length > 0 ? (
+          <View style={styles.smartRetryCard}>
+            <View style={styles.smartRetryHeader}>
+              <MaterialCommunityIcons name="alert-circle-outline" size={24} color={c.error} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.smartRetryTitle, { color: c.error }]}>
+                  Cần chụp lại {localFailedAngles.length} góc chưa đạt
+                </Text>
+                <Text style={styles.smartRetryDesc}>
+                  Hệ thống đã lưu tạm các góc hợp lệ. Bạn chỉ cần chụp lại góc bị lỗi để hoàn tất.
+                </Text>
+              </View>
+            </View>
+            <Button
+              mode="contained"
+              buttonColor={c.error}
+              textColor="#fff"
+              icon="camera-retake"
+              onPress={() => {
+                const firstFailed = ANGLES.findIndex((a) => localFailedAngles.some((f) => f.id === a.id));
+                if (firstFailed !== -1) {
+                  retakeAngle(firstFailed);
+                }
+              }}
+              style={{ marginTop: 4 }}
+            >
+              Chụp lại ngay góc: {localFailedAngles[0].label}
+            </Button>
+          </View>
+        ) : null}
+
         <View style={styles.reviewGrid}>
           {ANGLES.map((a, i) => {
-            const failed = failedAngles.find((f) => f.id === a.id);
+            const failed = localFailedAngles.find((f) => f.id === a.id);
             return (
             <View key={a.id} style={[styles.reviewCard, failed && { borderColor: c.error }]}>
               <Image
@@ -1053,6 +1167,103 @@ function AutoFaceCaptureInner({
             ) : null}
           </View>
         </View>
+
+        {/* Directional Visual Guide (Mũi tên chuyển động sinh động chỉ hướng) */}
+        {isRunning && currentIdx >= 0 && !showSuccess ? (
+          <View style={styles.directionGuideOverlay} pointerEvents="none">
+            {activeAngle.id === 'right' ? (
+              <Animated.View
+                style={[
+                  styles.directionPill,
+                  {
+                    position: 'absolute',
+                    right: 14,
+                    transform: [
+                      {
+                        translateX: arrowAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, 16],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              >
+                <Text style={styles.directionText}>Xoay phải</Text>
+                <MaterialCommunityIcons name="arrow-right-bold" size={24} color={c.primary} />
+              </Animated.View>
+            ) : null}
+
+            {activeAngle.id === 'left' ? (
+              <Animated.View
+                style={[
+                  styles.directionPill,
+                  {
+                    position: 'absolute',
+                    left: 14,
+                    transform: [
+                      {
+                        translateX: arrowAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, -16],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              >
+                <MaterialCommunityIcons name="arrow-left-bold" size={24} color={c.primary} />
+                <Text style={styles.directionText}>Xoay trái</Text>
+              </Animated.View>
+            ) : null}
+
+            {activeAngle.id === 'down' ? (
+              <Animated.View
+                style={[
+                  styles.directionPill,
+                  {
+                    position: 'absolute',
+                    bottom: 24,
+                    transform: [
+                      {
+                        translateY: arrowAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, 14],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              >
+                <MaterialCommunityIcons name="arrow-down-bold" size={24} color={c.primary} />
+                <Text style={styles.directionText}>Cúi nhẹ cằm xuống</Text>
+              </Animated.View>
+            ) : null}
+
+            {activeAngle.id === 'frontal' ? (
+              <Animated.View
+                style={[
+                  styles.directionPill,
+                  {
+                    position: 'absolute',
+                    bottom: 24,
+                    transform: [
+                      {
+                        scale: arrowAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0.96, 1.05],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              >
+                <MaterialCommunityIcons name="crosshairs-gps" size={22} color={c.primary} />
+                <Text style={styles.directionText}>Nhìn thẳng vào tâm</Text>
+              </Animated.View>
+            ) : null}
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.sheet}>
