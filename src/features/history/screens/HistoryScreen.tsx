@@ -20,6 +20,9 @@ import {
 } from '../../../theme/MobileDesignSystem';
 
 import { useAuth } from '../../../context/AuthContext';
+import { paymentApi } from '../../../api/payment';
+import { PaymentOrderResponse } from '../../../types/payment';
+import MobileVietQrPaymentModal from '../../../components/MobileVietQrPaymentModal';
 
 interface HistoryScreenProps {
   navigation: any;
@@ -60,9 +63,35 @@ export default function HistoryScreen({ navigation }: HistoryScreenProps) {
   const theme = useTheme() as AppTheme;
   const c = theme.colors;
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user, patron } = useAuth();
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
   const [showHeader, setShowHeader] = useState(false);
+  const [qrModalVisible, setQrModalVisible] = useState(false);
+  const [activePaymentOrder, setActivePaymentOrder] = useState<PaymentOrderResponse | null>(null);
+  const [payingRecordId, setPayingRecordId] = useState<string | null>(null);
+
+  const handlePayVietQr = async (recordId: string) => {
+    try {
+      setPayingRecordId(recordId);
+      triggerHaptic.selection();
+      const order = await paymentApi.createPaymentOrder([recordId], 'vietqr');
+      setActivePaymentOrder(order);
+      setQrModalVisible(true);
+    } catch (err: any) {
+      triggerHaptic.error();
+      Alert.alert('Lỗi tạo mã thanh toán', err?.response?.data?.message || err?.message || 'Không thể tạo mã VietQR');
+    } finally {
+      setPayingRecordId(null);
+    }
+  };
+
+  const handlePaymentSuccess = (orderCode: string) => {
+    setQrModalVisible(false);
+    setActivePaymentOrder(null);
+    triggerHaptic.success();
+    Alert.alert('Thanh toán thành công', `Mã GD ${orderCode} đã được gạch nợ. Thẻ độc giả đã được mở khóa.`);
+    void refetch();
+  };
 
   const {
     data: records,
@@ -303,6 +332,35 @@ export default function HistoryScreen({ navigation }: HistoryScreenProps) {
                           </Button>
                         )}
                       </View>
+
+                      {/* Hiển thị nợ phí phạt và nút thanh toán VietQR online từ xa */}
+                      {isReturned && (Number(record.fine_amount) > 0 || Number(record.damage_fee) > 0) && !record.fine_paid && (
+                        <View style={{ marginTop: 8, padding: 8, borderRadius: 8, backgroundColor: '#FFF5F5', borderColor: '#FFCDD2', borderWidth: 1 }}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <View style={{ flex: 1, paddingRight: 8 }}>
+                              <Text style={{ color: '#D32F2F', fontWeight: 'bold', fontSize: 12 }}>
+                                ⚠️ Nợ phí: {((Number(record.fine_amount) || 0) + (Number(record.damage_fee) || 0)).toLocaleString('vi-VN')} đ (Chưa trả)
+                              </Text>
+                              <Text style={{ color: '#777', fontSize: 10, marginTop: 2 }}>
+                                {Number(record.fine_amount) > 0 ? `Phạt trễ: ${Number(record.fine_amount).toLocaleString('vi-VN')} đ  ` : ''}
+                                {Number(record.damage_fee) > 0 ? `Hư hỏng: ${Number(record.damage_fee).toLocaleString('vi-VN')} đ` : ''}
+                              </Text>
+                            </View>
+                            <Button
+                              mode="contained"
+                              compact
+                              loading={payingRecordId === record.id}
+                              disabled={payingRecordId === record.id}
+                              icon="qrcode-scan"
+                              onPress={() => handlePayVietQr(record.id)}
+                              style={{ borderRadius: 6, backgroundColor: '#D32F2F' }}
+                              labelStyle={{ fontSize: 11, fontWeight: 'bold' }}
+                            >
+                              VietQR
+                            </Button>
+                          </View>
+                        </View>
+                      )}
                     </View>
                   </View>
                 </Surface>
@@ -311,6 +369,19 @@ export default function HistoryScreen({ navigation }: HistoryScreenProps) {
           })
         )}
       </ScrollView>
+
+      {/* Modal thanh toán VietQR động cho sinh viên */}
+      <MobileVietQrPaymentModal
+        visible={qrModalVisible}
+        order={activePaymentOrder}
+        patronName={patron?.fullName || user?.full_name}
+        studentCode={patron?.studentCode || user?.email?.split('@')[0]}
+        onDismiss={() => {
+          setQrModalVisible(false);
+          setActivePaymentOrder(null);
+        }}
+        onSuccess={handlePaymentSuccess}
+      />
     </SafeAreaView>
   );
 }

@@ -3,18 +3,18 @@
  * (MultiAngleCapture yaw/pitch), dùng Euler angles của ML Kit:
  * headEulerAngleY ~ yaw (quay trái/phải), headEulerAngleX ~ pitch (ngửa/cúi).
  *
- * LƯU Ý MIRROR (kiểm chứng trên máy thật Phase 2): camera trước lật ảnh nên
- * dấu Y có thể đảo so với thực tế. Bảng dưới giả định ảnh đã mirror;
- * nếu test máy thấy trái/phải ngược nhau, đảo dấu 2 dòng right/left.
+ * LƯU Ý MIRROR: camera trước lật ảnh nên dấu Y có thể đảo so với thực tế.
+ * Bảng dưới đã được cân bằng độ nhạy (Yaw 15° - 45°) để người dùng dễ đạt yêu cầu
+ * mà vẫn đảm bảo tính toán 3D của khuôn mặt.
  */
 
 export type FaceAngleId = 'frontal' | 'right' | 'left' | 'down';
 
 export const POSE_RANGES: Record<FaceAngleId, { yaw: [number, number]; pitch: [number, number] }> = {
-  frontal: { yaw: [-12, 12], pitch: [-12, 12] },
-  right: { yaw: [20, 50], pitch: [-15, 15] },
-  left: { yaw: [-50, -20], pitch: [-15, 15] },
-  down: { yaw: [-15, 15], pitch: [15, 45] },
+  frontal: { yaw: [-15, 15], pitch: [-15, 15] },
+  right: { yaw: [15, 45], pitch: [-20, 20] },
+  left: { yaw: [-45, -15], pitch: [-20, 20] },
+  down: { yaw: [-18, 18], pitch: [12, 45] },
 };
 
 const FIX_HINT: Record<FaceAngleId, string> = {

@@ -49,6 +49,10 @@ export interface BorrowRecord {
   returned_by_email?: string;
   return_method?: string;
   note?: string;
+  fine_amount?: number;
+  damage_fee?: number;
+  fine_paid?: boolean;
+  total_due?: number;
   book?: Book;
   copy?: { id: string; barcode: string; condition?: string | null; status?: string | null; shelf_location?: string | null } | null;
   return_condition?: string;
@@ -66,6 +70,10 @@ export interface ReturnResponse {
   message: string;
   record?: BorrowRecord;
   note?: string;
+  fine_amount?: number;
+  damage_fee?: number;
+  fine_paid?: boolean;
+  total_due?: number;
 }
 
 export interface Patron {

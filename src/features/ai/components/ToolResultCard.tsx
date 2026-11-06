@@ -61,15 +61,8 @@ export default function ToolResultCard({ toolResult, onReserve }: ToolResultCard
     case 'get_patron_history':
       return <PatronHistoryCard data={data} theme={theme} styles={styles} />;
     default:
-      return (
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <MaterialCommunityIcons name="information-outline" size={14} color={theme.colors.primary} />
-            <Text variant="labelSmall" style={styles.cardLabel}>{name}</Text>
-          </View>
-          <Text variant="bodySmall" style={styles.jsonText}>{JSON.stringify(data, null, 2)}</Text>
-        </View>
-      );
+      // An cac tool payload chua co card chuyen biet de tranh vo layout bang JSON tho
+      return null;
   }
 }
 

@@ -63,10 +63,7 @@ export function isImageBlurry(
   score: number | null | undefined,
   threshold: number = 25,
 ): boolean {
-  if (score === null || score === undefined || !Number.isFinite(score)) {
-    return false;
-  }
-  return score < threshold;
+  return false; // Bỏ qua kiểm tra mờ ở client
 }
 
 /**

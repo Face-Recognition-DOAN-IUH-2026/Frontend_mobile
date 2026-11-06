@@ -109,7 +109,7 @@ export default function FaceCameraScreen({ navigation }: FaceCameraScreenProps) 
       );
       const message =
         failed.length > 0
-          ? `${buildAngleErrorMessage(failed, fallback)}\nToàn bộ đã rollback, vui lòng chụp lại các góc lỗi.`
+          ? `${buildAngleErrorMessage(failed, fallback)}\nCác góc đạt chuẩn đã được lưu tạm. Bạn chỉ cần chụp lại các góc chưa đạt để hoàn tất.`
           : fallback;
       setFailedAngles(failed);
       Alert.alert('Đăng ký chưa đạt', message);

@@ -43,12 +43,15 @@ export default function FaceLoginScreen({ navigation }: FaceLoginScreenProps) {
         if (success) {
           return;
         }
+        // Nếu chưa fail hẳn và còn lượt thử, hiển thị thông báo chờ
         if (!faceFailed && faceAttemptCount < 2) {
           setError('Không nhận diện được, thử lại');
         }
       }
     } catch (err: any) {
-      const message = err?.response?.data?.detail || err?.message || 'Đăng nhập thất bại';
+      // Nhận error detail thực từ backend (do useFaceLoginState re-throw)
+      const rawDetail = err?.response?.data?.detail || err?.response?.data?.error || err?.message;
+      const message = rawDetail || 'Đăng nhập thất bại, thử lại';
       setError(message);
     } finally {
       setIsCapturing(false);
