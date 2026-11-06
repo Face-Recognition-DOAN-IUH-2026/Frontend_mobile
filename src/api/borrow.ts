@@ -1,5 +1,5 @@
 import api from './client';
-import { BorrowResponse, ReturnResponse, BorrowRecord, Book, BookWithStats, BookImportResponse, StaffPatronActiveBorrowsResponse, CreateBorrowSlipRequest, CreateBorrowSlipResponse, LookupBorrowSlipRequest, LookupBorrowSlipResponse, ConfirmBorrowSlipRequest } from '../types';
+import { BorrowResponse, ReturnResponse, BorrowRecord, Book, BookWithStats, BookImportResponse, StaffPatronActiveBorrowsResponse, CreateBorrowSlipRequest, CreateBorrowSlipResponse, LookupBorrowSlipRequest, LookupBorrowSlipResponse, ConfirmBorrowSlipRequest, QuickSearchCopy } from '../types';
 
 export interface WaitlistEntry {
   id: string;
@@ -98,6 +98,11 @@ export const borrowApi = {
 
   batchImportByIsbn: async (items: { isbn: string; quantity: number }[]): Promise<BookImportResponse> => {
     const response = await api.post<BookImportResponse>('/borrow/isbn-import/batch', { items });
+    return response.data;
+  },
+
+  quickSearchCopies: async (q: string, limit = 10): Promise<QuickSearchCopy[]> => {
+    const response = await api.get<QuickSearchCopy[]>('/borrow/copies/quick-search', { params: { q, limit } });
     return response.data;
   },
 

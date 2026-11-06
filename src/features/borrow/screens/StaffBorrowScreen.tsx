@@ -1,11 +1,11 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { View, StyleSheet, Alert, FlatList } from 'react-native';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { View, StyleSheet, Alert, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, Button, Surface, TextInput, Divider, useTheme } from 'react-native-paper';
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { borrowApi } from '../../../api/borrow';
-import { Book, BorrowRecord } from '../../../types';
+import { Book, BorrowRecord, QuickSearchCopy } from '../../../types';
 import { AppTheme } from '../../../theme/DarkTheme';
 import { devError } from '../../../utils/logger';
 import { GradientHeader, SectionCard, StatCard, EmptyState, GRADIENTS } from '../../../theme/MobileDesignSystem';
@@ -46,6 +46,9 @@ export default function StaffBorrowScreen() {
   const [activeRecords, setActiveRecords] = useState<BorrowRecord[]>([]);
   const [borrowConfig, setBorrowConfig] = useState<{ max_borrow_books: number }>({ max_borrow_books: 3 });
   const [manualIsbn, setManualIsbn] = useState('');
+  const [suggestions, setSuggestions] = useState<QuickSearchCopy[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -55,8 +58,8 @@ export default function StaffBorrowScreen() {
   const remaining = borrowConfig.max_borrow_books - activeCount;
   const canBorrow = remaining > 0 && overdueCount === 0;
 
-  const lookupManualIsbn = async () => {
-    const isbn = manualIsbn.trim();
+  const performLookup = async (isbnInput: string) => {
+    const isbn = isbnInput.trim();
     if (!isbn || !patronId) return;
     setScanError(null);
 
@@ -123,6 +126,43 @@ export default function StaffBorrowScreen() {
       setManualIsbn('');
     }
   };
+
+  const handleSearchChange = useCallback((val: string) => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    setSuggestions([]);
+    if (!val.trim()) {
+      setIsSearching(false);
+      return;
+    }
+    searchDebounceRef.current = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const data = await borrowApi.quickSearchCopies(val.trim(), 10);
+        setSuggestions(data);
+      } catch {
+        setSuggestions([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, []);
+
+  const lookupManualIsbn = useCallback(() => performLookup(manualIsbn), [manualIsbn, performLookup]);
+
+  const handleSelectSuggestion = useCallback(
+    (item: QuickSearchCopy) => {
+      setSuggestions([]);
+      setIsSearching(false);
+      performLookup(item.barcode);
+    },
+    [performLookup]
+  );
 
   const handleBarCodeScanned = useCallback(async (result: BarcodeScanningResult) => {
     if (scanned || !result.data) return;
@@ -513,27 +553,65 @@ export default function StaffBorrowScreen() {
       ) : null}
 
       {patronId && canBorrow ? (
-        <View style={styles.manualInputRow}>
-          <TextInput
-            value={manualIsbn}
-            onChangeText={setManualIsbn}
-            placeholder="Quét hoặc nhập mã bản sao (LIB-...) hoặc ISBN..."
-            mode="outlined"
-            style={styles.manualInput}
-            outlineStyle={styles.inputOutline}
-            activeOutlineColor={c.primary}
-            autoCapitalize="characters"
-            onSubmitEditing={lookupManualIsbn}
-          />
-          <Button
-            mode="contained"
-            compact
-            onPress={lookupManualIsbn}
-            disabled={!manualIsbn.trim()}
-            style={styles.manualLookupButton}
-          >
-            Thêm
-          </Button>
+        <View style={styles.manualInputSection}>
+          <View style={styles.manualInputRow}>
+            <TextInput
+              value={manualIsbn}
+              onChangeText={(v) => { setManualIsbn(v); handleSearchChange(v); }}
+              placeholder="Quét hoặc nhập mã bản sao (LIB-...) hoặc ISBN..."
+              mode="outlined"
+              style={styles.manualInput}
+              outlineStyle={styles.inputOutline}
+              activeOutlineColor={c.primary}
+              autoCapitalize="characters"
+              onSubmitEditing={lookupManualIsbn}
+            />
+            <Button
+              mode="contained"
+              compact
+              onPress={lookupManualIsbn}
+              disabled={!manualIsbn.trim()}
+              style={styles.manualLookupButton}
+            >
+              Thêm
+            </Button>
+          </View>
+
+          {suggestions.length > 0 && (
+            <View style={styles.suggestionBox}>
+              <FlatList
+                data={suggestions}
+                keyExtractor={(item) => item.id}
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingVertical: 4 }}
+                style={{ maxHeight: 220 }}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    onPress={() => handleSelectSuggestion(item)}
+                    style={styles.suggestionRow}
+                  >
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <Text style={styles.suggestionTitle} numberOfLines={1}>{item.book?.title || item.barcode}</Text>
+                      <Text style={styles.suggestionMeta} numberOfLines={1}>{item.barcode} | {item.book?.isbn || '—'} | {item.book?.author || '—'}</Text>
+                      <Text style={styles.suggestionMeta} numberOfLines={1}>Kệ: {item.shelf_location || 'Chưa xếp'}</Text>
+                    </View>
+                    <Text
+                      style={[
+                        styles.suggestionStatus,
+                        item.is_available ? styles.suggestionStatusAvailable : styles.suggestionStatusUnavailable,
+                      ]}
+                    >
+                      {item.is_available ? 'Sẵn sàng' : 'Đã mượn'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={() => null}
+              />
+            </View>
+          )}
+          {isSearching && <ActivityIndicator style={{ marginVertical: 6 }} />}
         </View>
       ) : null}
 
@@ -705,13 +783,43 @@ function createStyles(theme: AppTheme) {
       alignSelf: 'flex-start',
       borderColor: c.primary,
     },
+    manualInputSection: {
+      marginHorizontal: 16,
+      marginBottom: 12,
+    },
     manualInputRow: {
       flexDirection: 'row',
       gap: 8,
-      marginHorizontal: 16,
-      marginBottom: 12,
       alignItems: 'center',
     },
+    suggestionBox: {
+      marginTop: 8,
+      borderWidth: 1,
+      borderColor: c.outlineVariant,
+      borderRadius: 10,
+      backgroundColor: c.surface,
+      overflow: 'hidden',
+    },
+    suggestionRow: {
+      flexDirection: 'row',
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: c.outlineVariant,
+      alignItems: 'center',
+    },
+    suggestionTitle: { fontWeight: '700', fontSize: 14, color: c.onSurface },
+    suggestionMeta: { fontSize: 12, color: c.onSurfaceVariant },
+    suggestionStatus: {
+      fontSize: 11,
+      fontWeight: '700',
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 4,
+      overflow: 'hidden',
+    },
+    suggestionStatusAvailable: { color: '#059669', backgroundColor: 'rgba(16,185,129,0.15)' },
+    suggestionStatusUnavailable: { color: '#dc2626', backgroundColor: 'rgba(239,68,68,0.15)' },
     manualInput: {
       flex: 1,
       backgroundColor: 'transparent',

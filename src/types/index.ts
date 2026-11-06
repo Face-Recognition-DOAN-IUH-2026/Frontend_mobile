@@ -298,6 +298,23 @@ export interface ConfirmBorrowSlipRequest {
   items: ConfirmBorrowSlipItem[];
 }
 
+export interface QuickSearchCopy {
+  id: string;
+  book_id: string;
+  barcode: string;
+  is_available: boolean;
+  shelf_location: string | null;
+  condition: string;
+  status: string;
+  book: {
+    id: string;
+    isbn: string;
+    title: string;
+    author: string | null;
+    shelf_location: string | null;
+  } | null;
+}
+
 export interface Notification {
   id: string;
   userId: string;
