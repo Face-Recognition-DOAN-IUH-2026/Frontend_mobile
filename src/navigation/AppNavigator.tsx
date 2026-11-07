@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { NavigationContainer, DarkTheme as NavigationDarkTheme, DefaultTheme as NavigationDefaultTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -25,8 +25,9 @@ import ProfileScreen from '../features/profile/screens/ProfileScreen';
 import ReturnScreen from '../features/borrow/screens/ReturnScreen';
 import ScheduleScreen from '../features/schedule/screens/ScheduleScreen';
 import StaffBorrowScreen from '../features/borrow/screens/StaffBorrowScreen';
-import AIChatRoute from '../features/ai/screens/AIChatRoute';
+import AIChatScreen from '../features/ai/screens/AIChatScreen';
 import AIHealthScreen from '../features/ai/screens/AIHealthScreen';
+import KnowledgeBaseScreen from '../features/ai/screens/KnowledgeBaseScreen';
 import BookRecommendationsScreen from '../features/book/screens/BookRecommendationsScreen';
 import MyReservationsScreen from '../features/library/screens/MyReservationsScreen';
 import BookCatalogScreen from '../features/book/screens/BookCatalogScreen';
@@ -178,7 +179,7 @@ function PatronTabNavigator() {
       />
       <PatronTab.Screen
         name="AIChat"
-        component={AIChatRoute}
+        component={AIChatScreen}
         options={{
           title: 'AI Chat',
           headerShown: false,
@@ -275,7 +276,7 @@ function StaffTabNavigator() {
       />
       <StaffTab.Screen
         name="AIChat"
-        component={AIChatRoute}
+        component={AIChatScreen}
         options={{
           title: 'AI Chat',
           headerShown: false,
@@ -421,8 +422,13 @@ function StaffStackNavigator() {
       />
       <StaffStack.Screen
         name="AIChat"
-        component={AIChatRoute}
+        component={AIChatScreen}
         options={{ title: 'AI Chat', presentation: 'card' }}
+      />
+      <StaffStack.Screen
+        name="KnowledgeBase"
+        component={KnowledgeBaseScreen}
+        options={{ title: 'Knowledge Base (RAG)', presentation: 'card', headerShown: false }}
       />
       <StaffStack.Screen
         name="Notifications"

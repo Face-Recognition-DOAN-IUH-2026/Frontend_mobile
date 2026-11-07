@@ -250,6 +250,14 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                   color={GRADIENTS.violet[0]}
                   onPress={() => navigation.navigate('AIChat')}
                 />
+                {user?.role === 'admin' && (
+                  <QuickActionButton
+                    label="Tri thức RAG"
+                    icon="book-open-page-variant"
+                    color={GRADIENTS.indigo[0]}
+                    onPress={() => navigation.navigate('KnowledgeBase')}
+                  />
+                )}
               </>
             ) : (
               <>
