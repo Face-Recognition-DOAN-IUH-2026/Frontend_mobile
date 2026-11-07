@@ -17,6 +17,21 @@ export interface AIToolResult {
   result: { success: boolean; data?: any; error?: string };
 }
 
+export interface AIToolSummary {
+  name: string;
+  description: string;
+}
+
+export interface AIRagDocument {
+  source: string;
+  docTitle: string;
+  audience: 'public' | 'staff_only';
+  chunksCount: number;
+  uploadedAt?: string;
+  fileSize?: string;
+  roles?: string;
+}
+
 export interface AIPendingAction {
   action: string;
   description: string;

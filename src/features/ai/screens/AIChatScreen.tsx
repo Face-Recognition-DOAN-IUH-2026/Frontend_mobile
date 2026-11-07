@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, FlatList, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { Alert, FlatList, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { IconButton, Text, TextInput, Surface, useTheme } from 'react-native-paper';
+import { Button, IconButton, Modal, Portal, Text, TextInput, Surface, useTheme } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AIMessage, AIPendingAction } from '../../../types/ai';
+import { AIMessage, AIPendingAction, AIToolSummary } from '../../../types/ai';
 import { aiApi } from '../../../api/ai';
 import { joinWaitlist, leaveWaitlist } from '../../../api/borrow';
 import { useAuth } from '../../../context/AuthContext';
@@ -41,6 +41,33 @@ const WELCOME_ACTIONS_PATRON = [
   { label: 'Thẻ thư viện', message: 'tra cứu thông tin thẻ', icon: 'card-account-details' },
 ];
 
+interface ToolMeta {
+  label: string;
+  icon: string;
+  samplePrompt: string;
+}
+
+const TOOL_METAS: Record<string, ToolMeta> = {
+  search_books: { label: 'Tìm sách', icon: 'book-search', samplePrompt: 'Tìm sách ' },
+  get_shelf_location: { label: 'Vị trí kệ', icon: 'map-marker-path', samplePrompt: 'Tìm vị trí kệ của sách ' },
+  lookup_book: { label: 'Tra cứu sách', icon: 'book-open-variant', samplePrompt: 'Tra cứu chi tiết sách ' },
+  get_library_hours: { label: 'Giờ mở cửa', icon: 'clock-outline', samplePrompt: 'Xem giờ mở cửa thư viện' },
+  get_patron_info: { label: 'Thẻ thư viện', icon: 'card-account-details', samplePrompt: 'Tra cứu thông tin thẻ thư viện' },
+  get_patron_borrows: { label: 'Sách đang mượn', icon: 'book-clock', samplePrompt: 'Xem danh sách sách đang mượn' },
+  get_patron_history: { label: 'Lịch sử mượn', icon: 'history', samplePrompt: 'Xem lịch sử mượn trả sách' },
+  get_overdue_borrows: { label: 'Sách trễ hạn', icon: 'alert-circle', samplePrompt: 'Kiểm tra sách trễ hạn toàn hệ thống' },
+  get_schedule_today: { label: 'Lịch trực hôm nay', icon: 'calendar-clock', samplePrompt: 'Xem lịch trực hôm nay' },
+  get_all_schedules: { label: 'Toàn bộ lịch trực', icon: 'calendar-multiselect', samplePrompt: 'Xem toàn bộ lịch trực thư viện hôm nay' },
+};
+
+function getToolMeta(toolName: string): ToolMeta {
+  return TOOL_METAS[toolName] || {
+    label: toolName.replace(/_/g, ' '),
+    icon: 'wrench',
+    samplePrompt: toolName.replace(/_/g, ' '),
+  };
+}
+
 export default function AIChatScreen({ navigation, route }: AIChatScreenProps) {
   const theme = useTheme() as AppTheme;
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -56,6 +83,14 @@ export default function AIChatScreen({ navigation, route }: AIChatScreenProps) {
   const flatListRef = useRef<FlatList>(null);
   const { isOnline } = useNetwork();
   const [lastReservation, setLastReservation] = useState<{ id: string; bookId: string; title: string } | null>(null);
+  const [availableTools, setAvailableTools] = useState<AIToolSummary[]>([]);
+  const [toolsModalVisible, setToolsModalVisible] = useState(false);
+
+  useEffect(() => {
+    aiApi.getTools()
+      .then((tools) => setAvailableTools(tools || []))
+      .catch(() => {});
+  }, [user?.role]);
 
   const currentUserId = useMemo(() => patron?.id || user?.id, [patron?.id, user?.id]);
 
@@ -322,6 +357,17 @@ export default function AIChatScreen({ navigation, route }: AIChatScreenProps) {
         title="TVTL AI"
         subtitle="Trợ lý thông minh"
         icon="robot"
+        right={
+          availableTools.length > 0 ? (
+            <IconButton
+              icon="tools"
+              size={20}
+              iconColor="#FFFFFF"
+              onPress={() => setToolsModalVisible(true)}
+              style={{ margin: 0 }}
+            />
+          ) : undefined
+        }
       />
 
       <KeyboardAvoidingView
@@ -359,6 +405,31 @@ export default function AIChatScreen({ navigation, route }: AIChatScreenProps) {
             </View>
           </View>
         ) : null}
+
+        {availableTools.length > 0 && (
+          <View style={styles.toolBarWrapper}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.toolBarContent}
+            >
+              {availableTools.map((tool) => {
+                const meta = getToolMeta(tool.name);
+                return (
+                  <TouchableOpacity
+                    key={tool.name}
+                    style={styles.toolChip}
+                    activeOpacity={0.7}
+                    onPress={() => setInput(meta.samplePrompt)}
+                  >
+                    <MaterialCommunityIcons name={meta.icon as any} size={14} color={theme.colors.primary} />
+                    <Text variant="labelSmall" style={styles.toolChipText}>{meta.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
 
         <View style={styles.inputContainer}>
           <View style={styles.inputWrapper}>
@@ -405,6 +476,62 @@ export default function AIChatScreen({ navigation, route }: AIChatScreenProps) {
           onDismiss={() => setLastReservation(null)}
           bottomOffset={72}
         />
+
+        <Portal>
+          <Modal
+            visible={toolsModalVisible}
+            onDismiss={() => setToolsModalVisible(false)}
+            contentContainerStyle={styles.toolsModal}
+          >
+            <View style={styles.toolsModalHeader}>
+              <View style={styles.toolsModalTitleRow}>
+                <MaterialCommunityIcons name="tools" size={20} color={theme.colors.primary} />
+                <Text variant="titleMedium" style={styles.toolsModalTitle}>Công cụ AI ({availableTools.length})</Text>
+              </View>
+              <IconButton icon="close" size={20} onPress={() => setToolsModalVisible(false)} />
+            </View>
+            <ScrollView style={styles.toolsModalList}>
+              {availableTools.map((tool) => {
+                const meta = getToolMeta(tool.name);
+                return (
+                  <View key={tool.name} style={styles.toolItemCard}>
+                    <View style={styles.toolItemIcon}>
+                      <MaterialCommunityIcons name={meta.icon as any} size={20} color={theme.colors.primary} />
+                    </View>
+                    <View style={styles.toolItemInfo}>
+                      <Text variant="titleSmall" style={styles.toolItemName}>{meta.label}</Text>
+                      <Text variant="bodySmall" style={styles.toolItemDesc}>{tool.description}</Text>
+                    </View>
+                    <Button
+                      mode="contained-tonal"
+                      compact
+                      onPress={() => {
+                        setInput(meta.samplePrompt);
+                        setToolsModalVisible(false);
+                      }}
+                      style={styles.toolItemBtn}
+                    >
+                      Dùng
+                    </Button>
+                  </View>
+                );
+              })}
+            </ScrollView>
+            {user?.role === 'admin' && (
+              <Button
+                mode="contained"
+                icon="book-open-page-variant"
+                onPress={() => {
+                  setToolsModalVisible(false);
+                  navigation.navigate('KnowledgeBase');
+                }}
+                style={{ margin: 16 }}
+              >
+                Quản lý Knowledge Base (RAG)
+              </Button>
+            )}
+          </Modal>
+        </Portal>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -566,6 +693,92 @@ function createStyles(theme: AppTheme) {
     },
     sendBtnDisabled: {
       backgroundColor: c.outlineVariant,
+    },
+    toolBarWrapper: {
+      paddingVertical: 6,
+      backgroundColor: c.background,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: c.outlineVariant,
+    },
+    toolBarContent: {
+      paddingHorizontal: 12,
+      gap: 8,
+    },
+    toolChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: c.surface,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: c.primary + '30',
+      elevation: 1,
+    },
+    toolChipText: {
+      color: c.onSurface,
+      fontWeight: '600',
+      fontSize: 12,
+    },
+    toolsModal: {
+      backgroundColor: c.surface,
+      margin: 20,
+      borderRadius: 16,
+      maxHeight: '80%',
+      overflow: 'hidden',
+    },
+    toolsModalHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.outlineVariant,
+    },
+    toolsModalTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    toolsModalTitle: {
+      fontWeight: 'bold',
+      color: c.onSurface,
+    },
+    toolsModalList: {
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+    },
+    toolItemCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.outlineVariant,
+      gap: 12,
+    },
+    toolItemIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: c.primary + '15',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    toolItemInfo: {
+      flex: 1,
+    },
+    toolItemName: {
+      fontWeight: '600',
+      color: c.onSurface,
+    },
+    toolItemDesc: {
+      color: c.onSurfaceVariant,
+      marginTop: 2,
+    },
+    toolItemBtn: {
+      marginLeft: 4,
     },
   });
 }

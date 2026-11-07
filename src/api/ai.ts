@@ -10,9 +10,47 @@ import {
   AIInsightExplanation,
   AIInsightList,
   CompanionChunk,
+  AIToolSummary,
+  AIRagDocument,
 } from '../types/ai';
 
 export const aiApi = {
+  async getTools(): Promise<AIToolSummary[]> {
+    const { data } = await api.get('/ai/tools');
+    return data;
+  },
+
+  async getRagDocuments(): Promise<AIRagDocument[]> {
+    const { data } = await api.get('/ai/rag/documents');
+    return data?.data || [];
+  },
+
+  async uploadRagDocument(formData: FormData): Promise<{ success: boolean; data: AIRagDocument }> {
+    const { data } = await api.post('/ai/rag/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return data;
+  },
+
+  async uploadRagText(
+    title: string,
+    text: string,
+    audience: 'public' | 'staff_only' = 'public',
+  ): Promise<{ success: boolean; data: AIRagDocument }> {
+    const { data } = await api.post('/ai/rag/upload', {
+      title,
+      text,
+      audience,
+    });
+    return data;
+  },
+
+  async deleteRagDocument(source: string): Promise<{ success: boolean; message: string }> {
+    const { data } = await api.delete(`/ai/rag/documents/${encodeURIComponent(source)}`);
+    return data;
+  },
   async chat(message: string, sessionId?: string, role?: string, patronId?: string): Promise<AIChatResponse> {
     const endpoint = role === 'admin' ? '/ai/admin/chat'
                    : role === 'staff' ? '/ai/staff/chat'

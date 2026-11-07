@@ -44,6 +44,7 @@ export type StaffStackParamList = {
   ImportBooks: undefined;
   AIHealth: undefined;
   AIChat: undefined;
+  KnowledgeBase: undefined;
   Notifications: undefined;
   StaffReturn: undefined;
   StaffBorrow: undefined;
