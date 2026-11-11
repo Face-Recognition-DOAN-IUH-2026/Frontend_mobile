@@ -2,7 +2,7 @@ import { NativeModules, Platform } from 'react-native';
 
 const ENV_API_URL = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/+$/, '');
 
-const DEFAULT_FALLBACK_URL = 'http://192.168.1.100:80/api';
+const DEFAULT_FALLBACK_URL = 'http://192.168.1.79:80/api';
 
 function getDevHost(): string {
   // Automatically extract host IP from Metro bundler's scriptURL if available (e.g. "http://192.168.1.xxx:8081/...")
@@ -18,38 +18,41 @@ function getDevHost(): string {
 }
 
 function getApiBaseUrl(): string {
-  // In development, if connected to a remote Metro host (physical phone via Wi-Fi), prioritize that host IP
-  if (__DEV__) {
-    const devHost = getDevHost();
-    if (devHost && devHost !== 'localhost' && devHost !== '10.0.2.2') {
-      return `http://${devHost}:80/api`;
-    }
-  }
-
+  // Explicit environment variable takes top priority
   if (ENV_API_URL) {
     try {
       const url = new URL(ENV_API_URL);
-      if (['http:', 'https:'].includes(url.protocol) && url.pathname.endsWith('/api') && !url.search && !url.hash) {
+      if (['http:', 'https:'].includes(url.protocol)) {
         return ENV_API_URL;
       }
     } catch {
       // ignore parsing error and continue to fallback
     }
   }
-  if (__DEV__) return `http://${getDevHost()}:80/api`;
+
+  // In development, if connected to a remote Metro host (physical phone via Wi-Fi), prioritize that host IP
+  if (__DEV__) {
+    const devHost = getDevHost();
+    if (devHost && devHost !== 'localhost' && devHost !== '10.0.2.2') {
+      return `http://${devHost}:80/api`;
+    }
+    return `http://${getDevHost()}:80/api`;
+  }
+
   return DEFAULT_FALLBACK_URL;
 }
 
 function getApiBaseNoPath(): string {
+  if (ENV_API_URL) return ENV_API_URL.replace(/\/api\/?$/, '');
+
   if (__DEV__) {
     const devHost = getDevHost();
     if (devHost && devHost !== 'localhost' && devHost !== '10.0.2.2') {
       return `http://${devHost}:80`;
     }
+    return `http://${getDevHost()}:80`;
   }
 
-  if (ENV_API_URL) return ENV_API_URL.replace(/\/api\/?$/, '');
-  if (__DEV__) return `http://${getDevHost()}:80`;
   return DEFAULT_FALLBACK_URL.replace(/\/api\/?$/, '');
 }
 
