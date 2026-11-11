@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { View, StyleSheet, Image, ActivityIndicator, Linking, TouchableOpacity, ScrollView, Alert, Platform } from 'react-native';
+import { View, StyleSheet, Image, ActivityIndicator, Linking, TouchableOpacity, ScrollView, Alert, Platform, Share, NativeModules } from 'react-native';
 import { Dialog, Portal, Button, Text, useTheme, IconButton } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { paymentApi } from '../api/payment';
@@ -27,7 +27,19 @@ export const POPULAR_BANKS: PopularBank[] = [
   { id: 'momo', name: 'MoMo', shortName: 'Ví MoMo', schemes: ['momo://'], color: '#A50064' },
 ];
 
-async function safeCopyToClipboard(text: string): Promise<boolean> {
+function hasExpoClipboardNative(): boolean {
+  try {
+    const expoGlobal = (globalThis as any)?.expo?.modules;
+    if (expoGlobal && expoGlobal['ExpoClipboard']) return true;
+    if (NativeModules && (NativeModules.ExpoClipboard || NativeModules.Clipboard)) return true;
+  } catch {}
+  return false;
+}
+
+async function copyViaNativeClipboard(text: string): Promise<boolean> {
+  if (!hasExpoClipboardNative()) {
+    return false;
+  }
   try {
     const ExpoClipboard = require('expo-clipboard');
     if (ExpoClipboard && typeof ExpoClipboard.setStringAsync === 'function') {
@@ -35,19 +47,26 @@ async function safeCopyToClipboard(text: string): Promise<boolean> {
       return true;
     }
   } catch {
-    // ExpoClipboard native module not linked in current APK build
+    // Native module not linked
   }
+  return false;
+}
 
+async function safeCopyToClipboard(text: string, useShareFallback = false): Promise<boolean> {
   try {
-    const { Clipboard: RNClipboard } = require('react-native');
-    if (RNClipboard && typeof RNClipboard.setString === 'function') {
-      RNClipboard.setString(text);
-      return true;
-    }
-  } catch {
-    // Fallback Clipboard not available
-  }
+    const copied = await copyViaNativeClipboard(text);
+    if (copied) return true;
+  } catch {}
 
+  if (useShareFallback) {
+    try {
+      await Share.share({
+        message: text,
+        title: 'Thông tin thanh toán SePay',
+      });
+      return true;
+    } catch {}
+  }
   return false;
 }
 
@@ -148,7 +167,7 @@ export default function MobileVietQrPaymentModal({
 
   const handleCopy = async (text: string, field: string) => {
     triggerHaptic.selection();
-    await safeCopyToClipboard(text);
+    await safeCopyToClipboard(text, true);
     setCopiedField(field);
     setTimeout(() => setCopiedField(null), 2000);
   };
@@ -157,7 +176,7 @@ export default function MobileVietQrPaymentModal({
     if (!order) return;
     triggerHaptic.selection();
     const allInfo = `Ngân hàng: ${bankName}\nSố tài khoản: ${accountNumber}\nChủ tài khoản: ${accountHolder}\nSố tiền: ${Number(order.amount).toLocaleString('vi-VN')} đ\nNội dung: ${transferMsg}`;
-    await safeCopyToClipboard(allInfo);
+    await safeCopyToClipboard(allInfo, true);
     setCopiedField('all');
     setTimeout(() => setCopiedField(null), 2500);
   };
@@ -198,8 +217,8 @@ export default function MobileVietQrPaymentModal({
     const bank = targetBank || selectedBank;
     triggerHaptic.selection();
 
-    // 1. Sao chép nội dung chuyển khoản vào clipboard trước
-    await safeCopyToClipboard(transferMsg);
+    // 1. Thử sao chép ngầm vào clipboard nếu máy hỗ trợ
+    await safeCopyToClipboard(transferMsg, false);
     setCopiedField('msg');
 
     // 2. Thử mở trực tiếp qua custom scheme nếu máy đã đăng ký
