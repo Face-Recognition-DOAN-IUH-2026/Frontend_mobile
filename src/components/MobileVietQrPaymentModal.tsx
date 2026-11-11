@@ -151,7 +151,7 @@ export default function MobileVietQrPaymentModal({
       <Dialog visible={visible} onDismiss={onDismiss} style={[styles.dialog, { backgroundColor: theme.colors.surface }]}>
         <Dialog.Title style={styles.title}>
           <MaterialCommunityIcons name="qrcode-scan" size={24} color={theme.colors.primary} />
-          {'  '}Thanh toán VietQR Napas
+          {'  '}Thanh toán Chuyển khoản (SePay)
         </Dialog.Title>
 
         <Dialog.ScrollArea style={styles.scrollArea}>
@@ -182,7 +182,7 @@ export default function MobileVietQrPaymentModal({
                 <View style={styles.qrCard}>
                   <Image source={{ uri: qrImageUri }} style={styles.qrImage} resizeMode="contain" />
                   <Text variant="labelSmall" style={styles.napasTag}>
-                    Chuẩn Napas 247 · VietQR
+                    Chuẩn Napas 247 · SePay / VietQR
                   </Text>
                 </View>
 
