@@ -8,6 +8,7 @@ import { LoadingOverlay } from '../../../components/LoadingOverlay';
 import { API_BASE_NO_PATH } from '../../../config/api';
 
 const CLOUD_TOUR_URL = 'https://frontend-web-fawn-kappa.vercel.app/library/vr-tour';
+const LOCAL_TOUR_URL = 'http://192.168.1.79:3000/library/vr-tour';
 
 export default function LibraryTourScreen() {
   const theme = useTheme() as AppTheme;
@@ -17,27 +18,16 @@ export default function LibraryTourScreen() {
 
   const styles = useMemo(() => createStyles(theme), [theme]);
 
-  // Calculate default WebVR URL dynamically based on environment or local IP
+  // Default WebVR URL based on environment or hosted web domain
   const initialTourUrl = useMemo(() => {
     if (process.env.EXPO_PUBLIC_WEB_URL) {
       return `${process.env.EXPO_PUBLIC_WEB_URL.replace(/\/+$/, '')}/library/vr-tour`;
     }
-
-    const apiUrl = API_BASE_NO_PATH;
-    try {
-      const url = new URL(apiUrl);
-      url.port = '3000';
-      url.pathname = '/library/vr-tour';
-      return url.toString();
-    } catch (e) {
-      console.error('Error building VR tour URL:', e);
-    }
-    if (__DEV__) return `http://${Platform.OS === 'ios' ? 'localhost' : '10.0.2.2'}:3000/library/vr-tour`;
     return CLOUD_TOUR_URL;
   }, []);
 
   const [tourUrl, setTourUrl] = useState<string>(initialTourUrl);
-  const isCloud = tourUrl === CLOUD_TOUR_URL;
+  const isCloud = tourUrl.includes('vercel.app') || tourUrl.startsWith('https://');
 
   const handleReload = () => {
     setError(null);
@@ -48,7 +38,7 @@ export default function LibraryTourScreen() {
   const handleSwitchSource = (toCloud: boolean) => {
     setError(null);
     setLoading(true);
-    setTourUrl(toCloud ? CLOUD_TOUR_URL : initialTourUrl);
+    setTourUrl(toCloud ? CLOUD_TOUR_URL : LOCAL_TOUR_URL);
     setKey(prev => prev + 1);
   };
 

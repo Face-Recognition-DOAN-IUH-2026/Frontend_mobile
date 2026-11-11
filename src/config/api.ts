@@ -2,7 +2,7 @@ import { NativeModules, Platform } from 'react-native';
 
 const ENV_API_URL = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/+$/, '');
 
-const DEFAULT_FALLBACK_URL = 'http://192.168.1.79:80/api';
+const DEFAULT_FALLBACK_URL = 'https://iuhlib-api.duckdns.org/api';
 
 function getDevHost(): string {
   // Automatically extract host IP from Metro bundler's scriptURL if available (e.g. "http://192.168.1.xxx:8081/...")
