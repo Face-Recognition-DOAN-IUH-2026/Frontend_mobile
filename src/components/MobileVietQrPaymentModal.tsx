@@ -2,11 +2,34 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { View, StyleSheet, Image, ActivityIndicator, Linking, TouchableOpacity, ScrollView } from 'react-native';
 import { Dialog, Portal, Button, Text, useTheme, IconButton } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import * as Clipboard from 'expo-clipboard';
 import { paymentApi } from '../api/payment';
 import { PaymentOrderResponse } from '../types/payment';
 import { triggerHaptic } from '../utils/haptics';
 import { AppTheme } from '../theme/DarkTheme';
+
+async function safeCopyToClipboard(text: string): Promise<boolean> {
+  try {
+    const ExpoClipboard = require('expo-clipboard');
+    if (ExpoClipboard && typeof ExpoClipboard.setStringAsync === 'function') {
+      await ExpoClipboard.setStringAsync(text);
+      return true;
+    }
+  } catch {
+    // ExpoClipboard native module not linked in current APK build
+  }
+
+  try {
+    const { Clipboard: RNClipboard } = require('react-native');
+    if (RNClipboard && typeof RNClipboard.setString === 'function') {
+      RNClipboard.setString(text);
+      return true;
+    }
+  } catch {
+    // Fallback Clipboard not available
+  }
+
+  return false;
+}
 
 export interface MobileVietQrPaymentModalProps {
   visible: boolean;
@@ -104,7 +127,7 @@ export default function MobileVietQrPaymentModal({
 
   const handleCopy = async (text: string, field: string) => {
     triggerHaptic.selection();
-    await Clipboard.setStringAsync(text);
+    await safeCopyToClipboard(text);
     setCopiedField(field);
     setTimeout(() => setCopiedField(null), 2000);
   };
@@ -217,7 +240,7 @@ export default function MobileVietQrPaymentModal({
                       onPress={() => handleCopy(accountNumber, 'acc')}
                       activeOpacity={0.7}
                     >
-                      <Text variant="bodyMedium" style={{ fontFamily: 'monospace', fontWeight: '800', color: theme.colors.primary }}>
+                      <Text selectable={true} variant="bodyMedium" style={{ fontFamily: 'monospace', fontWeight: '800', color: theme.colors.primary }}>
                         {accountNumber}
                       </Text>
                       <IconButton
@@ -245,7 +268,7 @@ export default function MobileVietQrPaymentModal({
                       onPress={() => handleCopy(transferMsg, 'msg')}
                       activeOpacity={0.7}
                     >
-                      <Text variant="bodyMedium" style={{ fontFamily: 'monospace', fontWeight: '900', color: '#D32F2F' }}>
+                      <Text selectable={true} variant="bodyMedium" style={{ fontFamily: 'monospace', fontWeight: '900', color: '#D32F2F' }}>
                         {transferMsg}
                       </Text>
                       <IconButton

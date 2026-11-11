@@ -84,7 +84,7 @@ describe('MobileVietQrPaymentModal', () => {
       />
     );
 
-    expect(getByText(/Thanh toán VietQR Napas/)).toBeTruthy();
+    expect(getByText(/Thanh toán Chuyển khoản/)).toBeTruthy();
     expect(getByText('45.000 đ')).toBeTruthy();
     expect(getByText(/Trần Văn C/)).toBeTruthy();
     expect(getByText(/20054321/)).toBeTruthy();
