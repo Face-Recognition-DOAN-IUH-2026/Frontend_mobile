@@ -127,7 +127,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   const handlePaymentSuccess = async (orderCode: string) => {
     setQrPaymentOrder(null);
     triggerHaptic.success();
-    Alert.alert('Thành công', `Thanh toán VietQR thành công! (Mã GD: ${orderCode}). Thẻ thư viện đã được mở khóa.`);
+    Alert.alert('Thành công', `Thanh toán chuyển khoản thành công! (Mã GD: ${orderCode}). Thẻ thư viện đã được mở khóa.`);
     await loadFines();
   };
 

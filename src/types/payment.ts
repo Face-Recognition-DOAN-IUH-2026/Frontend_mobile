@@ -14,7 +14,7 @@ export interface PaymentOrderResponse {
   patronId: string;
   amount: number;
   status: 'pending' | 'completed' | 'expired' | 'cancelled';
-  paymentMethod: 'vietqr' | 'payos' | 'vnpay' | 'cash';
+  paymentMethod: 'vietqr' | 'sepay' | 'payos' | 'vnpay' | 'cash';
   qrUrl: string | null;
   qrData: string | null;
   expiresAt: string;

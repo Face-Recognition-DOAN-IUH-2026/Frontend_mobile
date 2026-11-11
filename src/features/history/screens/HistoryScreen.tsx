@@ -74,7 +74,7 @@ export default function HistoryScreen({ navigation }: HistoryScreenProps) {
     try {
       setPayingRecordId(recordId);
       triggerHaptic.selection();
-      const order = await paymentApi.createPaymentOrder([recordId], 'vietqr');
+      const order = await paymentApi.createPaymentOrder([recordId], 'sepay');
       setActivePaymentOrder(order);
       setQrModalVisible(true);
     } catch (err: any) {

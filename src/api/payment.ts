@@ -9,7 +9,7 @@ export const paymentApi = {
 
   createPaymentOrder: async (
     recordIds: string[],
-    paymentMethod: 'vietqr' | 'payos' = 'vietqr'
+    paymentMethod: 'vietqr' | 'sepay' | 'payos' = 'sepay'
   ): Promise<PaymentOrderResponse> => {
     const response = await api.post<PaymentOrderResponse>('/borrow/payments/create', {
       record_ids: recordIds,
