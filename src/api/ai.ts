@@ -17,7 +17,7 @@ import {
 export const aiApi = {
   async getTools(): Promise<AIToolSummary[]> {
     const { data } = await api.get('/ai/tools');
-    return data;
+    return data || [];
   },
 
   async getRagDocuments(): Promise<AIRagDocument[]> {
