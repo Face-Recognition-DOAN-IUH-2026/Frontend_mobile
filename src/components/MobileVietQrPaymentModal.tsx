@@ -1,11 +1,31 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { View, StyleSheet, Image, ActivityIndicator, Linking, TouchableOpacity, ScrollView } from 'react-native';
+import { View, StyleSheet, Image, ActivityIndicator, Linking, TouchableOpacity, ScrollView, Alert, Platform } from 'react-native';
 import { Dialog, Portal, Button, Text, useTheme, IconButton } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { paymentApi } from '../api/payment';
 import { PaymentOrderResponse } from '../types/payment';
 import { triggerHaptic } from '../utils/haptics';
 import { AppTheme } from '../theme/DarkTheme';
+
+export interface PopularBank {
+  id: string;
+  name: string;
+  shortName: string;
+  schemes: string[];
+  color: string;
+}
+
+export const POPULAR_BANKS: PopularBank[] = [
+  { id: 'mb', name: 'MB Bank', shortName: 'MB Bank', schemes: ['mbbank://'], color: '#1428A0' },
+  { id: 'vcb', name: 'Vietcombank', shortName: 'Vietcombank', schemes: ['vietcombankmobile://', 'vcb://', 'vcbdigibank://'], color: '#006B3F' },
+  { id: 'tcb', name: 'Techcombank', shortName: 'Techcombank', schemes: ['tcb://', 'tcbmobile://'], color: '#EC1C24' },
+  { id: 'bidv', name: 'BIDV', shortName: 'BIDV', schemes: ['bidv.smartbanking.partner://', 'bidvsmartbanking://'], color: '#006269' },
+  { id: 'vpb', name: 'VPBank NEO', shortName: 'VPBank', schemes: ['vpbankneo://', 'vpb://'], color: '#00875A' },
+  { id: 'acb', name: 'ACB ONE', shortName: 'ACB', schemes: ['acbone://', 'acbapp://'], color: '#004A99' },
+  { id: 'tpb', name: 'TPBank', shortName: 'TPBank', schemes: ['hydro://', 'tpbank://'], color: '#7B1FA2' },
+  { id: 'icb', name: 'VietinBank', shortName: 'VietinBank', schemes: ['vietinbankipay://'], color: '#0054A6' },
+  { id: 'momo', name: 'MoMo', shortName: 'Ví MoMo', schemes: ['momo://'], color: '#A50064' },
+];
 
 async function safeCopyToClipboard(text: string): Promise<boolean> {
   try {
@@ -54,6 +74,7 @@ export default function MobileVietQrPaymentModal({
   const [checking, setChecking] = useState(false);
   const [simulating, setSimulating] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [selectedBank, setSelectedBank] = useState<PopularBank>(POPULAR_BANKS[0]);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -173,19 +194,50 @@ export default function MobileVietQrPaymentModal({
   // Fallback to VietQR quicklink if qrUrl was null
   const qrImageUri = order.qrUrl || `https://img.vietqr.io/image/MB-0395324779-compact2.png?amount=${order.amount}&addInfo=${encodeURIComponent(transferMsg)}&accountName=${encodeURIComponent(accountHolder)}`;
 
-  const handleOpenBankApp = async () => {
+  const handleOpenBankApp = async (targetBank?: PopularBank) => {
+    const bank = targetBank || selectedBank;
     triggerHaptic.selection();
-    const deepLink = order.qrData || `vietqr://pay?bank=${encodeURIComponent(order.bankCode || 'MB')}&acc=${encodeURIComponent(accountNumber)}&amount=${order.amount}&msg=${encodeURIComponent(transferMsg)}`;
-    try {
-      const supported = await Linking.canOpenURL(deepLink);
-      if (supported) {
-        await Linking.openURL(deepLink);
-        return;
+
+    // 1. Sao chép nội dung chuyển khoản vào clipboard trước
+    await safeCopyToClipboard(transferMsg);
+    setCopiedField('msg');
+
+    // 2. Thử mở trực tiếp qua custom scheme nếu máy đã đăng ký
+    for (const scheme of bank.schemes) {
+      try {
+        const can = await Linking.canOpenURL(scheme).catch(() => false);
+        if (can) {
+          await Linking.openURL(scheme);
+          return;
+        }
+      } catch {
+        // Tiếp tục thử phương án tiếp theo
       }
-    } catch {
-      // Deep link scheme not registered
     }
-    Linking.openURL(qrImageUri).catch(() => {});
+
+    // 3. Thử gọi trực tiếp openURL với scheme chính (trên Android 11+, canOpenURL trả về false do package visibility nhưng openURL vẫn có thể mở được nếu app đã cài)
+    try {
+      const opened = await Linking.openURL(bank.schemes[0]).then(() => true).catch(() => false);
+      if (opened) return;
+    } catch {
+      // Bỏ qua nếu không mở được
+    }
+
+    // 4. Mở qua Universal Deeplink chuẩn VietQR Kit (trình duyệt hệ thống kích hoạt Intent mở app ngân hàng)
+    const dlUrl = `https://dl.vietqr.io/pay?app=${bank.id}&ba=${encodeURIComponent(accountNumber + '@' + (order.bankCode || 'mb').toLowerCase())}&am=${order.amount}&tn=${encodeURIComponent(transferMsg)}&bn=${encodeURIComponent(accountHolder)}`;
+    try {
+      const dlOpened = await Linking.openURL(dlUrl).then(() => true).catch(() => false);
+      if (dlOpened) return;
+    } catch {
+      // Bỏ qua
+    }
+
+    // 5. Nếu không mở được app: Thông báo rõ ràng cho người dùng (TUYỆT ĐỐI không mở ảnh QR trên web gây hiểu lầm)
+    Alert.alert(
+      'Đã chép nội dung chuyển khoản',
+      `Không thể tự động mở app ${bank.name}. Nội dung "${transferMsg}" đã được sao chép vào bộ nhớ tạm.\n\nVui lòng mở ứng dụng ngân hàng bạn đang dùng và dán nội dung này để hoàn tất.`,
+      [{ text: 'Đã hiểu' }]
+    );
   };
 
   return (
@@ -324,13 +376,54 @@ export default function MobileVietQrPaymentModal({
                 <Button
                   mode="contained"
                   icon="bank"
-                  onPress={handleOpenBankApp}
-                  style={[styles.primaryActionBtn, { backgroundColor: theme.colors.primary }]}
-                  contentStyle={{ height: 44 }}
+                  onPress={() => handleOpenBankApp(selectedBank)}
+                  style={[styles.primaryActionBtn, { backgroundColor: selectedBank.color || theme.colors.primary }]}
+                  contentStyle={{ height: 46 }}
                   labelStyle={{ fontWeight: '800', fontSize: 13 }}
                 >
-                  Mở App Ngân hàng (Quét QR nhanh)
+                  Mở App {selectedBank.name}
                 </Button>
+
+                {/* Quick Bank Selector */}
+                <View style={styles.bankPickerContainer}>
+                  <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, fontSize: 10, marginBottom: 6, fontWeight: '700', textTransform: 'uppercase' }}>
+                    Hoặc chọn app ngân hàng của bạn để mở:
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.bankChipScroll}>
+                    {POPULAR_BANKS.map((b) => {
+                      const isSelected = b.id === selectedBank.id;
+                      return (
+                        <TouchableOpacity
+                          key={b.id}
+                          style={[
+                            styles.bankChip,
+                            {
+                              borderColor: isSelected ? b.color : theme.colors.outlineVariant,
+                              backgroundColor: isSelected ? b.color + '20' : theme.colors.surface,
+                            },
+                          ]}
+                          onPress={() => {
+                            setSelectedBank(b);
+                            void handleOpenBankApp(b);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <View style={[styles.bankChipDot, { backgroundColor: b.color }]} />
+                          <Text
+                            variant="labelSmall"
+                            style={{
+                              fontWeight: isSelected ? '800' : '600',
+                              color: isSelected ? b.color : theme.colors.onSurface,
+                              fontSize: 11,
+                            }}
+                          >
+                            {b.shortName}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
 
                 {/* Secondary Quick Actions */}
                 <View style={styles.secondaryBtnRow}>
@@ -348,12 +441,12 @@ export default function MobileVietQrPaymentModal({
                   <Button
                     mode="outlined"
                     compact
-                    icon="open-in-new"
+                    icon="image-outline"
                     onPress={() => Linking.openURL(qrImageUri).catch(() => {})}
                     style={styles.halfBtn}
                     labelStyle={{ fontSize: 11, fontWeight: '700' }}
                   >
-                    Mở ảnh QR
+                    Xem ảnh QR lớn
                   </Button>
                 </View>
 
@@ -475,6 +568,30 @@ const styles = StyleSheet.create({
     marginTop: 10,
     borderRadius: 12,
     width: '100%',
+  },
+  bankPickerContainer: {
+    width: '100%',
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  bankChipScroll: {
+    flexDirection: 'row',
+    paddingVertical: 4,
+  },
+  bankChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginRight: 6,
+  },
+  bankChipDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
   },
   secondaryBtnRow: {
     flexDirection: 'row',
