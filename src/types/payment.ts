@@ -19,6 +19,11 @@ export interface PaymentOrderResponse {
   qrData: string | null;
   expiresAt: string;
   recordIds: string[];
+  bankCode?: string;
+  bankName?: string;
+  accountNumber?: string;
+  accountName?: string;
+  transferContent?: string;
 }
 
 export interface PaymentOrderStatusResponse {

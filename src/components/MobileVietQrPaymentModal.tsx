@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { View, StyleSheet, Image, ActivityIndicator, Linking } from 'react-native';
-import { Dialog, Portal, Button, Text, useTheme } from 'react-native-paper';
+import { View, StyleSheet, Image, ActivityIndicator, Linking, TouchableOpacity, ScrollView } from 'react-native';
+import { Dialog, Portal, Button, Text, useTheme, IconButton } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import * as Clipboard from 'expo-clipboard';
 import { paymentApi } from '../api/payment';
 import { PaymentOrderResponse } from '../types/payment';
 import { triggerHaptic } from '../utils/haptics';
@@ -28,6 +29,8 @@ export default function MobileVietQrPaymentModal({
   const [timeLeft, setTimeLeft] = useState(15 * 60);
   const [status, setStatus] = useState<'pending' | 'completed' | 'expired'>('pending');
   const [checking, setChecking] = useState(false);
+  const [simulating, setSimulating] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -99,17 +102,48 @@ export default function MobileVietQrPaymentModal({
     };
   }, [visible, order?.orderCode, status, checkStatus]);
 
+  const handleCopy = async (text: string, field: string) => {
+    triggerHaptic.selection();
+    await Clipboard.setStringAsync(text);
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
+
+  const handleSimulatePayment = async () => {
+    if (!order?.orderCode || simulating) return;
+    try {
+      setSimulating(true);
+      await paymentApi.simulatePayment(order.orderCode);
+      setStatus('completed');
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      triggerHaptic.success();
+      setTimeout(() => {
+        onSuccess(order.orderCode);
+      }, 1500);
+    } catch (err: any) {
+      console.error('Simulation error:', err);
+    } finally {
+      setSimulating(false);
+    }
+  };
+
   if (!visible || !order) return null;
 
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
   const timeFormatted = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
+  const bankName = order.bankName || 'MB Bank (Ngân hàng Quân đội)';
+  const accountNumber = order.accountNumber || '0395324779';
+  const accountHolder = order.accountName || 'THU VIEN DAI HOC CONG NGHIEP TPHCM';
+  const transferMsg = order.transferContent || order.orderCode;
+
+  // Fallback to VietQR quicklink if qrUrl was null
+  const qrImageUri = order.qrUrl || `https://img.vietqr.io/image/MB-0395324779-compact2.png?amount=${order.amount}&addInfo=${encodeURIComponent(transferMsg)}&accountName=${encodeURIComponent(accountHolder)}`;
+
   const handleOpenBankApp = () => {
     triggerHaptic.selection();
-    if (order.qrUrl) {
-      Linking.openURL(order.qrUrl).catch(() => {});
-    }
+    Linking.openURL(qrImageUri).catch(() => {});
   };
 
   return (
@@ -120,79 +154,158 @@ export default function MobileVietQrPaymentModal({
           {'  '}Thanh toán VietQR Napas
         </Dialog.Title>
 
-        <Dialog.Content style={styles.content}>
-          {status === 'completed' ? (
-            <View style={styles.completedBox}>
-              <MaterialCommunityIcons name="check-circle" size={72} color="#4A8C5C" />
-              <Text variant="titleMedium" style={{ fontWeight: '800', color: '#4A8C5C', marginTop: 12 }}>
-                Thanh toán thành công!
-              </Text>
-              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center', marginTop: 6 }}>
-                Khoản nợ đã được gạch và thẻ thư viện đã được kích hoạt lại tự động.
-              </Text>
-            </View>
-          ) : status === 'expired' ? (
-            <View style={styles.completedBox}>
-              <MaterialCommunityIcons name="clock-alert-outline" size={64} color="#B85C4A" />
-              <Text variant="titleMedium" style={{ fontWeight: '700', color: '#B85C4A', marginTop: 12 }}>
-                Mã QR đã hết hạn
-              </Text>
-              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center', marginTop: 4 }}>
-                Vui lòng đóng và tạo lại mã thanh toán mới.
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.body}>
-              {order.qrUrl ? (
+        <Dialog.ScrollArea style={styles.scrollArea}>
+          <ScrollView contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
+            {status === 'completed' ? (
+              <View style={styles.completedBox}>
+                <MaterialCommunityIcons name="check-circle" size={72} color="#4A8C5C" />
+                <Text variant="titleMedium" style={{ fontWeight: '800', color: '#4A8C5C', marginTop: 12 }}>
+                  Thanh toán thành công!
+                </Text>
+                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center', marginTop: 6 }}>
+                  Khoản nợ đã được gạch và thẻ thư viện đã được kích hoạt lại tự động.
+                </Text>
+              </View>
+            ) : status === 'expired' ? (
+              <View style={styles.completedBox}>
+                <MaterialCommunityIcons name="clock-alert-outline" size={64} color="#B85C4A" />
+                <Text variant="titleMedium" style={{ fontWeight: '700', color: '#B85C4A', marginTop: 12 }}>
+                  Mã QR đã hết hạn
+                </Text>
+                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center', marginTop: 4 }}>
+                  Vui lòng đóng và tạo lại mã thanh toán mới.
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.body}>
+                {/* QR Image */}
                 <View style={styles.qrCard}>
-                  <Image source={{ uri: order.qrUrl }} style={styles.qrImage} resizeMode="contain" />
+                  <Image source={{ uri: qrImageUri }} style={styles.qrImage} resizeMode="contain" />
+                  <Text variant="labelSmall" style={styles.napasTag}>
+                    Chuẩn Napas 247 · VietQR
+                  </Text>
                 </View>
-              ) : null}
 
-              <Text variant="headlineSmall" style={[styles.amount, { color: theme.colors.primary }]}>
-                {Number(order.amount).toLocaleString('vi-VN')} đ
-              </Text>
-
-              {patronName ? (
-                <Text variant="bodyMedium" style={{ fontWeight: '600', color: theme.colors.onSurface }}>
-                  {patronName} {studentCode ? `(${studentCode})` : ''}
+                {/* Amount */}
+                <Text variant="headlineSmall" style={[styles.amount, { color: theme.colors.primary }]}>
+                  {Number(order.amount).toLocaleString('vi-VN')} đ
                 </Text>
-              ) : null}
 
-              <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
-                Mã GD: {order.orderCode}
-              </Text>
+                {patronName ? (
+                  <Text variant="bodyMedium" style={{ fontWeight: '600', color: theme.colors.onSurface }}>
+                    {patronName} {studentCode ? `(${studentCode})` : ''}
+                  </Text>
+                ) : null}
 
-              <View style={styles.countdownRow}>
-                <MaterialCommunityIcons name="timer-outline" size={16} color={timeLeft < 120 ? '#B85C4A' : theme.colors.onSurfaceVariant} />
-                <Text variant="labelMedium" style={{ fontWeight: '700', color: timeLeft < 120 ? '#B85C4A' : theme.colors.onSurfaceVariant, marginLeft: 4 }}>
-                  Hết hạn sau: {timeFormatted}
-                </Text>
-              </View>
+                {/* Bank transfer details card */}
+                <View style={[styles.bankDetailsCard, { borderColor: theme.colors.outlineVariant, backgroundColor: theme.colors.surfaceVariant + '40' }]}>
+                  <Text variant="labelSmall" style={{ fontWeight: '800', color: theme.colors.primary, marginBottom: 8, textTransform: 'uppercase' }}>
+                    Thông tin chuyển khoản thủ công
+                  </Text>
 
-              <View style={styles.statusRow}>
-                <ActivityIndicator size="small" color={theme.colors.primary} />
-                <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 8, fontStyle: 'italic' }}>
-                  {checking ? 'Đang kiểm tra kết quả...' : 'Đang chờ nhận tiền chuyển khoản...'}
-                </Text>
-              </View>
+                  {/* Bank Name */}
+                  <View style={styles.detailRow}>
+                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Ngân hàng:</Text>
+                    <Text variant="bodySmall" style={{ fontWeight: '700', color: theme.colors.onSurface }}>{bankName}</Text>
+                  </View>
 
-              {order.qrUrl && (
+                  {/* Account Number */}
+                  <View style={styles.detailRow}>
+                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Số tài khoản:</Text>
+                    <TouchableOpacity
+                      style={styles.copyRow}
+                      onPress={() => handleCopy(accountNumber, 'acc')}
+                      activeOpacity={0.7}
+                    >
+                      <Text variant="bodyMedium" style={{ fontFamily: 'monospace', fontWeight: '800', color: theme.colors.primary }}>
+                        {accountNumber}
+                      </Text>
+                      <IconButton
+                        icon={copiedField === 'acc' ? 'check' : 'content-copy'}
+                        size={16}
+                        iconColor={copiedField === 'acc' ? '#4A8C5C' : theme.colors.primary}
+                        style={{ margin: 0, padding: 0 }}
+                      />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Account Holder */}
+                  <View style={styles.detailRow}>
+                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Chủ tài khoản:</Text>
+                    <Text variant="labelMedium" style={{ fontWeight: '700', color: theme.colors.onSurface }}>
+                      {accountHolder}
+                    </Text>
+                  </View>
+
+                  {/* Transfer Note */}
+                  <View style={styles.detailRow}>
+                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Nội dung CK:</Text>
+                    <TouchableOpacity
+                      style={styles.copyRow}
+                      onPress={() => handleCopy(transferMsg, 'msg')}
+                      activeOpacity={0.7}
+                    >
+                      <Text variant="bodyMedium" style={{ fontFamily: 'monospace', fontWeight: '900', color: '#D32F2F' }}>
+                        {transferMsg}
+                      </Text>
+                      <IconButton
+                        icon={copiedField === 'msg' ? 'check' : 'content-copy'}
+                        size={16}
+                        iconColor={copiedField === 'msg' ? '#4A8C5C' : '#D32F2F'}
+                        style={{ margin: 0, padding: 0 }}
+                      />
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text variant="labelSmall" style={{ color: '#D32F2F', fontSize: 10, marginTop: 4, fontStyle: 'italic' }}>
+                    ⚠️ Giữ nguyên mã nội dung để hệ thống tự động gạch nợ
+                  </Text>
+                </View>
+
+                {/* Countdown */}
+                <View style={styles.countdownRow}>
+                  <MaterialCommunityIcons name="timer-outline" size={16} color={timeLeft < 120 ? '#B85C4A' : theme.colors.onSurfaceVariant} />
+                  <Text variant="labelMedium" style={{ fontWeight: '700', color: timeLeft < 120 ? '#B85C4A' : theme.colors.onSurfaceVariant, marginLeft: 4 }}>
+                    Hết hạn sau: {timeFormatted}
+                  </Text>
+                </View>
+
+                {/* Polling */}
+                <View style={styles.statusRow}>
+                  <ActivityIndicator size="small" color={theme.colors.primary} />
+                  <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 8, fontStyle: 'italic' }}>
+                    {checking ? 'Đang kiểm tra kết quả...' : 'Đang chờ nhận tiền chuyển khoản...'}
+                  </Text>
+                </View>
+
+                {/* Buttons */}
                 <Button
                   mode="outlined"
-                  icon="bank"
+                  icon="open-in-new"
                   onPress={handleOpenBankApp}
-                  style={styles.deepLinkBtn}
+                  style={styles.actionBtn}
                   contentStyle={{ height: 38 }}
                 >
-                  Mở ảnh QR để quét
+                  Mở ảnh QR đầy đủ
                 </Button>
-              )}
-            </View>
-          )}
-        </Dialog.Content>
 
-        <Dialog.Actions style={{ justifyContent: 'center', paddingBottom: 16 }}>
+                <Button
+                  mode="text"
+                  icon="play-circle-outline"
+                  onPress={handleSimulatePayment}
+                  loading={simulating}
+                  disabled={simulating}
+                  style={styles.demoBtn}
+                  labelStyle={{ fontSize: 11, color: theme.colors.onSurfaceVariant }}
+                >
+                  {simulating ? 'Đang xử lý...' : 'Demo: Giả lập đã chuyển khoản'}
+                </Button>
+              </View>
+            )}
+          </ScrollView>
+        </Dialog.ScrollArea>
+
+        <Dialog.Actions style={{ justifyContent: 'center', paddingBottom: 12 }}>
           <Button onPress={onDismiss} mode="text">
             {status === 'completed' ? 'Đóng' : 'Hủy bỏ'}
           </Button>
@@ -205,18 +318,25 @@ export default function MobileVietQrPaymentModal({
 const styles = StyleSheet.create({
   dialog: {
     borderRadius: 20,
-    maxWidth: 360,
+    maxWidth: 380,
     alignSelf: 'center',
-    width: '90%',
+    width: '94%',
+    maxHeight: '90%',
   },
   title: {
     textAlign: 'center',
     fontWeight: '800',
     fontSize: 18,
+    paddingBottom: 4,
   },
-  content: {
+  scrollArea: {
+    paddingHorizontal: 0,
+    maxHeight: 520,
+  },
+  contentContainer: {
     alignItems: 'center',
     paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   body: {
     alignItems: 'center',
@@ -231,32 +351,60 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 3,
-    marginBottom: 12,
+    marginBottom: 8,
+    alignItems: 'center',
   },
   qrImage: {
-    width: 200,
-    height: 200,
+    width: 210,
+    height: 210,
+  },
+  napasTag: {
+    color: '#666',
+    fontWeight: '600',
+    marginTop: 4,
+    fontSize: 10,
   },
   amount: {
     fontWeight: '900',
-    marginTop: 4,
-    marginBottom: 4,
+    marginTop: 2,
+    marginBottom: 2,
+  },
+  bankDetailsCard: {
+    width: '100%',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginTop: 10,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginVertical: 3,
+  },
+  copyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   countdownRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 10,
   },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 6,
-    marginBottom: 8,
+    marginBottom: 6,
   },
-  deepLinkBtn: {
-    marginTop: 8,
+  actionBtn: {
+    marginTop: 6,
     borderRadius: 10,
     width: '100%',
+  },
+  demoBtn: {
+    marginTop: 4,
   },
   completedBox: {
     alignItems: 'center',
