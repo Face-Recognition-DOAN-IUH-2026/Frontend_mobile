@@ -379,6 +379,7 @@ export default function HistoryScreen({ navigation }: HistoryScreenProps) {
         onDismiss={() => {
           setQrModalVisible(false);
           setActivePaymentOrder(null);
+          void refetch();
         }}
         onSuccess={handlePaymentSuccess}
       />

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View, TouchableOpacity, Alert, Platform, Image } from 'react-native';
+import { ScrollView, StyleSheet, View, TouchableOpacity, Alert, Platform, Image, RefreshControl } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Avatar,
@@ -106,6 +107,22 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
 
   useEffect(() => {
     void loadFines();
+  }, [loadFines]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadFines();
+    }, [loadFines])
+  );
+
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await loadFines();
+    } finally {
+      setRefreshing(false);
+    }
   }, [loadFines]);
 
   const totalDebt = fines.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
@@ -218,7 +235,11 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   return (
     <SafeAreaView style={styles.container} edges={[]}>
       <LoadingOverlay loading={!user} message="Đang tải hồ sơ...">
-        <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={styles.content}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
+        >
           <GradientHeader
             title={displayName}
             subtitle={user?.email}
@@ -626,7 +647,10 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         order={qrPaymentOrder}
         patronName={displayName}
         studentCode={studentCode}
-        onDismiss={() => setQrPaymentOrder(null)}
+        onDismiss={() => {
+          setQrPaymentOrder(null);
+          void loadFines();
+        }}
         onSuccess={handlePaymentSuccess}
       />
     </SafeAreaView>
