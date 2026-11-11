@@ -353,10 +353,10 @@ export default function HistoryScreen({ navigation }: HistoryScreenProps) {
                               disabled={payingRecordId === record.id}
                               icon="qrcode-scan"
                               onPress={() => handlePayVietQr(record.id)}
-                              style={{ borderRadius: 6, backgroundColor: '#D32F2F' }}
+                              style={{ borderRadius: 8, backgroundColor: '#8B0000' }}
                               labelStyle={{ fontSize: 11, fontWeight: 'bold' }}
                             >
-                              VietQR
+                              Quét mã SePay
                             </Button>
                           </View>
                         </View>

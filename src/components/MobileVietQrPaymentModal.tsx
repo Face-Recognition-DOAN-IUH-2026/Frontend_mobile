@@ -132,6 +132,15 @@ export default function MobileVietQrPaymentModal({
     setTimeout(() => setCopiedField(null), 2000);
   };
 
+  const handleCopyAll = async () => {
+    if (!order) return;
+    triggerHaptic.selection();
+    const allInfo = `Ngân hàng: ${bankName}\nSố tài khoản: ${accountNumber}\nChủ tài khoản: ${accountHolder}\nSố tiền: ${Number(order.amount).toLocaleString('vi-VN')} đ\nNội dung: ${transferMsg}`;
+    await safeCopyToClipboard(allInfo);
+    setCopiedField('all');
+    setTimeout(() => setCopiedField(null), 2500);
+  };
+
   const handleSimulatePayment = async () => {
     if (!order?.orderCode || simulating) return;
     try {
@@ -164,8 +173,18 @@ export default function MobileVietQrPaymentModal({
   // Fallback to VietQR quicklink if qrUrl was null
   const qrImageUri = order.qrUrl || `https://img.vietqr.io/image/MB-0395324779-compact2.png?amount=${order.amount}&addInfo=${encodeURIComponent(transferMsg)}&accountName=${encodeURIComponent(accountHolder)}`;
 
-  const handleOpenBankApp = () => {
+  const handleOpenBankApp = async () => {
     triggerHaptic.selection();
+    const deepLink = order.qrData || `vietqr://pay?bank=${encodeURIComponent(order.bankCode || 'MB')}&acc=${encodeURIComponent(accountNumber)}&amount=${order.amount}&msg=${encodeURIComponent(transferMsg)}`;
+    try {
+      const supported = await Linking.canOpenURL(deepLink);
+      if (supported) {
+        await Linking.openURL(deepLink);
+        return;
+      }
+    } catch {
+      // Deep link scheme not registered
+    }
     Linking.openURL(qrImageUri).catch(() => {});
   };
 
@@ -301,16 +320,42 @@ export default function MobileVietQrPaymentModal({
                   </Text>
                 </View>
 
-                {/* Buttons */}
+                {/* Primary Quick Pay Button */}
                 <Button
-                  mode="outlined"
-                  icon="open-in-new"
+                  mode="contained"
+                  icon="bank"
                   onPress={handleOpenBankApp}
-                  style={styles.actionBtn}
-                  contentStyle={{ height: 38 }}
+                  style={[styles.primaryActionBtn, { backgroundColor: theme.colors.primary }]}
+                  contentStyle={{ height: 44 }}
+                  labelStyle={{ fontWeight: '800', fontSize: 13 }}
                 >
-                  Mở ảnh QR đầy đủ
+                  Mở App Ngân hàng (Quét QR nhanh)
                 </Button>
+
+                {/* Secondary Quick Actions */}
+                <View style={styles.secondaryBtnRow}>
+                  <Button
+                    mode="outlined"
+                    compact
+                    icon={copiedField === 'all' ? 'check' : 'content-copy'}
+                    onPress={handleCopyAll}
+                    style={styles.halfBtn}
+                    labelStyle={{ fontSize: 11, fontWeight: '700' }}
+                  >
+                    {copiedField === 'all' ? 'Đã sao chép!' : 'Chép nhanh TT'}
+                  </Button>
+
+                  <Button
+                    mode="outlined"
+                    compact
+                    icon="open-in-new"
+                    onPress={() => Linking.openURL(qrImageUri).catch(() => {})}
+                    style={styles.halfBtn}
+                    labelStyle={{ fontSize: 11, fontWeight: '700' }}
+                  >
+                    Mở ảnh QR
+                  </Button>
+                </View>
 
                 <Button
                   mode="text"
@@ -425,6 +470,22 @@ const styles = StyleSheet.create({
     marginTop: 6,
     borderRadius: 10,
     width: '100%',
+  },
+  primaryActionBtn: {
+    marginTop: 10,
+    borderRadius: 12,
+    width: '100%',
+  },
+  secondaryBtnRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    gap: 8,
+    marginTop: 8,
+  },
+  halfBtn: {
+    flex: 1,
+    borderRadius: 10,
   },
   demoBtn: {
     marginTop: 4,
