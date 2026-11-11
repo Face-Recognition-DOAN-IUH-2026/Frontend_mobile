@@ -317,7 +317,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                     Đang nợ: {totalDebt.toLocaleString('vi-VN')} đ ({fines.length} khoản)
                   </Text>
                   <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
-                    Vui lòng thanh toán trực tuyến qua VietQR Napas 247 để mở khóa thẻ thư viện tự động.
+                    Vui lòng thanh toán trực tuyến qua SePay (Napas 247) để mở khóa thẻ thư viện tự động.
                   </Text>
                 </View>
                 <Button
@@ -327,9 +327,9 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                   disabled={payingFine}
                   onPress={handlePayFines}
                   style={{ borderRadius: 12, backgroundColor: theme.colors.primary }}
-                  contentStyle={{ height: 42 }}
+                  contentStyle={{ height: 44 }}
                 >
-                  Thanh toán ngay bằng VietQR
+                  Quét mã SePay nộp phạt
                 </Button>
               </View>
             )}
