@@ -472,7 +472,7 @@ function AutoFaceCaptureInner({
         },
         noteText: { color: c.onSurfaceVariant, fontSize: 12, flex: 1, lineHeight: 17 },
         directionGuideOverlay: {
-          ...StyleSheet.absoluteFillObject,
+          ...StyleSheet.absoluteFill,
           alignItems: "center",
           justifyContent: "center",
         },
@@ -516,7 +516,7 @@ function AutoFaceCaptureInner({
         },
         smartRetryDesc: {
           fontSize: 12,
-          color: c.onErrorContainer,
+          color: (c as any).onErrorContainer || c.error,
           marginTop: 2,
           lineHeight: 17,
         },

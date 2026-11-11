@@ -30,6 +30,11 @@ export const scheduleApi = {
     return response.data;
   },
 
+  getAssignmentGeofence: async (assignmentId: string): Promise<{ configured: boolean; geofence?: { latitude: number; longitude: number; radiusMeters: number; addressHint?: string | null } | null; isGlobal?: boolean; zoneName?: string }> => {
+    const response = await api.get(`/schedules/assignments/${assignmentId}/geofence`);
+    return response.data;
+  },
+
   checkIn: async (id: string, lat?: number, lng?: number, method: string = 'mobile'): Promise<CheckInResponse> => {
     const body: Record<string, unknown> = { method };
     if (lat != null && lng != null) {

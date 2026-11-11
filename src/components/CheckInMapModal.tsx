@@ -8,7 +8,7 @@ import { Alert } from "react-native";
 import { Button, Card, Text, useTheme } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { scheduleApi } from "../../api/schedule";
+import { scheduleApi } from "../api/schedule";
 
 const EARTH_RADIUS_METERS = 6371e3;
 const GPS_TOLERANCE_METERS = 15;
@@ -121,7 +121,7 @@ export default function CheckInMapModal({ visible, assignmentId, zoneName, onClo
     <SafeAreaView style={containerStyle}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Xác nhận vị trí điểm danh</Text>
-        <Button icon="close" mode="text" onPress={onClose} />
+        <Button icon="close" mode="text" onPress={onClose}>Đóng</Button>
       </View>
       <Text style={styles.subtitle}>{zoneName}</Text>
       <View style={styles.mapContainer}>
@@ -165,8 +165,8 @@ export default function CheckInMapModal({ visible, assignmentId, zoneName, onClo
         ) : (
           <>
             {user ? (
-              <Text style={[styles.caption, { color: status?.allowed ? theme.colors.success ?? "#10b981" : theme.colors.error ?? "#ef4444" }]}>
-                {status?.allowed ? `✅ Trong khu vực thi (${Math.round(status.distance)}m / ${status.radius}m)` : `❌ Ngoài khu vực thi (${Math.round(status.distance)}m / ${status.radius}m)`}
+              <Text style={[styles.caption, { color: status?.allowed ? ((theme.colors as any).success ?? "#10b981") : (theme.colors.error ?? "#ef4444") }]}>
+                {status?.allowed ? `✅ Trong khu vực (${status?.distance != null ? Math.round(status.distance) : 0}m / ${status?.radius ?? 0}m)` : `❌ Ngoài khu vực (${status?.distance != null ? Math.round(status.distance) : 0}m / ${status?.radius ?? 0}m)`}
               </Text>
             ) : (
               <View style={styles.rowCenter}>
