@@ -22,4 +22,9 @@ export const paymentApi = {
     const response = await api.get<PaymentOrderStatusResponse>(`/borrow/payments/${orderCode}/status`);
     return response.data;
   },
+
+  simulatePayment: async (orderCode: string): Promise<any> => {
+    const response = await api.post(`/borrow/payments/${encodeURIComponent(orderCode)}/simulate`);
+    return response.data;
+  },
 };

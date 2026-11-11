@@ -32,4 +32,9 @@ jest.mock('zustand', () => ({
 
 jest.mock('expo-notifications', () => ({
   getExpoPushTokenAsync: jest.fn().mockResolvedValue({ data: 'token' }),
+}));
+
+jest.mock('expo-clipboard', () => ({
+  setStringAsync: jest.fn().mockResolvedValue(true),
+  getStringAsync: jest.fn().mockResolvedValue(''),
 }));
