@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Alert, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as FileSystem from 'expo-file-system/legacy';
 import AutoFaceCapture from '../../../components/AutoFaceCapture';
 import CameraFallback from '../../../components/CameraFallback';
 import { LoadingOverlay } from '../../../components/LoadingOverlay';
@@ -26,24 +27,29 @@ interface FaceCameraScreenProps {
 export default function FaceCameraScreen({ navigation }: FaceCameraScreenProps) {
   const theme = useTheme<AppTheme>();
   const c = theme.colors;
-  const { patron } = useAuth();
+  const { patron, user } = useAuth();
   const [isUploading, setIsUploading] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [failedAngles, setFailedAngles] = useState<FailedAngle[]>([]);
 
   const handleFilesReady = async (images: string[]) => {
-    const patronId = patron?.id;
-    if (!patronId || images.length !== 4) {
+    const patronId = patron?.id || user?.id;
+    if (!patronId) {
+      Alert.alert('Lỗi', 'Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.');
+      return;
+    }
+    if (images.length !== 4) {
       Alert.alert('Lỗi', 'Chưa chụp đủ 4 góc khuôn mặt');
       return;
     }
 
     setFailedAngles([]);
     setIsUploading(true);
+    const tempPaths: string[] = [];
+    const angleNames = ['frontal', 'right', 'left', 'down'] as const;
+
     try {
-      // Kiểm tra độ mờ từng ảnh trước khi upload (góc frontal là bắt buộc check blur
-      // theo quy tắc của worker). Tránh upload 4 ảnh rồi worker rollback toàn bộ
-      // vì 1 góc lỗi MOTION_BLUR.
+      // 1. Kiểm tra độ mờ từng ảnh trước khi upload
       const angleLabels: Record<number, string> = {
         0: 'Nhìn thẳng',
         1: 'Nghiêng phải',
@@ -63,35 +69,74 @@ export default function FaceCameraScreen({ navigation }: FaceCameraScreenProps) 
         }
       }
 
-      const formData = new FormData();
-      formData.append('frontal', {
-        uri: `data:image/jpeg;base64,${images[0]}`,
-        type: 'image/jpeg',
-        name: 'face_frontal.jpg',
-      } as any);
-      formData.append('right', {
-        uri: `data:image/jpeg;base64,${images[1]}`,
-        type: 'image/jpeg',
-        name: 'face_right.jpg',
-      } as any);
-      formData.append('left', {
-        uri: `data:image/jpeg;base64,${images[2]}`,
-        type: 'image/jpeg',
-        name: 'face_left.jpg',
-      } as any);
-      formData.append('down', {
-        uri: `data:image/jpeg;base64,${images[3]}`,
-        type: 'image/jpeg',
-        name: 'face_down.jpg',
-      } as any);
-      formData.append('consent_given', 'true');
+      // 2. Ghi base64 ra file tạm để React Native FormData upload đúng chuẩn multipart/form-data
+      for (let i = 0; i < images.length; i++) {
+        const raw = images[i];
+        if (raw.startsWith('file://') || raw.startsWith('content://')) {
+          tempPaths.push(raw);
+        } else {
+          const cleanBase64 = raw.replace(/^data:image\/[a-z]+;base64,/, '');
+          const tempPath = `${FileSystem.cacheDirectory || ''}enroll_${angleNames[i]}_${Date.now()}_${i}.jpg`;
+          await FileSystem.writeAsStringAsync(tempPath, cleanBase64, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          tempPaths.push(tempPath);
+        }
+      }
 
-      const { data } = await api.post(`/patrons/${patronId}/enroll-batch`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 130000,
-      });
+      const createBatchFormData = () => {
+        const fd = new FormData();
+        fd.append('frontal', {
+          uri: tempPaths[0],
+          type: 'image/jpeg',
+          name: 'face_frontal.jpg',
+        } as any);
+        fd.append('right', {
+          uri: tempPaths[1],
+          type: 'image/jpeg',
+          name: 'face_right.jpg',
+        } as any);
+        fd.append('left', {
+          uri: tempPaths[2],
+          type: 'image/jpeg',
+          name: 'face_left.jpg',
+        } as any);
+        fd.append('down', {
+          uri: tempPaths[3],
+          type: 'image/jpeg',
+          name: 'face_down.jpg',
+        } as any);
+        fd.append('consent_given', 'true');
+        return fd;
+      };
 
-      await waitForEnrollment(data.job_id);
+      // 3. Gọi endpoint đăng ký theo lô: ưu tiên /face/enroll-batch (giống web), fallback /patrons/:id/enroll-batch
+      let responseData: any;
+      try {
+        const res = await api.post('/face/enroll-batch', createBatchFormData(), {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 130000,
+        });
+        responseData = res.data;
+      } catch (postErr: any) {
+        if (patronId && (postErr?.response?.status === 404 || postErr?.response?.status === 405)) {
+          const fallbackRes = await api.post(`/patrons/${patronId}/enroll-batch`, createBatchFormData(), {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            timeout: 130000,
+          });
+          responseData = fallbackRes.data;
+        } else {
+          throw postErr;
+        }
+      }
+
+      const jobId = responseData?.job_id;
+      if (!jobId) {
+        throw new Error('Máy chủ không phản hồi mã xử lý khuôn mặt');
+      }
+
+      // 4. Chờ Celery worker xử lý xong
+      await waitForEnrollment(jobId);
       Alert.alert('Thành công', 'Đăng ký khuôn mặt thành công!', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
@@ -115,6 +160,12 @@ export default function FaceCameraScreen({ navigation }: FaceCameraScreenProps) 
       Alert.alert('Đăng ký chưa đạt', message);
     } finally {
       setIsUploading(false);
+      // Dọn dẹp các file ảnh tạm trong cache
+      for (const p of tempPaths) {
+        if (p.includes('enroll_')) {
+          FileSystem.deleteAsync(p, { idempotent: true }).catch(() => {});
+        }
+      }
     }
   };
 
