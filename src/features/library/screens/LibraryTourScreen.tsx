@@ -8,7 +8,9 @@ import { LoadingOverlay } from '../../../components/LoadingOverlay';
 import { API_BASE_NO_PATH } from '../../../config/api';
 
 const CLOUD_TOUR_URL = 'https://frontend-web-fawn-kappa.vercel.app/library/vr-tour';
-const LOCAL_TOUR_URL = 'http://192.168.1.79:3000/library/vr-tour';
+const LOCAL_TOUR_URL = process.env.EXPO_PUBLIC_WEB_URL
+  ? `${process.env.EXPO_PUBLIC_WEB_URL.replace(/\/+$/, '')}/library/vr-tour`
+  : 'http://localhost:3000/library/vr-tour';
 
 export default function LibraryTourScreen() {
   const theme = useTheme() as AppTheme;
