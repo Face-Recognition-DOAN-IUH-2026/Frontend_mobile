@@ -28,11 +28,33 @@ Bản build trên EAS lấy biến từ `eas.json` → `build.<profile>.env`:
 }
 ```
 
-Muốn đổi URL cho một lần build mà không sửa file, dùng EAS environment variables:
+### Biến môi trường trên EAS (bắt buộc cho CI/CD)
+
+`eas build` đọc biến từ `eas.json` → `build.<profile>.env`.
+Nhưng **`eas update` (OTA) KHÔNG đọc `eas.json`** — nó đọc *EAS environment variables*.
+Trên GitHub Actions không có file `.env` (bị gitignore) nên nếu thiếu biến trên EAS,
+bundle OTA sẽ có `EXPO_PUBLIC_API_URL` = `undefined`.
+
+Đã tạo sẵn cho cả `preview` và `production`:
 
 ```powershell
-npx eas-cli env:create --name EXPO_PUBLIC_API_URL --value "https://..." --environment preview --visibility plaintext
+npx eas-cli env:create --name EXPO_PUBLIC_API_URL --value "https://iuhlib-api.duckdns.org/api" `
+  --environment preview --environment production --visibility plaintext --non-interactive
+
+npx eas-cli env:create --name EXPO_PUBLIC_WEB_URL --value "https://frontend-web-fawn-kappa.vercel.app" `
+  --environment preview --environment production --visibility plaintext --non-interactive
 ```
+
+Kiểm tra:
+
+```powershell
+npx eas-cli env:list --environment preview
+npx eas-cli env:list --environment production
+```
+
+> `eas update` ở chế độ `--non-interactive` **bắt buộc** có `--environment`,
+> và giá trị phải khớp tên channel (`preview` / `production`).
+> Workflow đã truyền sẵn.
 
 Biến đang được code sử dụng:
 
@@ -143,6 +165,27 @@ git push origin main        # → CI chạy pre-check rồi OTA
 ```
 
 > Lưu ý: `main` hiện đã phân nhánh so với các branch ngày. Kiểm tra conflict trước khi merge.
+
+### Run bị "cancelled" không phải lỗi
+
+Workflow đặt `concurrency.cancel-in-progress: true`. Nếu bạn push nhiều commit
+liên tiếp trong thời gian ngắn, **run cũ sẽ bị hủy** để run mới nhất chạy.
+Log của run bị hủy kết thúc bằng:
+
+```
+Tests: 178 passed, 178 total
+##[error]The operation was canceled.
+```
+
+Đây là hành vi đúng (tiết kiệm CI minutes + tránh 2 bản OTA đè nhau),
+**không phải test fail**. Muốn xem trạng thái thật của commit:
+
+```powershell
+# chỉ run có conclusion "success" trên commit mới nhất mới là kết quả thật
+Invoke-RestMethod "https://api.github.com/repos/Face-Recognition-DOAN-IUH-2026/Frontend_mobile/actions/runs?per_page=5" |
+  Select-Object -ExpandProperty workflow_runs |
+  Select-Object @{n='sha';e={$_.head_sha.Substring(0,7)}}, conclusion, event
+```
 
 ---
 
