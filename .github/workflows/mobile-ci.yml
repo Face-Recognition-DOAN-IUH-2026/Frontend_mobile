@@ -1,0 +1,132 @@
+name: Mobile App CI & EAS Deploy
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - '*-*-*'   # date branches, e.g. 13-11-26
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Thao tác thực hiện'
+        required: true
+        default: 'typecheck-only'
+        type: choice
+        options:
+          - 'typecheck-only'
+          - 'eas-ota-update'
+          - 'eas-build-apk'
+      channel:
+        description: 'EAS Channel (cho OTA Update)'
+        required: false
+        default: 'preview'
+        type: choice
+        options:
+          - 'preview'
+          - 'production'
+      profile:
+        description: 'EAS Build Profile (cho APK Build)'
+        required: false
+        default: 'preview'
+        type: choice
+        options:
+          - 'preview'
+          - 'production'
+
+# Prevent two deploys racing on the same ref
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pre-check:
+    name: 🛡️ Pre-build Verification (TypeScript & Test)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: 📦 Install Dependencies
+        run: npm ci || npm install
+
+      - name: 🔍 TypeScript Static Type Checking
+        run: npx tsc -p tsconfig.json --noEmit
+
+      - name: 🧪 Unit Tests
+        run: npm test -- --ci
+
+  eas-ota:
+    name: ⚡ Push Over-The-Air Update (EAS Update)
+    needs: pre-check
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'eas-ota-update')
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: 📦 Install Dependencies
+        run: npm ci || npm install
+
+      - name: 🚀 Setup Expo & EAS CLI
+        run: npm install -g eas-cli
+
+      - name: 📲 Deploy EAS Update (OTA)
+        if: env.EXPO_TOKEN != ''
+        run: |
+          CHANNEL="${{ github.event.inputs.channel || 'preview' }}"
+          echo "== Publishing OTA update to channel: $CHANNEL =="
+          eas update --auto --channel "$CHANNEL" --non-interactive
+
+  eas-build:
+    name: 📱 EAS Cloud Build APK
+    needs: pre-check
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'eas-build-apk'
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: 📦 Install Dependencies
+        run: npm ci || npm install
+
+      - name: 🚀 Setup EAS CLI
+        run: npm install -g eas-cli
+
+      - name: 🔨 Trigger EAS Build (Android APK)
+        if: env.EXPO_TOKEN != ''
+        run: |
+          PROFILE="${{ github.event.inputs.profile || 'preview' }}"
+          echo "== Starting EAS build with profile: $PROFILE =="
+          eas build -p android --profile "$PROFILE" --non-interactive --no-wait
