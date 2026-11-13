@@ -70,7 +70,7 @@ export default function HistoryScreen({ navigation }: HistoryScreenProps) {
   const [activePaymentOrder, setActivePaymentOrder] = useState<PaymentOrderResponse | null>(null);
   const [payingRecordId, setPayingRecordId] = useState<string | null>(null);
 
-  const handlePayVietQr = async (recordId: string) => {
+  const handlePaySePay = async (recordId: string) => {
     try {
       setPayingRecordId(recordId);
       triggerHaptic.selection();
@@ -79,7 +79,7 @@ export default function HistoryScreen({ navigation }: HistoryScreenProps) {
       setQrModalVisible(true);
     } catch (err: any) {
       triggerHaptic.error();
-      Alert.alert('Lỗi tạo mã thanh toán', err?.response?.data?.message || err?.message || 'Không thể tạo mã VietQR');
+      Alert.alert('Lỗi tạo mã thanh toán', err?.response?.data?.message || err?.message || 'Không thể tạo mã SePay');
     } finally {
       setPayingRecordId(null);
     }
@@ -352,7 +352,7 @@ export default function HistoryScreen({ navigation }: HistoryScreenProps) {
                               loading={payingRecordId === record.id}
                               disabled={payingRecordId === record.id}
                               icon="qrcode-scan"
-                              onPress={() => handlePayVietQr(record.id)}
+                              onPress={() => handlePaySePay(record.id)}
                               style={{ borderRadius: 8, backgroundColor: '#8B0000' }}
                               labelStyle={{ fontSize: 11, fontWeight: 'bold' }}
                             >

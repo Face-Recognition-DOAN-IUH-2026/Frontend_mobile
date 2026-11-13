@@ -173,8 +173,8 @@ export default function MobileVietQrPaymentModal({
   const accountHolder = order.accountName || 'THU VIEN DAI HOC CONG NGHIEP TPHCM';
   const transferMsg = order.transferContent || order.orderCode;
 
-  // VietQR quicklink image URI
-  const qrImageUri = order.qrUrl || `https://img.vietqr.io/image/MB-0395324779-compact2.png?amount=${order.amount}&addInfo=${encodeURIComponent(transferMsg)}&accountName=${encodeURIComponent(accountHolder)}`;
+  // SePay QR image URI
+  const qrImageUri = order.qrUrl || `https://qr.sepay.vn/img?acc=${accountNumber}&bank=MB&amount=${order.amount}&des=${encodeURIComponent(transferMsg)}&template=compact`;
 
   return (
     <Portal>
