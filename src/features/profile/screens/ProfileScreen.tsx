@@ -135,7 +135,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       const order = await paymentApi.createPaymentOrder(fines.map((f) => f.record_id));
       setQrPaymentOrder(order);
     } catch {
-      Alert.alert('Lỗi', 'Không thể tạo mã thanh toán VietQR lúc này.');
+      Alert.alert('Lỗi', 'Không thể tạo mã thanh toán SePay lúc này.');
     } finally {
       setPayingFine(false);
     }
