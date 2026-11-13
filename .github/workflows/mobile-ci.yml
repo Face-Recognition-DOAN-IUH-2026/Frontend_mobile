@@ -98,7 +98,9 @@ jobs:
         run: |
           CHANNEL="${{ github.event.inputs.channel || 'preview' }}"
           echo "== Publishing OTA update to channel: $CHANNEL =="
-          eas update --auto --channel "$CHANNEL" --non-interactive
+          # --environment is required in non-interactive mode and is what
+          # supplies EXPO_PUBLIC_* values on CI (there is no .env on the runner)
+          eas update --auto --channel "$CHANNEL" --environment "$CHANNEL" --non-interactive
 
   eas-build:
     name: 📱 EAS Cloud Build APK
