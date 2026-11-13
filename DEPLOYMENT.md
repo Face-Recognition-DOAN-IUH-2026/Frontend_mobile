@@ -28,11 +28,33 @@ Bản build trên EAS lấy biến từ `eas.json` → `build.<profile>.env`:
 }
 ```
 
-Muốn đổi URL cho một lần build mà không sửa file, dùng EAS environment variables:
+### Biến môi trường trên EAS (bắt buộc cho CI/CD)
+
+`eas build` đọc biến từ `eas.json` → `build.<profile>.env`.
+Nhưng **`eas update` (OTA) KHÔNG đọc `eas.json`** — nó đọc *EAS environment variables*.
+Trên GitHub Actions không có file `.env` (bị gitignore) nên nếu thiếu biến trên EAS,
+bundle OTA sẽ có `EXPO_PUBLIC_API_URL` = `undefined`.
+
+Đã tạo sẵn cho cả `preview` và `production`:
 
 ```powershell
-npx eas-cli env:create --name EXPO_PUBLIC_API_URL --value "https://..." --environment preview --visibility plaintext
+npx eas-cli env:create --name EXPO_PUBLIC_API_URL --value "https://iuhlib-api.duckdns.org/api" `
+  --environment preview --environment production --visibility plaintext --non-interactive
+
+npx eas-cli env:create --name EXPO_PUBLIC_WEB_URL --value "https://frontend-web-fawn-kappa.vercel.app" `
+  --environment preview --environment production --visibility plaintext --non-interactive
 ```
+
+Kiểm tra:
+
+```powershell
+npx eas-cli env:list --environment preview
+npx eas-cli env:list --environment production
+```
+
+> `eas update` ở chế độ `--non-interactive` **bắt buộc** có `--environment`,
+> và giá trị phải khớp tên channel (`preview` / `production`).
+> Workflow đã truyền sẵn.
 
 Biến đang được code sử dụng:
 
