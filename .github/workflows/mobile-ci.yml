@@ -38,62 +38,70 @@ on:
           - 'preview'
           - 'production'
 
-# Prevent two deploys racing on the same ref
+# Prevent two deploys racing on the same ref.
+# NOTE: a superseded run shows up as "cancelled" in the Actions UI and its log
+# ends with "##[error]The operation was canceled." — that is NOT a failure.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege: CI only reads the repo.
+permissions:
+  contents: read
+
 jobs:
   pre-check:
-    name: 🛡️ Pre-build Verification (TypeScript & Test)
+    name: Pre-build Verification (TypeScript & Test)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
-      - name: 📥 Checkout Code
-        uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v5
 
-      - name: ⚙️ Setup Node.js 22
-        uses: actions/setup-node@v4
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: 'npm'
 
-      - name: 📦 Install Dependencies
-        run: npm ci || npm install
+      - name: Install Dependencies
+        run: npm ci
 
-      - name: 🔍 TypeScript Static Type Checking
+      - name: TypeScript Static Type Checking
         run: npx tsc -p tsconfig.json --noEmit
 
-      - name: 🧪 Unit Tests
+      - name: Unit Tests
         run: npm test -- --ci
 
   eas-ota:
-    name: ⚡ Push Over-The-Air Update (EAS Update)
+    name: Push Over-The-Air Update (EAS Update)
     needs: pre-check
     if: |
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'eas-ota-update')
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
     steps:
-      - name: 📥 Checkout Code
-        uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v5
 
-      - name: ⚙️ Setup Node.js 22
-        uses: actions/setup-node@v4
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: 'npm'
 
-      - name: 📦 Install Dependencies
-        run: npm ci || npm install
+      - name: Install Dependencies
+        run: npm ci
 
-      - name: 🚀 Setup Expo & EAS CLI
+      - name: Setup Expo & EAS CLI
         run: npm install -g eas-cli
 
-      - name: 📲 Deploy EAS Update (OTA)
+      - name: Deploy EAS Update (OTA)
         if: env.EXPO_TOKEN != ''
         run: |
           CHANNEL="${{ github.event.inputs.channel || 'preview' }}"
@@ -103,30 +111,31 @@ jobs:
           eas update --auto --channel "$CHANNEL" --environment "$CHANNEL" --non-interactive
 
   eas-build:
-    name: 📱 EAS Cloud Build APK
+    name: EAS Cloud Build APK
     needs: pre-check
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'eas-build-apk'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
     steps:
-      - name: 📥 Checkout Code
-        uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v5
 
-      - name: ⚙️ Setup Node.js 22
-        uses: actions/setup-node@v4
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: 'npm'
 
-      - name: 📦 Install Dependencies
-        run: npm ci || npm install
+      - name: Install Dependencies
+        run: npm ci
 
-      - name: 🚀 Setup EAS CLI
+      - name: Setup EAS CLI
         run: npm install -g eas-cli
 
-      - name: 🔨 Trigger EAS Build (Android APK)
+      - name: Trigger EAS Build (Android APK)
         if: env.EXPO_TOKEN != ''
         run: |
           PROFILE="${{ github.event.inputs.profile || 'preview' }}"

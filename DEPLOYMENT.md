@@ -166,6 +166,27 @@ git push origin main        # → CI chạy pre-check rồi OTA
 
 > Lưu ý: `main` hiện đã phân nhánh so với các branch ngày. Kiểm tra conflict trước khi merge.
 
+### Run bị "cancelled" không phải lỗi
+
+Workflow đặt `concurrency.cancel-in-progress: true`. Nếu bạn push nhiều commit
+liên tiếp trong thời gian ngắn, **run cũ sẽ bị hủy** để run mới nhất chạy.
+Log của run bị hủy kết thúc bằng:
+
+```
+Tests: 178 passed, 178 total
+##[error]The operation was canceled.
+```
+
+Đây là hành vi đúng (tiết kiệm CI minutes + tránh 2 bản OTA đè nhau),
+**không phải test fail**. Muốn xem trạng thái thật của commit:
+
+```powershell
+# chỉ run có conclusion "success" trên commit mới nhất mới là kết quả thật
+Invoke-RestMethod "https://api.github.com/repos/Face-Recognition-DOAN-IUH-2026/Frontend_mobile/actions/runs?per_page=5" |
+  Select-Object -ExpandProperty workflow_runs |
+  Select-Object @{n='sha';e={$_.head_sha.Substring(0,7)}}, conclusion, event
+```
+
 ---
 
 ## 6. Trước khi phát hành production
