@@ -157,3 +157,59 @@ git push origin main        # → CI chạy pre-check rồi OTA
 đăng nhập, khôi phục session, đăng ký khuôn mặt, reconnect notification, AI streaming.
 
 Nâng cấp dependency native cũng bắt buộc build lại (không dùng OTA được).
+
+---
+
+## 7. Troubleshooting
+
+### `Gradle build failed with unknown error`
+
+Lấy log thật (CLI không in ra nguyên nhân):
+
+```powershell
+npx eas-cli build:view <build-id>          # chỉ có link, không có log
+```
+
+Mở link `Logs`, vào phase **Run gradlew**, tìm dòng `* What went wrong:`.
+
+#### Lỗi đã từng gặp
+
+```
+> Field 'version' is required for type with serial name
+  'expo.modules.plugin.configuration.Publication', but it was missing
+  at path: $.modules[N].projects[0].publication
+```
+
+Nghĩa là có **hai bản `expo-image` khác SDK** trong `node_modules`. Nguyên nhân:
+`@infinitered/react-native-mlkit-face-detection` khai báo peer dependency
+`"expo-image": "*"`. Vì project không có `expo-image` trực tiếp, npm cài bản
+`latest` (SDK 58) lồng bên trong package đó, và config plugin của SDK 57 đọc
+file `expo-module.config.json` của bản 58 → thiếu field `version` → sập.
+
+Kiểm tra:
+
+```powershell
+Get-ChildItem node_modules -Filter expo-module.config.json -Recurse |
+  ForEach-Object {
+    $j = Get-Content $_.FullName -Raw | ConvertFrom-Json
+    if ($j.android.publication -and -not $j.android.publication.version) { $_.FullName }
+  }
+```
+
+Phải không in ra dòng nào. Cách sửa:
+
+```powershell
+npx expo install expo-image   # cài bản đúng SDK 57 ở top-level
+npm dedupe                     # gộp, xoá bản 58 lồng bên trong
+```
+
+> Bài học: bất kỳ package nào có peer dependency `expo-* : "*"` đều có thể
+> kéo về bản SDK mới hơn. Luôn chạy `npx expo install --check` và kiểm tra
+> `node_modules/<pkg>/node_modules/` sau khi thêm thư viện native mới.
+
+### Build treo ở `Computing project fingerprint`
+
+```powershell
+$env:EAS_SKIP_AUTO_FINGERPRINT=1
+```
+
