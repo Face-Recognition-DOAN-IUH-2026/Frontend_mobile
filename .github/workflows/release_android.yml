@@ -1,0 +1,171 @@
+name: Android Release APK & OTA Manifest
+
+on:
+  push:
+    tags:
+      - 'android-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release-android:
+    name: Build Signed Release APK & Publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    env:
+      RELEASES_REPO: Face-Recognition-DOAN-IUH-2026/Frontend_mobile
+      EXPO_PUBLIC_API_URL: https://iuhlib-api.duckdns.org/api
+      EXPO_PUBLIC_WEB_URL: https://frontend-web-fawn-kappa.vercel.app
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: TypeScript & Unit Tests Gate
+        run: |
+          npx tsc -p tsconfig.json --noEmit
+          npm test -- --ci
+
+      - name: Verify Tag Matches app.json Version
+        id: meta
+        run: |
+          TAG_NAME="${GITHUB_REF#refs/tags/}"
+          TAG_VERSION="${TAG_NAME#android-v}"
+          APP_VERSION=$(node -e "console.log(require('./app.json').expo.version)")
+          VERSION_CODE=$(node -e "console.log(require('./app.json').expo.android.versionCode || 1)")
+          echo "Tag version: $TAG_VERSION | app.json version: $APP_VERSION | versionCode: $VERSION_CODE"
+          if [ "$TAG_VERSION" != "$APP_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match app.json expo.version ($APP_VERSION). Please bump version in app.json before tagging!"
+            exit 1
+          fi
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$APP_VERSION" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('package-lock.json', 'app.json') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Expo Prebuild Android
+        run: npx expo prebuild --platform android --non-interactive
+
+      - name: Restore Release Keystore
+        run: |
+          if [ -z "${{ secrets.TS_KEYSTORE_BASE64 }}" ]; then
+            echo "::error::Missing TS_KEYSTORE_BASE64 secret!"
+            exit 1
+          fi
+          mkdir -p ../private_keys
+          echo "${{ secrets.TS_KEYSTORE_BASE64 }}" | base64 --decode > ../private_keys/library_release.jks
+
+      - name: Build Signed Release APK
+        env:
+          TS_KEYSTORE_PASS: ${{ secrets.TS_KEYSTORE_PASS }}
+          TS_KEY_PASS: ${{ secrets.TS_KEY_PASS }}
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Package APK & Generate latest_android.json
+        id: pkg
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          VERSION_CODE="${{ steps.meta.outputs.version_code }}"
+          TAG_NAME="${{ steps.meta.outputs.tag_name }}"
+          APK_SRC="android/app/build/outputs/apk/release/app-release.apk"
+          APK_OUT="ThuVien-v${VERSION}.apk"
+
+          if [ ! -f "$APK_SRC" ]; then
+            echo "::error::Release APK not found at $APK_SRC"
+            exit 1
+          fi
+
+          cp "$APK_SRC" "$APK_OUT"
+          SHA256=$(sha256sum "$APK_OUT" | awk '{print $1}')
+          DOWNLOAD_URL="https://github.com/${RELEASES_REPO}/releases/download/${TAG_NAME}/${APK_OUT}"
+
+          PREV_TAG=$(git tag --list 'android-v*' --sort=-v:refname | sed -n '2p')
+          if [ -n "$PREV_TAG" ]; then
+            CHANGELOG=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s" -n 15)
+          else
+            CHANGELOG=$(git log -n 10 --pretty=format:"- %s")
+          fi
+          if [ -z "$CHANGELOG" ]; then
+            CHANGELOG="- Cập nhật phiên bản v${VERSION}"
+          fi
+
+          export VERSION VERSION_CODE DOWNLOAD_URL SHA256 CHANGELOG
+          node -e '
+            const fs = require("fs");
+            const manifest = {
+              platform: "android",
+              version: process.env.VERSION,
+              version_code: Number(process.env.VERSION_CODE),
+              download_url: process.env.DOWNLOAD_URL,
+              sha256: process.env.SHA256,
+              changelog: process.env.CHANGELOG,
+              force_update: false
+            };
+            fs.writeFileSync("latest_android.json", JSON.stringify(manifest, null, 2));
+          '
+          echo "apk_file=$APK_OUT" >> "$GITHUB_OUTPUT"
+
+      - name: Publish Tag Release & Update latest-android Tag
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_GH_TOKEN }}
+          TAG_NAME: ${{ steps.meta.outputs.tag_name }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          APK_OUT: ${{ steps.pkg.outputs.apk_file }}
+        run: |
+          if gh release view "$TAG_NAME" --repo "$RELEASES_REPO" >/dev/null 2>&1; then
+            gh release upload "$TAG_NAME" "$APK_OUT" latest_android.json --repo "$RELEASES_REPO" --clobber
+          else
+            gh release create "$TAG_NAME" "$APK_OUT" latest_android.json \
+              --repo "$RELEASES_REPO" \
+              --title "Thư Viện Android v${VERSION}" \
+              --notes-file latest_android.json
+          fi
+
+          # Move/update fixed latest-android tag and release
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -f latest-android
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${RELEASES_REPO}.git" refs/tags/latest-android
+
+          if gh release view latest-android --repo "$RELEASES_REPO" >/dev/null 2>&1; then
+            gh release upload latest-android "$APK_OUT" latest_android.json --repo "$RELEASES_REPO" --clobber
+          else
+            gh release create latest-android "$APK_OUT" latest_android.json \
+              --repo "$RELEASES_REPO" \
+              --title "Latest Android Release (v${VERSION})" \
+              --notes "Auto-updated by GitHub Actions for ${TAG_NAME}"
+          fi
