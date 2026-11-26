@@ -20,6 +20,21 @@ jobs:
       EXPO_PUBLIC_WEB_URL: https://frontend-web-fawn-kappa.vercel.app
 
     steps:
+      - name: Validate Required Signing Secrets
+        run: |
+          if [ -z "${{ secrets.TS_KEYSTORE_BASE64 }}" ]; then
+            echo "::error::Missing TS_KEYSTORE_BASE64 secret!"
+            exit 1
+          fi
+          if [ -z "${{ secrets.TS_KEYSTORE_PASS }}" ]; then
+            echo "::error::Missing TS_KEYSTORE_PASS secret!"
+            exit 1
+          fi
+          if [ -z "${{ secrets.TS_KEY_PASS }}" ]; then
+            echo "::error::Missing TS_KEY_PASS secret!"
+            exit 1
+          fi
+
       - name: Checkout Code
         uses: actions/checkout@v5
         with:
@@ -82,16 +97,16 @@ jobs:
             ${{ runner.os }}-gradle-
 
       - name: Expo Prebuild Android
-        run: npx expo prebuild --platform android --non-interactive
+        run: CI=1 npx expo prebuild --platform android
 
       - name: Restore Release Keystore
         run: |
-          if [ -z "${{ secrets.TS_KEYSTORE_BASE64 }}" ]; then
-            echo "::error::Missing TS_KEYSTORE_BASE64 secret!"
+          mkdir -p ../private_keys
+          printf '%s' "${{ secrets.TS_KEYSTORE_BASE64 }}" | tr -d '\r\n ' | base64 --decode > ../private_keys/library_release.jks
+          if [ ! -s ../private_keys/library_release.jks ]; then
+            echo "::error::Decoded keystore file is empty or invalid!"
             exit 1
           fi
-          mkdir -p ../private_keys
-          echo "${{ secrets.TS_KEYSTORE_BASE64 }}" | base64 --decode > ../private_keys/library_release.jks
 
       - name: Build Signed Release APK
         env:
@@ -148,7 +163,7 @@ jobs:
 
       - name: Publish Tag Release & Update latest-android Tag
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_GH_TOKEN || github.token }}
           TAG_NAME: ${{ steps.meta.outputs.tag_name }}
           VERSION: ${{ steps.meta.outputs.version }}
           APK_OUT: ${{ steps.pkg.outputs.apk_file }}

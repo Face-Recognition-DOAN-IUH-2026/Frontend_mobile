@@ -11,9 +11,9 @@ const KEYSTORE_FILENAME = 'library_release.jks';
 
 const RELEASE_SIGNING_BLOCK = `
         release {
-            def externalKeystore = rootProject.file("../private_keys/${KEYSTORE_FILENAME}")
-            def localKeystore = rootProject.file("private_keys/${KEYSTORE_FILENAME}")
-            def ksFile = externalKeystore.exists() ? externalKeystore : localKeystore
+            def parentKeystore = rootProject.file("../../private_keys/${KEYSTORE_FILENAME}")
+            def localKeystore = rootProject.file("../private_keys/${KEYSTORE_FILENAME}")
+            def ksFile = parentKeystore.exists() ? parentKeystore : localKeystore
             def ksPass = System.getenv("TS_KEYSTORE_PASS") ?: ""
             def kPass = System.getenv("TS_KEY_PASS") ?: ksPass
             if (ksFile.exists() && ksPass) {
@@ -21,6 +21,8 @@ const RELEASE_SIGNING_BLOCK = `
                 storePassword ksPass
                 keyAlias System.getenv("TS_KEY_ALIAS") ?: "library_release"
                 keyPassword kPass
+            } else if (System.getenv("CI") == "true") {
+                throw new GradleException("Release keystore or TS_KEYSTORE_PASS is missing on CI! Checked: " + parentKeystore.absolutePath + " and " + localKeystore.absolutePath)
             } else {
                 // Fallback to debug signing only when local release keystore is not present
                 storeFile signingConfigs.debug.storeFile
