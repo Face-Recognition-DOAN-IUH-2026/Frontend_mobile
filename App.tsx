@@ -12,6 +12,7 @@ import { NotificationProvider } from './src/context/NotificationContext';
 import { MobileThemeProvider, useMobileTheme } from './src/context/ThemeContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import LegacyUpgradeBanner from './src/components/LegacyUpgradeBanner';
+import UpdateDialog from './src/components/UpdateDialog';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import { setupGlobalErrorHandlers } from './src/utils/error-reporter';
 import { queryClient } from './src/lib/queryClient';
@@ -44,6 +45,7 @@ function AppContent() {
               <StatusBar style={isDark ? 'light' : 'dark'} />
               <AppNavigator />
               <LegacyUpgradeBanner />
+              <UpdateDialog silent />
             </NotificationProvider>
           </AuthProvider>
         </NetworkProvider>
